@@ -1,0 +1,386 @@
+// Track ribbon, walls, neon edge strips + fake-bloom glow ribbons, boost pad decals.
+// No lights: the surface pattern lives in a fragment shader, everything else is
+// vertex-colored MeshBasicMaterial. Fog on matte surfaces only — neon pierces the haze.
+import * as THREE from 'three';
+import { TUNING } from '../config.js';
+import { makeFrame } from './spline.js';
+
+export function buildTrackMesh(spline, theme) {
+  const group = new THREE.Group();
+  group.add(buildSurface(spline, theme));
+  group.add(buildWalls(spline));
+  group.add(buildEdgeStrips(spline));
+  group.add(buildGlowRibbons(spline));
+  const pads = buildBoostPads(spline);
+  group.add(pads.mesh);
+  group.matrixAutoUpdate = false;
+  return { group, update: pads.update };
+}
+
+function sliceCount(spline) {
+  return Math.ceil(spline.length / TUNING.SLICE_STEP);
+}
+
+// Iterate cross-sections, handing each frame to cb(i, s, frame).
+function eachSlice(spline, cb) {
+  const n = sliceCount(spline);
+  const f = makeFrame();
+  for (let i = 0; i <= n; i++) {
+    const s = (i / n) * spline.length;
+    spline.frameAt(s, f);
+    cb(i, s, f);
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------- surface
+function buildSurface(spline, theme) {
+  const n = sliceCount(spline);
+  const across = 5; // -W, -W/2, 0 (crowned), +W/2, +W
+  const pos = new Float32Array((n + 1) * across * 3);
+  const lat = new Float32Array((n + 1) * across);   // lateral meters
+  const dist = new Float32Array((n + 1) * across);  // s meters
+  const wdt = new Float32Array((n + 1) * across);   // half width at slice
+  const v = new THREE.Vector3();
+
+  eachSlice(spline, (i, s, f) => {
+    const W = f.width;
+    const xs = [-W, -W / 2, 0, W / 2, W];
+    const crown = [0, 0.5, 1, 0.5, 0];
+    for (let j = 0; j < across; j++) {
+      v.copy(f.pos)
+        .addScaledVector(f.R, xs[j])
+        .addScaledVector(f.U, crown[j] * TUNING.CROWN * W);
+      const k = (i * across + j) * 3;
+      pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+      lat[i * across + j] = xs[j];
+      dist[i * across + j] = s;
+      wdt[i * across + j] = W;
+    }
+  });
+
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    if (spline.gapAt(((i + 0.5) / n) * spline.length)) continue; // jump gap
+    for (let j = 0; j < across - 1; j++) {
+      const a = i * across + j, b = a + across;
+      idx.push(a, a + 1, b, a + 1, b + 1, b); // CCW from above (normal = +U)
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('aLat', new THREE.BufferAttribute(lat, 1));
+  geom.setAttribute('aDist', new THREE.BufferAttribute(dist, 1));
+  geom.setAttribute('aWidth', new THREE.BufferAttribute(wdt, 1));
+  geom.setIndex(idx);
+
+  const C = TUNING.COL;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        baseCol: { value: new THREE.Color(theme.trackBase) },
+        bandCol: { value: new THREE.Color(theme.trackBand) },
+        lineCol: { value: new THREE.Color(C.CENTERLINE) },
+        warnCol: { value: new THREE.Color(C.WARNING) },
+        trackLen: { value: spline.length },
+      },
+    ]),
+    vertexShader: /* glsl */ `
+      attribute float aLat;
+      attribute float aDist;
+      attribute float aWidth;
+      varying float vLat;
+      varying float vDist;
+      varying float vWidth;
+      #include <fog_pars_vertex>
+      void main() {
+        vLat = aLat; vDist = aDist; vWidth = aWidth;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 baseCol, bandCol, lineCol, warnCol;
+      uniform float trackLen;
+      varying float vLat;
+      varying float vDist;
+      varying float vWidth;
+      #include <fog_pars_fragment>
+      void main() {
+        vec3 col = baseCol;
+        // Rhythm bands: 2m band every 8m — the 10Hz strobe at vmax IS the speed.
+        float band = step(fract(vDist / 8.0), 0.25);
+        col = mix(col, bandCol, band);
+        // Warning stripes 1m inside each edge.
+        float aw = abs(vLat);
+        float warn = step(vWidth - 1.2, aw) * step(aw, vWidth - 0.8)
+                   * step(fract(vDist / 4.0), 0.55);
+        col = mix(col, warnCol, warn * 0.9);
+        // Centerline dashes: 3m on / 3m off.
+        float dash = step(abs(vLat), 0.16) * step(fract(vDist / 6.0), 0.5);
+        col = mix(col, lineCol, dash * 0.85);
+        // Start/finish checker band across the first 4 meters.
+        if (vDist < 4.0 || vDist > trackLen - 0.5) {
+          float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);
+          col = mix(vec3(0.06, 0.04, 0.12), vec3(0.92), checker);
+        }
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }
+    `,
+    fog: true,
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// ---------------------------------------------------------------- walls
+function buildWalls(spline) {
+  const n = sliceCount(spline);
+  const pos = new Float32Array((n + 1) * 4 * 3);
+  const col = new Float32Array((n + 1) * 4 * 3);
+  const v = new THREE.Vector3();
+  const lean = Math.tan(TUNING.WALL_LEAN) * TUNING.WALL_HEIGHT;
+  const cWall = new THREE.Color(TUNING.COL.WALL);
+  const cWallLit = new THREE.Color(TUNING.COL.WALL).multiplyScalar(2.2);
+
+  eachSlice(spline, (i, s, f) => {
+    const W = f.width;
+    // 4 verts: L bottom, L top, R bottom, R top.
+    const defs = [
+      [-W, -0.3, 0], [-(W + lean), TUNING.WALL_HEIGHT, 1],
+      [W, -0.3, 0], [W + lean, TUNING.WALL_HEIGHT, 1],
+    ];
+    for (let j = 0; j < 4; j++) {
+      v.copy(f.pos).addScaledVector(f.R, defs[j][0]).addScaledVector(f.U, defs[j][1]);
+      const k = (i * 4 + j) * 3;
+      pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+      const c = defs[j][2] ? cWallLit : cWall;
+      col[k] = c.r; col[k + 1] = c.g; col[k + 2] = c.b;
+    }
+  });
+
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    if (spline.gapAt(((i + 0.5) / n) * spline.length)) continue; // jump gap
+    const a = i * 4, b = a + 4;
+    idx.push(a, a + 1, b, b, a + 1, b + 1);       // left wall (faces inward)
+    idx.push(a + 2, b + 2, a + 3, a + 3, b + 2, b + 3); // right wall
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geom.setIndex(idx);
+
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+    vertexColors: true, fog: true, side: THREE.DoubleSide,
+  }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// ------------------------------------------------------- neon edge strips
+// Surface edge strips + wall-top strips, cyan left / magenta right.
+// fog:false on purpose — WipEout neon pierces the sunset haze and telegraphs corners.
+function buildEdgeStrips(spline) {
+  const n = sliceCount(spline);
+  const strips = 4; // surface L, surface R, wall-top L, wall-top R
+  const pos = new Float32Array((n + 1) * strips * 2 * 3);
+  const col = new Float32Array((n + 1) * strips * 2 * 3);
+  const v = new THREE.Vector3();
+  const lean = Math.tan(TUNING.WALL_LEAN) * TUNING.WALL_HEIGHT;
+  const cl = new THREE.Color(TUNING.COL.EDGE_L);
+  const cr = new THREE.Color(TUNING.COL.EDGE_R);
+
+  eachSlice(spline, (i, s, f) => {
+    const W = f.width;
+    const defs = [
+      // [x0, x1, y, color]
+      [-(W - 0.05), -(W - 0.38), 0.02, cl],
+      [W - 0.38, W - 0.05, 0.02, cr],
+      [-(W + lean) - 0.06, -(W + lean) + 0.1, TUNING.WALL_HEIGHT + 0.02, cl],
+      [(W + lean) - 0.1, (W + lean) + 0.06, TUNING.WALL_HEIGHT + 0.02, cr],
+    ];
+    for (let j = 0; j < strips; j++) {
+      const [x0, x1, y, c] = defs[j];
+      for (let e = 0; e < 2; e++) {
+        v.copy(f.pos).addScaledVector(f.R, e ? x1 : x0).addScaledVector(f.U, y);
+        const k = ((i * strips + j) * 2 + e) * 3;
+        pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+        col[k] = c.r; col[k + 1] = c.g; col[k + 2] = c.b;
+      }
+    }
+  });
+
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    if (spline.gapAt(((i + 0.5) / n) * spline.length)) continue; // jump gap
+    for (let j = 0; j < strips; j++) {
+      const a = (i * strips + j) * 2, b = a + strips * 2;
+      idx.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geom.setIndex(idx);
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+    vertexColors: true, fog: false, side: THREE.DoubleSide,
+  }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// ------------------------------------------------------ fake-bloom ribbons
+// A 3x wider additive ribbon under each neon strip, alpha falling off across
+// the width. Two triangles per segment buy "WipEout glow" without a bloom pass.
+function buildGlowRibbons(spline) {
+  const n = sliceCount(spline);
+  const ribbons = 2; // surface edges L/R (wall tops share the wash)
+  const across = 3;  // alpha 0 / peak / 0
+  const pos = new Float32Array((n + 1) * ribbons * across * 3);
+  const col = new Float32Array((n + 1) * ribbons * across * 4);
+  const v = new THREE.Vector3();
+  const cl = new THREE.Color(TUNING.COL.EDGE_L);
+  const cr = new THREE.Color(TUNING.COL.EDGE_R);
+  const HALF = 0.65;
+
+  eachSlice(spline, (i, s, f) => {
+    const W = f.width;
+    const defs = [
+      [-(W - 0.22), cl],
+      [W - 0.22, cr],
+    ];
+    for (let j = 0; j < ribbons; j++) {
+      const [cx, c] = defs[j];
+      for (let e = 0; e < across; e++) {
+        const x = cx + (e - 1) * HALF;
+        v.copy(f.pos).addScaledVector(f.R, x).addScaledVector(f.U, 0.015);
+        const k = ((i * ribbons + j) * across + e) * 3;
+        pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+        const k4 = ((i * ribbons + j) * across + e) * 4;
+        col[k4] = c.r; col[k4 + 1] = c.g; col[k4 + 2] = c.b;
+        col[k4 + 3] = e === 1 ? 0.35 : 0.0;
+      }
+    }
+  });
+
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    if (spline.gapAt(((i + 0.5) / n) * spline.length)) continue; // jump gap
+    for (let j = 0; j < ribbons; j++) {
+      for (let e = 0; e < across - 1; e++) {
+        const a = (i * ribbons + j) * across + e, b = a + ribbons * across;
+        idx.push(a, a + 1, b, a + 1, b + 1, b); // CCW from above
+      }
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(col, 4));
+  geom.setIndex(idx);
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  mesh.renderOrder = 2;
+  return mesh;
+}
+
+// ------------------------------------------------------------- boost pads
+// 6x4m decals conformed to the surface. Chevrons scroll toward the player and
+// a brightness pulse chases along the track. One merged geometry, one draw call.
+function buildBoostPads(spline) {
+  const C = TUNING.COL;
+  const f = makeFrame();
+  const v = new THREE.Vector3();
+  const positions = [], locals = [], phases = [], idx = [];
+  const LEN = 6, HW = 2, SLICES = 6;
+
+  for (const pad of spline.pads) {
+    const base = positions.length / 3;
+    for (let i = 0; i <= SLICES; i++) {
+      const s = pad.s - LEN / 2 + (i / SLICES) * LEN;
+      spline.frameAt(s, f);
+      for (let e = 0; e < 2; e++) {
+        const x = pad.d + (e ? HW : -HW);
+        // Follow the surface crown ((1 - |x|/W) * CROWN * W, same profile as
+        // buildSurface) or the decal sinks under the road near the camera.
+        const crownH = Math.max(0, 1 - Math.abs(x) / f.width) * TUNING.CROWN * f.width;
+        v.copy(f.pos).addScaledVector(f.R, x).addScaledVector(f.U, crownH + 0.05);
+        positions.push(v.x, v.y, v.z);
+        locals.push(e ? 1 : 0, i / SLICES);
+        phases.push(pad.s * 0.5);
+      }
+    }
+    for (let i = 0; i < SLICES; i++) {
+      const a = base + i * 2, b = a + 2;
+      idx.push(a, a + 1, b, a + 1, b + 1, b); // CCW from above
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geom.setAttribute('aLocal', new THREE.BufferAttribute(new Float32Array(locals), 2));
+  geom.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(phases), 1));
+  geom.setIndex(idx);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      baseCol: { value: new THREE.Color(C.PAD_BASE) },
+      chevCol: { value: new THREE.Color(C.PAD_CHEVRON) },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec2 aLocal;
+      attribute float aPhase;
+      varying vec2 vLocal;
+      varying float vPhase;
+      void main() {
+        vLocal = aLocal; vPhase = aPhase;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float time;
+      uniform vec3 baseCol, chevCol;
+      varying vec2 vLocal;
+      varying float vPhase;
+      void main() {
+        float x = vLocal.x * 2.0 - 1.0;       // -1..1 across
+        float y = vLocal.y * 6.0;             // meters along
+        // Forward-pointing chevrons scrolling toward the player at 3 u/s.
+        float c = fract((y + abs(x) * 1.4 + time * 3.0) / 1.5);
+        float chev = smoothstep(0.62, 0.5, c) * smoothstep(0.2, 0.32, c);
+        float pulse = 0.6 + 0.4 * sin(4.0 * time - vPhase);
+        float edge = smoothstep(1.0, 0.85, abs(x));
+        vec3 col = baseCol + chevCol * chev * pulse * 1.6;
+        gl_FragColor = vec4(col * edge, 1.0);
+      }
+    `,
+    fog: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return { mesh, update: (t) => { mat.uniforms.time.value = t; } };
+}

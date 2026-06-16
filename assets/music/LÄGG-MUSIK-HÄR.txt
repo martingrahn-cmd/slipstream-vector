@@ -1,0 +1,13 @@
+Lägg dina loopade låtar här. Fem platser, alla valfria:
+
+  menu.mp3      - menyn
+  sunset.mp3    - SUNSET MESA  (bana 1-2)
+  coast.mp3     - PALM COAST   (bana 3-4)
+  sprawl.mp3    - NEON SPRAWL  (bana 5-6)
+
+  race.mp3      - reserv: spelas i alla världar som saknar egen fil
+
+Världslåten startar vid START och byts vid retur till menyn (menylåten
+tar över där). Saknas en fil är det bara tyst för den platsen — inget fel.
+
+Volymen styrs av AUDIO-raden i menyn (master för musik + effekter).

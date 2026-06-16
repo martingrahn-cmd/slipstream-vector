@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SLIPSTREAM VECTOR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles/main.css" />
+</head>
+<body>
+  <div id="game"></div>
+
+  <div class="hud" id="lap-block">
+    <div id="position"></div>
+    <div id="lap">LAP 1 / 3</div>
+    <div id="lap-time">0:00.000</div>
+    <div id="last-lap"></div>
+    <div id="best-lap"></div>
+  </div>
+
+  <div class="hud hidden" id="results"></div>
+  <div class="hud hidden" id="trophies"></div>
+  <div class="hud hidden" id="trophy-toast"></div>
+
+  <div class="hud" id="speed-block">
+    <span id="speed">0</span>
+    <div id="speed-unit">KM/H</div>
+  </div>
+
+  <div class="hud" id="boost-meter">
+    <div id="boost-ghost"></div>
+    <div id="boost-fill"></div>
+  </div>
+
+  <canvas class="hud" id="minimap"></canvas>
+
+  <div class="hud hidden" id="center-msg"></div>
+  <div class="hud hidden" id="countdown"><span id="cd-digit"></span></div>
+  <div class="hud hidden" id="center-sub"></div>
+  <div class="hud" id="stats"></div>
+
+  <div class="hud intro" id="overlay">
+    <h1>SLIPSTREAM VECTOR</h1>
+
+    <div class="intro-prompt" id="intro-prompt">PRESS START</div>
+
+    <div class="menu-row mode-strip" id="row-mode">
+      <span class="mode-opt" id="mode-0"><span>CHAMPIONSHIP</span></span>
+      <span class="mode-opt" id="mode-1"><span>SINGLE RACE</span></span>
+      <span class="mode-opt" id="mode-2"><span>TIME TRIAL</span></span>
+    </div>
+
+    <div class="menu-body">
+    <div class="menu-cards">
+      <section class="card" id="card-track">
+        <header>
+          <span class="tag">CIRCUIT</span>
+          <span class="tag-dim" id="menu-world">SUNSET MESA</span>
+        </header>
+        <canvas id="env-thumb"></canvas>
+        <div class="menu-row" id="row-track">
+          <span class="arrow">&#9664;</span>
+          <span class="value" id="menu-track">Sunset Circuit</span>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="track-data">
+          <canvas id="menu-thumb"></canvas>
+          <div class="track-col">
+            <canvas id="menu-profile"></canvas>
+            <div class="profile-label">ELEVATION</div>
+            <div id="menu-best">NO RECORD</div>
+          </div>
+        </div>
+        <div class="menu-row small" id="row-class">
+          <label>CLASS</label>
+          <span class="arrow">&#9664;</span>
+          <span class="value" id="menu-class">RAPIER</span>
+          <span class="arrow">&#9654;</span>
+          <span class="lock-note hidden" id="menu-class-lock"></span>
+        </div>
+      </section>
+
+      <section class="card" id="card-ship">
+        <header><span class="tag">YOUR SHIP</span></header>
+        <canvas id="podium"></canvas>
+        <div class="menu-row" id="row-team">
+          <span class="arrow">&#9664;</span>
+          <span class="value" id="menu-team">VEKTOR DYNAMICS</span>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div id="menu-blurb"></div>
+        <div id="menu-stats"></div>
+        <div class="menu-row small" id="row-livery">
+          <label>LIVERY</label>
+          <span class="arrow">&#9664;</span>
+          <span class="value" id="menu-livery"></span>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="menu-row small" id="row-pilot">
+          <label>PILOT</label>
+          <span class="arrow">&#9664;</span>
+          <span class="value" id="menu-pilot">VANTA</span>
+          <span class="arrow">&#9654;</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="menu-bar">
+      <div class="menu-row small" id="row-audio">
+        <label>AUDIO</label>
+        <span class="arrow">&#9664;</span>
+        <span class="value" id="menu-volume"></span>
+        <span class="arrow">&#9654;</span>
+      </div>
+      <div class="menu-actions">
+        <div class="menu-row action" id="row-records">
+          <span class="play">&#9656;</span><span class="value">RECORDS</span>
+        </div>
+        <div class="menu-row action" id="row-trophies">
+          <span class="play">&#9656;</span><span class="value">TROPHIES</span>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="press" id="menu-go">ENTER &mdash; RACE</div>
+    <div class="keys-hint">&uarr;&darr; select &nbsp; &larr;&rarr; change &nbsp; ENTER confirm &nbsp; ESC back &nbsp; SHIFT airbrake</div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

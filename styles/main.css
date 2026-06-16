@@ -1,0 +1,595 @@
+:root {
+  --cyan: #00f0ff;
+  --magenta: #ff2ec8;
+  --hot: #ffd23f;
+  --ink: #12052e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+#game canvas { display: block; }
+
+.hud {
+  position: fixed;
+  color: #fff;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  user-select: none;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Speed, bottom right */
+#speed-block {
+  right: 36px; bottom: 26px;
+  text-align: right;
+  transform: skewX(-8deg);
+}
+#speed {
+  display: inline-block;
+  font-family: 'Orbitron', monospace;
+  font-weight: 800;
+  font-size: 84px;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 0 18px rgba(0, 240, 255, 0.65), 0 0 50px rgba(0, 240, 255, 0.3);
+  transition: scale 80ms linear;
+}
+#speed-unit {
+  font-size: 20px; font-weight: 700; letter-spacing: 0.35em;
+  color: var(--cyan);
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.8);
+}
+#speed.boost-pop { animation: boostPop 0.45s ease-out; }
+@keyframes boostPop {
+  0% { color: var(--cyan); transform: scale(1.3); }
+  100% { color: #fff; transform: scale(1); }
+}
+
+/* Laps, top left */
+#lap-block { left: 32px; top: 26px; transform: skewX(-8deg); }
+#position {
+  font-family: 'Orbitron', monospace; font-weight: 800;
+  font-size: 44px; line-height: 1; color: #fff;
+  text-shadow: 0 0 18px rgba(0, 240, 255, 0.7);
+  margin-bottom: 4px;
+}
+#position b { font-size: 58px; color: var(--cyan); }
+#position span { font-size: 24px; opacity: 0.7; }
+#position.pos-pop { animation: boostPop 0.35s ease-out; }
+
+/* Trophy unlock toast — slides up from the bottom-right, holds, fades. */
+#trophy-toast {
+  right: 20px; bottom: -120px;
+  display: flex; align-items: center; gap: 14px;
+  min-width: 300px; max-width: 380px;
+  padding: 12px 18px;
+  background: rgba(9, 5, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 3px solid var(--hot);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  z-index: 30;
+  transition: bottom 0.5s cubic-bezier(0.18, 1.3, 0.4, 1), opacity 0.45s;
+  opacity: 0;
+}
+#trophy-toast.show { bottom: 24px; opacity: 1; }
+#trophy-toast .trophy-icon {
+  font-size: 34px; line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(255, 210, 63, 0.5));
+}
+#trophy-toast .trophy-label {
+  font-family: 'Orbitron', monospace; font-weight: 700;
+  font-size: 10px; letter-spacing: 0.22em; margin-bottom: 3px;
+}
+#trophy-toast .trophy-name {
+  font-family: 'Orbitron', monospace; font-weight: 600;
+  font-size: 17px; color: #fff; letter-spacing: 0.04em;
+}
+#trophy-toast .trophy-desc {
+  font-size: 13px; color: rgba(255, 255, 255, 0.6); margin-top: 2px;
+}
+
+/* Trophy gallery — reuses the results panel chrome. */
+#trophies {
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  width: min(680px, 92vw); max-height: 88vh; overflow-y: auto;
+  padding: 22px 28px;
+  background: rgba(9, 5, 22, 0.93);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 2px solid var(--hot);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+}
+#trophies h2 {
+  font-family: 'Orbitron', monospace; font-weight: 800;
+  font-size: 28px; letter-spacing: 0.2em; color: var(--hot);
+  text-align: center; margin-bottom: 14px; transform: skewX(-6deg);
+}
+#trophies .results-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.34em;
+  color: rgba(255, 255, 255, 0.6); text-align: center; margin-bottom: 4px;
+}
+#trophies .trophy-tier-head {
+  font-family: 'Orbitron', monospace; font-weight: 700;
+  font-size: 12px; letter-spacing: 0.24em;
+  margin: 14px 0 8px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+#trophies .trophy-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+#trophies .trophy-card {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 10px; min-height: 78px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.45;
+}
+#trophies .trophy-card.on { opacity: 1; border-color: rgba(0, 240, 255, 0.3); }
+#trophies .tc-icon { font-size: 22px; line-height: 1; }
+#trophies .tc-name {
+  font-family: 'Orbitron', monospace; font-weight: 600;
+  font-size: 11px; color: #fff; letter-spacing: 0.03em;
+}
+#trophies .tc-desc { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
+#trophies .press {
+  margin-top: 16px; text-align: center;
+  font-family: 'Orbitron', monospace; font-size: 14px; letter-spacing: 0.25em;
+  color: #fff; animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* Race results */
+#results {
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20; /* above the menu overlay (records board opens in attract) */
+  min-width: 520px;
+  padding: 26px 34px;
+  background: rgba(10, 4, 28, 0.88);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 50px rgba(0, 240, 255, 0.15);
+}
+#results {
+  border-top: 2px solid var(--hot);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+}
+#results .results-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.34em;
+  color: rgba(255, 255, 255, 0.6); text-align: center; margin-bottom: 4px;
+}
+#results h2 {
+  font-family: 'Orbitron', monospace; font-weight: 800;
+  font-size: 30px; letter-spacing: 0.2em; color: var(--hot);
+  text-shadow: 0 0 14px rgba(255, 210, 63, 0.6);
+  margin-bottom: 16px; text-align: center;
+  transform: skewX(-6deg);
+}
+#results .pts {
+  font-family: 'Orbitron', monospace; font-size: 14px;
+  color: var(--cyan); min-width: 78px; text-align: right;
+  white-space: nowrap;
+}
+/* Podium metals on standings boards. */
+#results .row.m1 .place { color: #ffd23f; text-shadow: 0 0 10px rgba(255, 210, 63, 0.8); }
+#results .row.m2 .place { color: #d8e2e8; text-shadow: 0 0 8px rgba(216, 226, 232, 0.6); }
+#results .row.m3 .place { color: #e08d4f; text-shadow: 0 0 8px rgba(224, 141, 79, 0.6); }
+/* The champion finale gets the gold treatment. */
+#results.champ { border-top-color: #ffd23f; }
+#results.champ h2 {
+  font-size: 42px;
+  background: linear-gradient(180deg, #fff 20%, #ffd23f 55%, #ff8c3a 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 26px rgba(255, 210, 63, 0.55));
+  animation: champPulse 1.6s ease-in-out infinite;
+}
+@keyframes champPulse {
+  50% { filter: drop-shadow(0 0 40px rgba(255, 210, 63, 0.85)); }
+}
+#results .row {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 19px; font-weight: 600; letter-spacing: 0.06em;
+  padding: 5px 8px;
+}
+#results .row.you {
+  background: rgba(255, 46, 136, 0.16);
+  outline: 1px solid rgba(255, 46, 136, 0.5);
+}
+#results .place { width: 26px; text-align: right; font-family: 'Orbitron', monospace; color: var(--cyan); }
+#results .swatch { width: 14px; height: 14px; border-radius: 2px; box-shadow: 0 0 8px currentColor; }
+#results .name { flex: 1; white-space: nowrap; font-size: 17px; }
+#results .time {
+  font-family: 'Orbitron', monospace; font-size: 15px; opacity: 0.9;
+  white-space: nowrap;
+}
+#results .time.racing {
+  font-style: italic; color: var(--cyan); opacity: 0.7;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+#results .press {
+  margin-top: 18px; text-align: center;
+  font-family: 'Orbitron', monospace; font-size: 15px; letter-spacing: 0.25em;
+  color: #fff; animation: pulse 1.4s ease-in-out infinite;
+}
+#lap {
+  font-family: 'Orbitron', monospace; font-weight: 600;
+  font-size: 26px; letter-spacing: 0.18em; color: var(--hot);
+  text-shadow: 0 0 14px rgba(255, 210, 63, 0.6);
+}
+#lap-time { font-size: 36px; font-weight: 700; letter-spacing: 0.08em; }
+#last-lap, #best-lap { font-size: 17px; font-weight: 500; letter-spacing: 0.22em; opacity: 0.85; }
+#best-lap { color: var(--magenta); text-shadow: 0 0 10px rgba(255, 46, 200, 0.7); }
+
+/* Boost meter, bottom center */
+#boost-meter {
+  left: 50%; bottom: 34px;
+  width: 280px; height: 12px;
+  transform: translateX(-50%) skewX(-18deg);
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  background: rgba(8, 4, 24, 0.6);
+  opacity: 0.35;
+  transition: opacity 200ms;
+}
+#boost-meter.active { opacity: 1; box-shadow: 0 0 22px rgba(0, 240, 255, 0.45); }
+#boost-ghost, #boost-fill { position: absolute; inset: 0; width: 0%; }
+#boost-ghost { background: rgba(255, 255, 255, 0.45); }
+#boost-fill { background: linear-gradient(90deg, var(--cyan), #8cf9ff); }
+
+/* Center messages */
+#center-msg {
+  left: 50%; top: 38%;
+  transform: translate(-50%, -50%) skewX(-8deg);
+  font-family: 'Orbitron', monospace;
+  font-weight: 800; font-size: 84px; letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 0 24px rgba(255, 46, 200, 0.8), 0 0 70px rgba(255, 46, 200, 0.4);
+  white-space: nowrap;
+}
+#center-msg.center-pop { animation: centerPop 0.5s ease-out; }
+/* The fat countdown: a digit that slams in with a shockwave ring. */
+#countdown {
+  left: 50%; top: 36%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+#cd-digit {
+  display: block;
+  font-family: 'Orbitron', monospace; font-weight: 800; font-style: italic;
+  font-size: 240px; line-height: 1;
+  transform: skewX(-8deg);
+  color: #fff;
+}
+#countdown.n3 #cd-digit { color: var(--cyan); text-shadow: 0 0 50px rgba(0, 240, 255, 0.65), 8px 8px 0 rgba(0, 60, 80, 0.55); }
+#countdown.n2 #cd-digit { color: var(--hot); text-shadow: 0 0 50px rgba(255, 210, 63, 0.65), 8px 8px 0 rgba(90, 60, 0, 0.55); }
+#countdown.n1 #cd-digit { color: var(--magenta); text-shadow: 0 0 50px rgba(255, 46, 200, 0.65), 8px 8px 0 rgba(90, 0, 60, 0.55); }
+#countdown.go #cd-digit {
+  font-size: 130px; letter-spacing: 0.22em;
+  background: linear-gradient(180deg, #fff 25%, var(--cyan) 55%, var(--magenta) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 34px rgba(0, 240, 255, 0.7));
+}
+#countdown.slam #cd-digit { animation: cdSlam 0.4s cubic-bezier(0.18, 1.4, 0.4, 1) both; }
+#countdown.go.slam #cd-digit { animation: cdStart 0.85s ease-out both; }
+@keyframes cdSlam {
+  0% { transform: skewX(-8deg) scale(3); opacity: 0; filter: blur(10px); }
+  55% { transform: skewX(-8deg) scale(0.94); opacity: 1; filter: blur(0); }
+  75% { transform: skewX(-8deg) scale(1.07); }
+  100% { transform: skewX(-8deg) scale(1); opacity: 1; }
+}
+@keyframes cdStart {
+  0% { transform: skewX(-8deg) scaleX(2.4) scaleY(0.2); opacity: 0; }
+  30% { transform: skewX(-8deg) scale(1); opacity: 1; }
+  70% { transform: skewX(-8deg) scale(1.04); opacity: 1; }
+  100% { transform: skewX(-8deg) scale(1.12); opacity: 0; }
+}
+/* Shockwave ring behind each slam. */
+#countdown::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 320px; height: 320px;
+  margin: -160px 0 0 -160px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  color: #fff;
+}
+#countdown.n3::before { color: var(--cyan); }
+#countdown.n2::before { color: var(--hot); }
+#countdown.n1::before { color: var(--magenta); }
+#countdown.slam::before { animation: cdRing 0.55s ease-out both; }
+@keyframes cdRing {
+  0% { transform: scale(0.35); opacity: 0.85; }
+  100% { transform: scale(2.3); opacity: 0; }
+}
+
+#center-sub {
+  left: 50%; top: 47%;
+  transform: translate(-50%, -50%) skewX(-8deg);
+  font-family: 'Orbitron', monospace;
+  font-weight: 600; font-size: 21px; letter-spacing: 0.3em;
+  color: var(--hot);
+  text-shadow: 0 0 14px rgba(255, 210, 63, 0.55);
+  white-space: nowrap;
+}
+#overlay .menu-row.locked .arrow { visibility: hidden !important; }
+@keyframes centerPop {
+  0% { transform: translate(-50%, -50%) skewX(-8deg) scale(1.6); opacity: 0.2; }
+  100% { transform: translate(-50%, -50%) skewX(-8deg) scale(1); opacity: 1; }
+}
+
+/* Stats, top right */
+#stats {
+  right: 14px; top: 12px;
+  font-family: monospace; font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Minimap, top right under the stats line */
+#minimap {
+  right: 14px; top: 34px;
+  filter: drop-shadow(0 0 14px rgba(0, 240, 255, 0.18));
+  opacity: 0.92;
+}
+
+/* Start overlay */
+#overlay {
+  inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 9px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at 50% 65%, rgba(196, 43, 143, 0.32), transparent 60%),
+    linear-gradient(180deg, rgba(18, 5, 46, 0.92), rgba(18, 5, 46, 0.78));
+  backdrop-filter: blur(2px);
+}
+#overlay h1 {
+  font-family: 'Orbitron', monospace; font-weight: 800;
+  font-style: italic;
+  font-size: clamp(40px, 7vw, 92px);
+  letter-spacing: 0.14em;
+  transform: skewX(-8deg);
+  background: linear-gradient(180deg, #fff 30%, var(--cyan) 55%, var(--magenta) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* hard offset print-shadow + soft neon — poster, not soft-glow soup */
+  filter: drop-shadow(5px 5px 0 rgba(255, 46, 200, 0.3))
+          drop-shadow(0 0 22px rgba(0, 240, 255, 0.35));
+}
+#overlay .sub {
+  font-size: 19px; font-weight: 500; letter-spacing: 0.5em;
+  color: var(--hot); text-shadow: 0 0 12px rgba(255, 210, 63, 0.6);
+}
+/* Two-card layout: circuit left, ship right. Angular panels, left-aligned
+   content, glow reserved for the few things that matter. */
+#overlay .menu-cards {
+  display: flex; gap: 22px; align-items: stretch;
+}
+/* Mode strip: three angular chips above the cards. */
+#overlay .mode-strip {
+  display: flex; gap: 10px; opacity: 0.75; padding: 0;
+}
+#overlay .mode-strip.focus { opacity: 1; }
+#overlay .mode-opt {
+  font-family: 'Orbitron', monospace; font-weight: 700;
+  font-size: 14px; letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 7px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transform: skewX(-14deg);
+  background: rgba(9, 5, 22, 0.7);
+}
+#overlay .mode-opt > span { display: inline-block; transform: skewX(14deg); }
+#overlay .mode-opt.sel {
+  color: #0b0719;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  text-shadow: none;
+}
+#overlay .mode-strip.focus .mode-opt.sel { box-shadow: 0 0 18px rgba(0, 240, 255, 0.55); }
+#overlay .lock-note {
+  font-size: 11px; letter-spacing: 0.2em; color: var(--hot);
+}
+#overlay .card {
+  background: rgba(9, 5, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 2px solid var(--cyan);
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  padding: 12px 16px 14px;
+  display: flex; flex-direction: column; gap: 9px;
+  text-align: left;
+}
+#card-ship { border-top-color: var(--magenta); }
+#overlay .card header {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+#overlay .tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.34em;
+  color: rgba(255, 255, 255, 0.92);
+}
+#overlay .tag-dim {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.22em;
+  color: var(--hot);
+}
+#overlay #env-thumb, #overlay #podium {
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0b0719;
+}
+#overlay .menu-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 0;
+  opacity: 0.55;
+}
+#overlay .menu-row.focus { opacity: 1; }
+#overlay .menu-row .value {
+  font-family: 'Orbitron', monospace; font-weight: 600;
+  font-size: 19px; letter-spacing: 0.06em; color: #fff;
+}
+#overlay .menu-row.focus .value { color: var(--cyan); }
+#overlay .menu-row.small .value { font-size: 14px; }
+#overlay .menu-row label {
+  font-size: 11px; letter-spacing: 0.28em; color: rgba(255, 255, 255, 0.55);
+  width: 52px;
+}
+#overlay .arrow {
+  color: var(--cyan); font-size: 13px; visibility: hidden;
+}
+#overlay .menu-row.focus .arrow { visibility: visible; }
+#overlay .track-data { display: flex; gap: 14px; align-items: center; }
+#overlay .track-col { display: flex; flex-direction: column; gap: 3px; }
+#overlay .profile-label {
+  font-size: 9px; letter-spacing: 0.4em; color: rgba(255, 255, 255, 0.45);
+}
+#overlay #menu-thumb, #overlay #menu-profile {
+  background: rgba(8, 4, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+#overlay #menu-best {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.2em;
+  color: var(--magenta);
+}
+#overlay #menu-blurb {
+  font-size: 14px; font-style: italic;
+  color: rgba(255, 255, 255, 0.66);
+  min-height: 18px;
+}
+#overlay #menu-stats { display: flex; flex-direction: column; gap: 4px; }
+#overlay .stat { display: flex; align-items: center; gap: 10px; }
+#overlay .stat label {
+  font-size: 10px; letter-spacing: 0.24em; color: rgba(255, 255, 255, 0.55);
+  width: 76px;
+}
+#overlay .bar { display: inline-flex; gap: 3px; }
+#overlay .bar i {
+  width: 16px; height: 7px; display: inline-block;
+  background: rgba(255, 255, 255, 0.1);
+  transform: skewX(-18deg);
+}
+#overlay .bar i.on { background: var(--cyan); }
+#card-ship .bar i.on { background: var(--magenta); }
+#overlay .swatch-pair {
+  display: inline-flex; gap: 2px; padding: 3px;
+  border: 1px solid transparent; margin-right: 8px;
+}
+#overlay .swatch-pair.sel { border-color: rgba(255, 255, 255, 0.7); }
+#overlay .swatch-pair.champ { box-shadow: 0 0 9px rgba(255, 210, 63, 0.7); }
+#overlay .swatch-pair i { width: 20px; height: 12px; display: inline-block; }
+#overlay #menu-class small {
+  font-family: 'Rajdhani', sans-serif; font-weight: 600;
+  font-size: 12px; letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.5); margin-left: 8px;
+}
+#overlay .keys-hint {
+  font-size: 12px; letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.4);
+}
+/* Cards + footer bar share one width so the bar lines up under the cards. */
+#overlay .menu-body { display: flex; flex-direction: column; gap: 12px; }
+#overlay .menu-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 22px; width: 100%;
+  background: rgba(9, 5, 22, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  padding: 8px 16px;
+}
+#overlay .menu-bar #row-audio { flex: 0 0 auto; }
+#overlay .menu-bar #row-audio label { width: auto; margin-right: 4px; }
+
+/* Action rows (RECORDS / TROPHIES) — selectable buttons, confirmed with the
+   same button as everything else. No keyboard-letter shortcut needed. */
+#overlay .menu-actions { display: flex; gap: 10px; }
+#overlay .menu-row.action {
+  flex: 0 0 auto; min-width: 132px; justify-content: center; gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+#overlay .menu-row.action .play { color: var(--cyan); font-size: 12px; }
+#overlay .menu-row.action .value {
+  font-family: 'Orbitron', monospace; font-weight: 600;
+  font-size: 14px; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.8);
+}
+#overlay .menu-row.action.focus {
+  border-color: var(--cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+#overlay .menu-row.action.focus .value { color: #fff; transform: none; }
+#overlay .menu-row.action::before { display: none; }
+#overlay .controls {
+  margin-top: 14px;
+  display: grid; grid-template-columns: auto auto; gap: 6px 22px;
+  font-size: 17px; letter-spacing: 0.12em; color: rgba(255,255,255,0.85);
+}
+#overlay .controls b { color: var(--cyan); font-weight: 700; text-align: right; }
+#overlay .press {
+  margin-top: 22px;
+  font-family: 'Orbitron', monospace; font-size: 24px; font-weight: 600;
+  letter-spacing: 0.3em; color: #fff;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+/* ---- console-style title gate + menu motion ---- */
+/* Intro: only the title + PRESS START; the menu is hidden until you start. */
+#overlay.intro { justify-content: center; gap: 36px; }
+#overlay.intro h1 { font-size: clamp(54px, 9vw, 120px); }
+#overlay.intro .mode-strip,
+#overlay.intro .menu-cards,
+#overlay.intro > .press,
+#overlay.intro .keys-hint { display: none !important; }
+.intro-prompt {
+  display: none;
+  font-family: 'Orbitron', monospace; font-weight: 700;
+  font-size: 30px; letter-spacing: 0.42em; color: #fff;
+  transform: skewX(-8deg);
+  text-shadow: 0 0 22px rgba(0, 240, 255, 0.7);
+  animation: pressPulse 1.25s ease-in-out infinite;
+}
+#overlay.intro .intro-prompt { display: block; }
+@keyframes pressPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Card / strip entrance — replayed each time the menu is revealed. */
+#overlay.anim .mode-strip { animation: dropIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+#overlay.anim #card-track { animation: slideInL 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both 0.05s; }
+#overlay.anim #card-ship { animation: slideInR 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both 0.1s; }
+#overlay.anim > .press { animation: dropIn 0.4s ease-out both 0.2s; }
+@keyframes dropIn { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+@keyframes slideInL { from { opacity: 0; transform: translateX(-46px); } to { opacity: 1; transform: none; } }
+@keyframes slideInR { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: none; } }
+
+/* Gliding selection: a bright accent bar + value pop on the focused row. */
+#overlay .menu-row { position: relative; transition: opacity 140ms; }
+#overlay .menu-row::before {
+  content: ''; position: absolute; left: -14px; top: 50%;
+  width: 4px; height: 0; transform: translateY(-50%);
+  background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+  transition: height 160ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+#overlay .menu-row.focus::before { height: 76%; }
+#overlay .menu-row.mode-strip::before { display: none; }
+#overlay .menu-row .value { transition: transform 140ms, color 140ms; transform-origin: left center; }
+#overlay .menu-row.focus .value { transform: scale(1.08); }
+
+/* Trophy gallery slides in. */
+#trophies.panel-in { animation: panelIn 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+@keyframes panelIn {
+  from { opacity: 0; transform: translate(-50%, -50%) translateY(22px) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* On the title/menu, the gameplay HUD is hidden — only the front-end shows. */
+body.in-menu #lap-block,
+body.in-menu #speed-block,
+body.in-menu #boost-meter,
+body.in-menu #minimap { display: none !important; }
+
+.hidden { display: none !important; }

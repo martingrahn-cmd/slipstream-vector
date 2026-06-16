@@ -1,0 +1,89 @@
+// The feel event bus. Physics emits raw events; everything juicy (trauma,
+// boost envelope, hitstop, flash, fog pulse) is owned and fanned out here, so
+// tuning feel never touches sim code.
+import { TUNING as T } from '../config.js';
+
+export class Juice {
+  constructor() {
+    this.listeners = new Map();
+    this.trauma = 0;
+    this.boostFactor = 0;   // attack 12/s, release 3/s envelope
+    this.boostTarget = 0;
+    this.timescale = 1;
+    this.flash = 0;
+    this.flashHold = 0;
+    this.hitstopT = 0;
+    this.fovSpike = 0;
+    this.camPunch = 0;      // lateral camera punch, signed, decays fast
+    this.scrapeAccum = 0;
+
+    this.on('boost', () => {
+      this.addTrauma(T.TRAUMA_BOOST);
+      this.setFlash(T.FLASH_BOOST);
+      this.fovSpike = T.FOV_BOOST_SPIKE;
+    });
+    this.on('miniboost', () => {
+      this.addTrauma(0.12);
+      this.fovSpike = Math.max(this.fovSpike, T.FOV_BOOST_SPIKE * 0.5);
+    });
+    this.on('wallHit', ({ side, severity }) => {
+      this.addTrauma(T.TRAUMA_HIT * (0.6 + 0.4 * severity));
+      this.setFlash(T.FLASH_HIT);
+      this.hitstopT = T.HITSTOP_TIME;
+      this.camPunch = -side * 0.3 * (0.5 + 0.5 * severity);
+    });
+    this.on('scrape', () => {
+      this.scrapeAccum = Math.min(this.scrapeAccum + T.TRAUMA_SCRAPE, T.TRAUMA_SCRAPE_CAP);
+      if (this.trauma < 0.2) this.trauma = 0.2;
+    });
+    this.on('land', ({ severity }) => {
+      this.addTrauma(T.TRAUMA_LAND * severity);
+    });
+  }
+
+  on(name, fn) {
+    if (!this.listeners.has(name)) this.listeners.set(name, []);
+    this.listeners.get(name).push(fn);
+  }
+
+  emit(name, payload) {
+    const fns = this.listeners.get(name);
+    if (fns) for (const fn of fns) fn(payload);
+  }
+
+  addTrauma(x) {
+    this.trauma = Math.min(this.trauma + x, 1);
+  }
+
+  setFlash(x) {
+    this.flash = Math.max(this.flash, x);
+    this.flashHold = 0.06;
+  }
+
+  // realDt: unscaled wall-clock dt. boosting: physics boostTimer > 0.
+  update(realDt, boosting) {
+    this.trauma = Math.max(0, this.trauma - T.TRAUMA_DECAY * realDt);
+    this.trauma = Math.min(1, this.trauma + this.scrapeAccum);
+    this.scrapeAccum = Math.max(0, this.scrapeAccum - realDt * 0.5);
+
+    this.boostTarget = boosting ? 1 : 0;
+    const rate = this.boostTarget > this.boostFactor ? T.BOOST_ATTACK : T.BOOST_RELEASE;
+    this.boostFactor += (this.boostTarget - this.boostFactor)
+      * Math.min(1, rate * realDt);
+
+    if (this.flashHold > 0) this.flashHold -= realDt;
+    else this.flash = Math.max(0, this.flash - 2.5 * realDt);
+
+    this.hitstopT -= realDt;
+    this.timescale = this.hitstopT > 0 ? T.HITSTOP_SCALE : 1;
+
+    this.fovSpike = Math.max(0, this.fovSpike - (T.FOV_BOOST_SPIKE / T.FOV_SPIKE_DECAY) * realDt);
+    this.camPunch *= Math.exp(-8 * realDt);
+  }
+
+  // Effective trauma includes the speed rumble floor — turn it off and the
+  // game feels dead.
+  effectiveTrauma(speedNorm) {
+    return Math.max(this.trauma, T.TRAUMA_SPEED_FLOOR * speedNorm * speedNorm);
+  }
+}
