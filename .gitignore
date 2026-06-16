@@ -11,8 +11,4 @@
 # future-proof in case a toolchain is added later)
 node_modules/
 
-# Martin's music is drop-in only — not committed.
-# See assets/music/LÄGG-MUSIK-HÄR.txt for the slots; missing files = silence.
-assets/music/*.mp3
-assets/music/*.ogg
-assets/music/*.wav
+# (Music is committed — Martin's own compositions ship with the game.)
