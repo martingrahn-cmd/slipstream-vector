@@ -79,6 +79,7 @@ export const TUNING = {
   TRAUMA_DECAY: 1.2,
   TRAUMA_BOOST: 0.08, // a kick, not a rattle — boost feel comes from FOV/lunge/lines
   TRAUMA_HIT: 0.45,
+  TRAUMA_BUMP: 0.22,      // ship-to-ship shunt — gentler than a wall, scales with closing speed
   TRAUMA_LAND: 0.3,
   TRAUMA_SCRAPE: 0.02,    // per 60Hz-frame equivalent
   TRAUMA_SCRAPE_CAP: 0.35,

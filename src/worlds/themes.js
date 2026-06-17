@@ -33,6 +33,7 @@ export const THEMES = {
     mesaLit: 0x6b2fa0,
     mesaShadow: 0x3a1b6b,
     mesaRim: 0xff8c5a,
+    warm: 0xffd9a0,       // sun-facing highlight tint — warm sunset gold
     mountainFar: 0x5c2a9d,
     rock: 0x3a1b6b,
     trackBase: 0x1b1038,
@@ -79,6 +80,7 @@ export const THEMES = {
     mesaLit: 0x3fae6b,    // jungle islets
     mesaShadow: 0x1e6b4f,
     mesaRim: 0xffd98a,    // sun-kissed ridges
+    warm: 0xfff2d0,       // bright golden-hour daylight highlight
     mountainFar: 0x2e8fa3,
     rock: 0x8f7a52,       // sandbars and driftwood rock
     trackBase: 0x12262e,
@@ -122,6 +124,7 @@ export const THEMES = {
     mesaLit: 0x231c44,    // tower blocks along the track
     mesaShadow: 0x120d28,
     mesaRim: 0xff8fc0,    // catch the city glow on the edges
+    warm: 0xb9c2ff,       // cool moonlit highlight — it's night, not sunset
     mountainFar: 0x1a1133,
     rock: 0x1f1838,
     trackBase: 0x101020,

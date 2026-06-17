@@ -103,6 +103,14 @@ breaking fairness. You start with PULSE; win the championship at a class to
 unlock the next, and win the OVERDRIVE cup for a prestige gold champion
 livery. Progress persists. `src/worlds/classes.js`.
 
+**Rival difficulty:** the RIVALS row picks how hard the field drives —
+**ROOKIE** (forgiving), **PRO** (the default, a real fight) and **ACE**
+(brutal). It is independent of which track you pick and raises only *driver*
+skill — corner confidence, line tightness, boost-pad use — never ship speed,
+so the no-rubber-band rule holds. Every tier is open from the start (it's a
+challenge you choose, not a reward you earn) and the choice persists.
+`src/worlds/difficulty.js`.
+
 ## Racing
 
 You start P8 in a field of 8. Pick your seat on the start screen (↑↓ rows,
@@ -117,8 +125,8 @@ early gives a smaller BOOST START; hold the whole countdown and you flood the
 engines — nothing. The AI gets the same skill-gated chance.
 
 **Fairness:** ship stats belong to the hull — an AI in a Razorback gets the
-same +3% top speed you would. Drivers never cheat: difficulty (ramping with
-the track's roster position) only raises driver skill — corner-speed
+same +3% top speed you would. Drivers never cheat: difficulty (the RIVALS
+tier you pick — ROOKIE / PRO / ACE) only raises driver skill — corner-speed
 confidence, line tightness, boost-pad usage. No rubber-banding, ever. Teams
 have personalities (Halcyon: smooth lines; Razorback: late brakers;
 NovaSurge: boost hunters).
@@ -150,14 +158,29 @@ python3 -m http.server 8741
 | `↑ ↓` | menu rows |
 | `↓` / `S` | brake |
 | `Shift` | airbrake drift — release after >0.7 s for a mini-boost |
-| `Enter` | confirm / start / advance / restart (gamepad A later) |
+| `Enter` | confirm / start / advance / restart |
 | `Esc` | back / abort to menu |
 | `R` | respawn on the centerline (in race) |
 | `P` | pause |
+| `F` | toggle fullscreen (also the ⛶ button, bottom-left) |
 | `M` | debug top-down view |
 
-RECORDS and TROPHIES are selectable buttons in the menu (confirm to open) —
-not keyboard shortcuts, so they map cleanly to a gamepad.
+**Gamepad** (W3C standard mapping, auto-detected — just press a button):
+
+| Control | Action |
+|---|---|
+| Left stick / D-pad | steer · menu navigate |
+| RT / A / stick-up | thrust |
+| LT / D-pad-down / stick-down | brake |
+| LB / RB | airbrake drift |
+| A / Start | confirm / start / advance |
+| B | back / abort to menu |
+| X | respawn · Select pauses |
+
+Triggers are read analog, so you can feather the throttle. Fullscreen stays
+keyboard/mouse only — `requestFullscreen` needs a user gesture a gamepad can't
+grant. RECORDS and TROPHIES are selectable menu buttons (confirm to open), not
+keyboard shortcuts, so they map cleanly to a pad.
 
 Ride the blue chevron pads for a 1.2 s boost; the chain of three on the start
 straight sits on the risk line next to the left wall.
@@ -238,9 +261,10 @@ deterministically, independent of rAF.
 
 Done: 3 worlds × 2 tracks (two with F-Zero loops), 8-ship AI field (4 teams ×
 2 liveries, no rubber-banding), Championship / Single Race / Time Trial, three
-speed classes with an unlock ladder + prestige livery, full menu + ship
-select, procedural audio + music hooks, launch boosts, solid collisions,
-records, trackside liveliness.
+speed classes with an unlock ladder + prestige livery, a chosen RIVALS
+difficulty (decoupled from the track), full menu + ship select, keyboard +
+gamepad input, fullscreen, procedural audio + music hooks, launch boosts,
+solid collisions, records, trackside liveliness.
 
 Not yet built (rough priority):
 - **Music** — Martin composes the four tracks himself (drop-in slots ready).
@@ -248,7 +272,6 @@ Not yet built (rough priority):
   weighting, to protect the no-rubber-band rule), optionally with a hull
   energy/shield bar. Cheap in the spline domain. A natural Eliminator mode
   would pair with it.
-- **Gamepad support** — currently keyboard only.
 - **Performance pass** — merge the AI field's flame/glow sprites (draws climb
   to ~90–115 with 8 ships + city props).
 - **Championship persistence** — in-progress standings reset on reload (unlock

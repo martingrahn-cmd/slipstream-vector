@@ -337,6 +337,26 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink)
   opacity: 0.92;
 }
 
+/* Fullscreen toggle, bottom-left (the one free corner). Clickable, so it
+   opts back into pointer events that .hud turns off. */
+#fs-btn {
+  left: 16px; bottom: 16px;
+  z-index: 30; pointer-events: auto; cursor: pointer;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; line-height: 1;
+  color: var(--cyan);
+  background: rgba(9, 5, 22, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+  opacity: 0.45;
+  transition: opacity 140ms, box-shadow 140ms, color 140ms;
+}
+#fs-btn:hover, #fs-btn:focus-visible {
+  opacity: 1; color: #fff; outline: none;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.5);
+}
+
 /* Start overlay */
 #overlay {
   inset: 0;
@@ -482,7 +502,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink)
 #overlay .swatch-pair.sel { border-color: rgba(255, 255, 255, 0.7); }
 #overlay .swatch-pair.champ { box-shadow: 0 0 9px rgba(255, 210, 63, 0.7); }
 #overlay .swatch-pair i { width: 20px; height: 12px; display: inline-block; }
-#overlay #menu-class small {
+#overlay #menu-class small,
+#overlay #menu-difficulty small {
   font-family: 'Rajdhani', sans-serif; font-weight: 600;
   font-size: 12px; letter-spacing: 0.12em;
   color: rgba(255, 255, 255, 0.5); margin-left: 8px;

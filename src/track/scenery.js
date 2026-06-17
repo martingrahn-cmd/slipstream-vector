@@ -68,7 +68,7 @@ export function buildScenery(spline, scene, theme) {
   const rng = mulberry32(1337);
   const group = new THREE.Group();
   group.matrixAutoUpdate = false;
-  setBakeTheme(theme.mesaRim, theme.ground);
+  setBakeTheme(theme.mesaRim, theme.ground, theme.warm);
 
   // Track bounds for placement. The ground must clear the LOWEST point of the
   // banked track edge (a 32-degree bank drops the low edge ~5m below the

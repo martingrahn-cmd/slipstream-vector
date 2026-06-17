@@ -39,6 +39,18 @@ export class Juice {
     this.on('land', ({ severity }) => {
       this.addTrauma(T.TRAUMA_LAND * severity);
     });
+    // Ship-to-ship shunt: scaled by closing speed, gentler than a wall, and
+    // routed through addTrauma so it stays clamped — no raw trauma pokes.
+    this.on('bump', ({ severity = 0.5 } = {}) => {
+      this.addTrauma(T.TRAUMA_BUMP * (0.5 + 0.5 * severity));
+    });
+    // Came up short on a jump: a hard thump, but deliberately NOT a wallHit —
+    // it must not pollute the wall-hit tally that clean-win trophies read.
+    this.on('shortfall', () => {
+      this.addTrauma(T.TRAUMA_HIT);
+      this.setFlash(T.FLASH_HIT);
+      this.hitstopT = T.HITSTOP_TIME;
+    });
   }
 
   on(name, fn) {

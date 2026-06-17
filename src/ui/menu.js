@@ -4,7 +4,7 @@
 import { TEAMS, CALLSIGNS } from '../worlds/teams.js';
 import { fmt } from './hud.js';
 
-const ROWS = ['mode', 'track', 'class', 'team', 'livery', 'pilot', 'audio', 'records', 'trophies'];
+const ROWS = ['mode', 'track', 'class', 'difficulty', 'team', 'livery', 'pilot', 'audio', 'records', 'trophies'];
 
 export class Menu {
   constructor() {
@@ -20,6 +20,7 @@ export class Menu {
       pilot: document.getElementById('menu-pilot'),
       class: document.getElementById('menu-class'),
       classLock: document.getElementById('menu-class-lock'),
+      difficulty: document.getElementById('menu-difficulty'),
       volume: document.getElementById('menu-volume'),
       thumb: document.getElementById('menu-thumb'),
       profile: document.getElementById('menu-profile'),
@@ -75,6 +76,12 @@ export class Menu {
       + `<small>${data.classKmh} KM/H</small>`;
     this.el.classLock.textContent = data.classLockHint || '';
     this.el.classLock.classList.toggle('hidden', !data.classLockHint);
+
+    // Rival difficulty: name in its tier color + a one-word feel tag. Always
+    // available — no lock hint (unlike speed class).
+    const diff = data.diff;
+    this.el.difficulty.innerHTML = `<span style="color:#${hex(diff.color)}">${diff.name}</span>`
+      + `<small>${diff.tag}</small>`;
 
     const team = TEAMS[selection.team];
     this.el.team.textContent = team.fullName.toUpperCase();

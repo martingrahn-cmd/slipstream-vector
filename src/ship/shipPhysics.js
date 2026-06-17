@@ -5,7 +5,7 @@
 // ZERO three.js imports: this module runs headless (the AI/replay seam).
 // `track` must provide: length, scalarsAt(s, out), verticalCurvAt(s), pads.
 // `events.emit(name, payload)` receives: boost, miniboost, wallHit, scrape,
-// land, lap.
+// land, shortfall, lap.
 import { TUNING as T } from '../config.js';
 
 export class ShipPhysics {
@@ -169,7 +169,8 @@ export class ShipPhysics {
           this.s = wrap(target, tr.length);
           this.d = 0; this.vd = 0;
           this.v *= 0.5;
-          this.events.emit('wallHit', { side: 1, severity: 1 });
+          // A hard thump, but NOT a wall hit — see juice 'shortfall'.
+          this.events.emit('shortfall', {});
         } else {
           this.events.emit('land', { severity: Math.min(-this.hv / 8, 1) });
         }

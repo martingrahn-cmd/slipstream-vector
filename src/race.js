@@ -12,11 +12,12 @@ import { aiRoster } from './worlds/teams.js';
 const NULL_BUS = { emit() {}, on() {} };
 
 export class Race {
-  // difficulty: 0..5 (the track's index in the roster).
+  // aiLevel: the chosen rival difficulty as a skill scalar (~0.6 easy .. 5 hard),
+  // from worlds/difficulty.js — DECOUPLED from which track this is.
   // selection: the player's seat {team, livery, callsign}.
   // solo: time trial — no AI on track. cls: the active speed class (scales
   // AI physics AND skill, same as the player's ship).
-  constructor(spline, scene, difficulty, totalLaps, juice, selection, solo = false, cls = null) {
+  constructor(spline, scene, aiLevel, totalLaps, juice, selection, solo = false, cls = null) {
     this.spline = spline;
     this.scene = scene;
     this.totalLaps = totalLaps;
@@ -24,15 +25,15 @@ export class Race {
     this.selection = selection;
     this.clock = 0;
 
-    // Corner-speed confidence ramps with track difficulty AND the speed class.
-    const base = 0.82 + difficulty * 0.045 + (cls ? cls.aiSkill : 0);
+    // Corner-speed confidence ramps with the chosen difficulty AND the speed class.
+    const base = 0.82 + aiLevel * 0.045 + (cls ? cls.aiSkill : 0);
     const seats = solo ? [] : aiRoster(selection.team, Math.min(selection.livery, 1));
     this.racers = seats.map((seat, i) => {
       const sk = seat.team.skill;
       const skill = {
         corner: Math.min(1.1, base + sk.corner + (i % 2) * 0.02),
-        line: Math.max(0.1, Math.min(1, 0.45 + difficulty * 0.09 + sk.line * 4)),
-        boost: Math.max(0, Math.min(1, 0.3 + difficulty * 0.12 + sk.boost * 3)),
+        line: Math.max(0.1, Math.min(1, 0.45 + aiLevel * 0.09 + sk.line * 4)),
+        boost: Math.max(0, Math.min(1, 0.3 + aiLevel * 0.12 + sk.boost * 3)),
       };
       const phys = new ShipPhysics(spline, NULL_BUS, seat.team.stats, cls);
       const vis = new ShipVisual(spline, scene, {
@@ -41,7 +42,7 @@ export class Race {
       });
       return {
         seat, phys, vis,
-        driver: new AiDriver(spline, skill, 1000 + difficulty * 97 + i * 31),
+        driver: new AiDriver(spline, skill, Math.floor(1000 + aiLevel * 97 + i * 31)),
         boostEnv: 0,
         finishTime: null,
         name: `${seat.team.name} · ${seat.pilot}`,
@@ -120,7 +121,6 @@ export class Race {
             lead.v += closing * 0.3;
             this._pairCool.set(key, this.clock);
             if (trail === player || lead === player) {
-              this.juice.trauma = Math.max(this.juice.trauma, 0.18);
               this.juice.emit('bump', { severity: Math.min(closing / 18, 1) });
             }
           } else {

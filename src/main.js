@@ -24,6 +24,7 @@ import { Podium } from './ui/podium.js';
 import { Achievements } from './ui/achievements.js';
 import { TEAMS, CALLSIGNS } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
+import { DIFFICULTIES } from './worlds/difficulty.js';
 
 // Prestige livery (index 2 on every team) unlocked by winning the Phantom cup.
 const CHAMPION_LIVERY = { hull: 0x1a1208, accent: 0xffd23f };
@@ -132,6 +133,8 @@ const MODES = ['CHAMPIONSHIP', 'SINGLE RACE', 'TIME TRIAL'];
 const selection = {
   mode: clampInt(localStorage.getItem('sv-mode') ?? '1', MODES.length),
   classIdx: Math.min(clampInt(localStorage.getItem('sv-class'), CLASSES.length), unlockedClasses()),
+  // Rival difficulty (default PRO ≈ the old per-track average). Always free to pick.
+  difficulty: clampInt(localStorage.getItem('sv-difficulty') ?? '1', DIFFICULTIES.length),
   team: clampInt(localStorage.getItem('sv-team'), TEAMS.length),
   livery: clampInt(localStorage.getItem('sv-livery'), liveryCount()),
   pilot: clampInt(localStorage.getItem('sv-pilot'), CALLSIGNS.length),
@@ -229,7 +232,8 @@ function buildField() {
   const variant = { ...team.variant, ...liveryOf(team, selection.livery) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
   shipVisual = new ShipVisual(spline, scene, variant);
-  race = new Race(spline, scene, trackIndex, TOTAL_LAPS, juice, selectionInfo(),
+  race = new Race(spline, scene, DIFFICULTIES[selection.difficulty].level,
+    TOTAL_LAPS, juice, selectionInfo(),
     selection.mode === 2 /* time trial: empty track */, cls);
   race.grid();
   ship.reset(12);
@@ -238,6 +242,7 @@ function buildField() {
   localStorage.setItem('sv-livery', String(selection.livery));
   localStorage.setItem('sv-pilot', String(selection.pilot));
   localStorage.setItem('sv-class', String(selection.classIdx));
+  localStorage.setItem('sv-difficulty', String(selection.difficulty));
 }
 
 function updateMenu() {
@@ -252,6 +257,7 @@ function updateMenu() {
     mode: selection.mode,
     cls,
     classKmh: classKmh(cls, T.VMAX),
+    diff: DIFFICULTIES[selection.difficulty],
     // The next locked class and what unlocks it — shown as a hint.
     classLockHint: selection.classIdx >= unlocked && unlocked < CLASSES.length - 1
       ? `WIN ${CLASSES[unlocked].name} CUP` : null,
@@ -713,6 +719,9 @@ function applyMenuKey(code) {
       const next = selection.classIdx + act.dir;
       selection.classIdx = Math.max(0, Math.min(unlockedClasses(), next));
       buildField();
+    } else if (act.row === 'difficulty') {
+      selection.difficulty = n(DIFFICULTIES.length, selection.difficulty, act.dir);
+      buildField(); // rebuilds the AI field with the new skill level
     } else if (act.row === 'team') {
       selection.team = n(TEAMS.length, selection.team, act.dir);
       buildField();
@@ -913,6 +922,27 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSize(innerWidth, innerHeight);
+});
+
+// Fullscreen: on-screen button + F key. Both are genuine user gestures, which
+// requestFullscreen requires — a gamepad button can't grant activation, so it
+// is intentionally NOT bound here. Entering/leaving fires a resize, so the
+// renderer and composer rescale through the handler above.
+const fsBtn = document.getElementById('fs-btn');
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+  }
+}
+fsBtn.addEventListener('click', () => { toggleFullscreen(); fsBtn.blur(); });
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyF' && !e.repeat) toggleFullscreen();
+});
+document.addEventListener('fullscreenchange', () => {
+  fsBtn.title = document.fullscreenElement ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
 });
 
 // ------------------------------------------------------------------- boot
