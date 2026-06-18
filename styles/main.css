@@ -613,4 +613,34 @@ body.in-menu #speed-block,
 body.in-menu #boost-meter,
 body.in-menu #minimap { display: none !important; }
 
+/* Championship podium ceremony — full-screen 3D stage + title overlay. */
+#podium-scene {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  z-index: 60; display: block;
+}
+#podium-title {
+  position: fixed; top: 6%; left: 0; right: 0; z-index: 61;
+  text-align: center; pointer-events: none;
+}
+#podium-title .pt-tag {
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  letter-spacing: 0.42em; font-size: 15px; color: #8fe9ff;
+  text-shadow: 0 0 14px rgba(0, 240, 255, 0.6);
+}
+#podium-title .pt-title {
+  font-family: 'Orbitron', sans-serif; font-weight: 800;
+  font-size: 50px; line-height: 1.1; color: #fff; margin: 4px 0;
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.4);
+}
+#podium-title .pt-sub {
+  font-family: 'Rajdhani', sans-serif; font-weight: 600;
+  letter-spacing: 0.2em; font-size: 16px; color: #c9d2e8; opacity: 0.85;
+}
+#podium-title.champ .pt-title {
+  background: linear-gradient(180deg, #fff 20%, #ffd23f 55%, #ff8c3a 95%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 26px rgba(255, 210, 63, 0.6));
+  animation: champPulse 1.6s ease-in-out infinite;
+}
+
 .hidden { display: none !important; }

@@ -94,7 +94,7 @@ export function buildScenery(spline, scene, theme) {
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
   group.add(rings.mesh);
-  group.add(buildGantry(spline));
+  group.add(buildGantry(spline, groundY));
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme));
@@ -642,7 +642,7 @@ function mergeColored(geoms) {
 // rail, neon strips up the inner faces (cyan left / magenta right, echoing the
 // track edges) and a checkered start/finish band facing the oncoming cars.
 // Built in a local frame (x = right, y = up, z = travel) and oriented once.
-function buildGantry(spline) {
+function buildGantry(spline, groundY) {
   const f = makeFrame();
   spline.frameAt(0, f);
   const g = new THREE.Group();
@@ -651,11 +651,18 @@ function buildGantry(spline) {
   const SPAN = 2 * PX + 4;           // beam length across the road
   const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
-  // --- dark structure: bases, columns, caps, braces, beam, top rail ---
+  // --- dark structure: legs/footings, columns, caps, braces, beam, top rail ---
   const dark = [];
+  // The gate stands vertically (world up) at the centreline height, but the
+  // ground beside the road sits lower — and lower still when the start line is
+  // sloped/banked or elevated. Drop the legs to the ground plane (capped so a
+  // crest start doesn't grow absurd stilts) so the feet are always planted.
+  const legBottom = Math.max(groundY - f.pos.y, -7) - 0.4;
   for (const s of [-1, 1]) {
     const px = s * PX;
-    dark.push(box(4.4, 2.8, 4.4).translate(px, 1.4, 0));         // base block
+    const legTop = 2.6;
+    dark.push(box(2.2, legTop - legBottom, 2.4).translate(px, (legTop + legBottom) / 2, 0)); // leg to ground
+    dark.push(box(4.4, 1.4, 4.4).translate(px, legBottom + 0.7, 0));                          // footing
     dark.push(box(2.0, 9.8, 2.4).translate(px, 7.2, 0));         // column
     dark.push(box(3.2, 1.0, 3.4).translate(px, 12.4, 0));        // cap
     dark.push(box(4.4, 0.8, 1.2).rotateZ(s * 0.6).translate(px - s * 2.1, 11.2, 0)); // gusset brace
@@ -789,6 +796,16 @@ function buildScrub(rng, spline, groundY, theme) {
 
 // ------------------------------------------------------------------ flora
 // 'cacti' for the desert, 'palms' for the coast — same scatterer.
+// True if (x,z) clears the track surface laterally by at least `margin` metres
+// (scans the arc-length samples; spline.width is the half-width there).
+function clearOfTrack(spline, x, z, margin) {
+  for (let i = 0; i < spline.n; i++) {
+    const dx = x - spline.pos[i * 3], dz = z - spline.pos[i * 3 + 2];
+    if (Math.hypot(dx, dz) - spline.width[i] < margin) return false;
+  }
+  return true;
+}
+
 function buildFlora(rng, spline, groundY, theme) {
   const style = theme.flora;
   const parts = [];
@@ -832,14 +849,22 @@ function buildFlora(rng, spline, groundY, theme) {
   const sc = new THREE.Vector3();
   const Y = new THREE.Vector3(0, 1, 0);
   for (let i = 0; i < count; i++) {
-    const s = rng() * spline.length;
-    spline.frameAt(s, f);
-    const side = rng() < 0.5 ? -1 : 1;
-    const dist = f.width + 8 + rng() * 60;
-    const rx = f.R.x, rz = f.R.z;
-    const rl = Math.hypot(rx, rz) || 1;
+    // Pick a spot, but reject any that lands over the track — palms are tall
+    // and otherwise poke up through the surface on the inside of curves.
+    let x = 0, z = 0;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const s = rng() * spline.length;
+      spline.frameAt(s, f);
+      const side = rng() < 0.5 ? -1 : 1;
+      const dist = f.width + 8 + rng() * 60;
+      const rx = f.R.x, rz = f.R.z;
+      const rl = Math.hypot(rx, rz) || 1;
+      x = f.pos.x + (rx / rl) * side * dist;
+      z = f.pos.z + (rz / rl) * side * dist;
+      if (attempt === 7 || clearOfTrack(spline, x, z, 3)) break;
+    }
     const size = 1.6 + rng() * 2.2;
-    p.set(f.pos.x + (rx / rl) * side * dist, groundY, f.pos.z + (rz / rl) * side * dist);
+    p.set(x, groundY, z);
     q.setFromAxisAngle(Y, rng() * Math.PI * 2);
     sc.setScalar(size);
     m.compose(p, q, sc);

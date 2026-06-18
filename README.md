@@ -71,9 +71,13 @@ menu (never back to the title gate).
 ## Game modes
 
 Top row of the menu: **CHAMPIONSHIP** (all six tracks in roster order, points
-10-8-6-5-4-3-2-1 per race, standings between rounds, and a champion ceremony
-at the end — podium medals, a wins column, pulsing gold title and confetti if
-you take it; track choice is locked to the calendar), **SINGLE RACE** (any
+10-8-6-5-4-3-2-1 per race, standings between rounds, and at the end a full
+**3D podium ceremony** (`ui/podiumScene.js`) — the top-three ships rise onto
+gold/silver/bronze tiers under spotlights, confetti rains, the camera dollies
+in from a wide shot to a hero shot, your ship is ringed, and the title reads
+CHAMPION or P*n* OVERALL; press Enter for the standings board. Preview it
+without racing via `__game.podiumDemo(rank)`. Track choice is locked to the
+calendar), **SINGLE RACE** (any
 track vs the field) and **TIME TRIAL** (alone, chasing records). ESC aborts
 any session back to the menu. During the countdown a banner announces the
 round and circuit; the last lap gets a FINAL LAP call.
@@ -214,6 +218,7 @@ src/
   ui/menu.js               attract menu: mode strip, track/team/livery/pilot rows, thumbnails
   ui/minimap.js            canvas minimap: track outline, pads, start line, ship + rivals
   ui/podium.js             spinning 3D ship model for the menu ship card
+  ui/podiumScene.js        full-screen 3D championship podium ceremony
 assets/music/              drop-in music slots (see Sound & music)
 ```
 

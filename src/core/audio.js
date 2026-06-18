@@ -46,7 +46,63 @@ export class AudioEngine {
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
     this._buildEngine();
+    this._buildOpponentVoices();
     this._tryMusic();
+  }
+
+  // A small pool of engine voices reassigned to the nearest opponents each
+  // frame — purely cosmetic (no physics/AI coupling, no rubber-banding).
+  _buildOpponentVoices() {
+    const ctx = this.ctx;
+    this.oppVoices = [];
+    for (let i = 0; i < 2; i++) {
+      const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 60;
+      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 30;
+      const subG = ctx.createGain(); subG.gain.value = 0.5;
+      const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 500;
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      osc.connect(filt); sub.connect(subG); subG.connect(filt);
+      filt.connect(gain);
+      if (pan) { gain.connect(pan); pan.connect(this.master); } else { gain.connect(this.master); }
+      osc.start(); sub.start();
+      this.oppVoices.push({ osc, sub, filt, gain, pan });
+    }
+  }
+
+  // racers: array of opponent physics {s, d, v, speedNorm, VMAX}. playerS = the
+  // player's arc length; len = spline length. Voices fade in by proximity.
+  updateOpponentEngines(dt, racers, playerS, len, racing) {
+    if (!this.ctx || !this.oppVoices) return;
+    const k = Math.min(1, 8 * dt);
+    let scored = [];
+    if (racing && racers && racers.length) {
+      for (const r of racers) {
+        let ds = (((r.s - playerS) % len) + len) % len;
+        if (ds > len - ds) ds = len - ds;
+        scored.push({ r, ds });
+      }
+      scored.sort((a, b) => a.ds - b.ds);
+    }
+    const REACH = 55; // metres along the track before a voice goes silent
+    for (let i = 0; i < this.oppVoices.length; i++) {
+      const v = this.oppVoices[i];
+      const cand = scored[i];
+      let targetGain = 0, freq = v.osc.frequency.value, pan = 0;
+      if (cand && cand.ds < REACH) {
+        const r = cand.r;
+        const sn = r.speedNorm != null ? r.speedNorm : Math.min(1, r.v / (r.VMAX || 90));
+        freq = 50 + sn * 150;
+        const prox = 1 - cand.ds / REACH;
+        targetGain = 0.06 * prox * prox * this.stateScale;
+        pan = Math.max(-1, Math.min(1, (r.d || 0) / 6));
+      }
+      v.osc.frequency.value += (freq - v.osc.frequency.value) * k;
+      v.sub.frequency.value = v.osc.frequency.value * 0.5;
+      v.filt.frequency.value = 320 + (freq - 50) * 6;
+      v.gain.gain.value += (targetGain - v.gain.gain.value) * k;
+      if (v.pan) v.pan.pan.value += (pan - v.pan.pan.value) * k;
+    }
   }
 
   // ---- continuous engine + wind + scrape bed -----------------------------
@@ -61,18 +117,26 @@ export class AudioEngine {
     this.engGain.connect(this.master);
 
     this.osc1 = ctx.createOscillator();
-    this.osc1.type = 'sawtooth';
-    this.osc1.frequency.value = 55;
+    this.osc1.type = 'sawtooth';      // harmonic body (turbine, not two-stroke)
+    this.osc1.frequency.value = 48;
     this.osc2 = ctx.createOscillator();
-    this.osc2.type = 'square';
-    this.osc2.frequency.value = 55.6;
+    this.osc2.type = 'triangle';      // was square — drop the hollow buzz
+    this.osc2.frequency.value = 48.5;
     const o2g = ctx.createGain();
-    o2g.gain.value = 0.5;
+    o2g.gain.value = 0.42;
+    this.osc3 = ctx.createOscillator();
+    this.osc3.type = 'sine';          // sub an octave down — the weight
+    this.osc3.frequency.value = 24;
+    const o3g = ctx.createGain();
+    o3g.gain.value = 0.6;
     this.osc1.connect(this.engFilter);
     this.osc2.connect(o2g);
     o2g.connect(this.engFilter);
+    this.osc3.connect(o3g);
+    o3g.connect(this.engFilter);
     this.osc1.start();
     this.osc2.start();
+    this.osc3.start();
 
     // Wind: looped noise through a bandpass that opens with speed.
     this.wind = ctx.createBufferSource();
@@ -111,10 +175,11 @@ export class AudioEngine {
     this.stateScale += ((racing ? 1 : 0.25) - this.stateScale) * Math.min(1, 4 * dt);
     const k = Math.min(1, 10 * dt);
 
-    const f = 52 + sn * 165 + boostFactor * 70;
+    const f = 46 + sn * 150 + boostFactor * 66;
     this.osc1.frequency.value += (f - this.osc1.frequency.value) * k;
     this.osc2.frequency.value = this.osc1.frequency.value * 1.011;
-    const cutoff = 280 + throttle * 900 + sn * 1400 + boostFactor * 900;
+    this.osc3.frequency.value = this.osc1.frequency.value * 0.5; // sub follows an octave down
+    const cutoff = 190 + throttle * 900 + sn * 1500 + boostFactor * 900;
     this.engFilter.frequency.value += (cutoff - this.engFilter.frequency.value) * k;
     const eg = (0.018 + throttle * 0.038 + sn * 0.02 + boostFactor * 0.025) * this.stateScale;
     this.engGain.gain.value += (eg - this.engGain.gain.value) * k;
@@ -220,9 +285,23 @@ export class AudioEngine {
   // race.mp3 acts as a fallback for any missing world track. Missing file =
   // silence for that slot, never an error.
   _tryMusic() {
-    this.musicEls = {};
+    this.musicEls = {};       // HTMLAudio fallbacks (used until a buffer decodes)
+    this.musicBuffers = {};   // decoded AudioBuffers for gapless looping
+    this._decoding = {};
+    this._musicSources = [];  // live BufferSourceNodes of the current loop
+    this._loopKey = null;     // track currently looping gaplessly
+    this._loopTimer = null;
     this._wantKey = null;
-    this.currentMusic = null;
+    this.currentMusic = null; // HTMLAudio element currently playing, if any
+    // Equal-power crossfade curves (reused for every loop boundary).
+    const N = 33;
+    this._fadeIn = new Float32Array(N);
+    this._fadeOut = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const x = (i / (N - 1)) * Math.PI / 2;
+      this._fadeIn[i] = Math.sin(x);
+      this._fadeOut[i] = Math.cos(x);
+    }
     for (const key of ['menu', 'sunset', 'coast', 'sprawl', 'race']) {
       const el = document.createElement('audio');
       el.src = `./assets/music/${key}.mp3`;
@@ -232,22 +311,94 @@ export class AudioEngine {
         const node = this.ctx.createMediaElementSource(el);
         node.connect(this.musicBus);
         this.musicEls[key] = el;
-        // If this slot was requested before the file finished loading, start it.
-        if (this._wantKey === key && !this.currentMusic) this.playMusic(key);
+        // If this slot was requested before the file loaded, start it now.
+        if (this._wantKey === key && !this._loopKey && !this.currentMusic) this.playMusic(key);
       }, { once: true });
       el.addEventListener('error', () => {}, { once: true });
       el.load();
     }
   }
 
+  // Fetch + decode a track to an AudioBuffer, then upgrade to the gapless loop
+  // if it's still the one we want. Never edits the file — playback only.
+  _decodeMusic(key) {
+    if (this.musicBuffers[key] || this._decoding[key]) return;
+    this._decoding[key] = true;
+    fetch(`./assets/music/${key}.mp3`)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('404'))))
+      .then((ab) => this.ctx.decodeAudioData(ab))
+      .then((buf) => {
+        this.musicBuffers[key] = buf;
+        if (this._wantKey === key && this._loopKey !== key) this.playMusic(key);
+      })
+      .catch(() => {})
+      .finally(() => { this._decoding[key] = false; });
+  }
+
+  // Seamless loop: each pass overlaps the next by a short equal-power crossfade,
+  // so the end melts into the start instead of clicking/gapping like <audio loop>.
+  _startGaplessLoop(reqKey, buffer) {
+    const ctx = this.ctx;
+    const XF = Math.min(0.5, buffer.duration * 0.25); // crossfade seconds
+    const period = Math.max(0.3, buffer.duration - XF);
+    this._loopKey = reqKey;
+    const scheduleAt = (t) => {
+      if (this._loopKey !== reqKey) return;          // track changed
+      if (ctx.state !== 'running') {                 // paused — wait, don't stack
+        this._loopTimer = setTimeout(() => scheduleAt(t), 250);
+        return;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const g = ctx.createGain();
+      src.connect(g); g.connect(this.musicBus);
+      g.gain.setValueCurveAtTime(this._fadeIn, t, XF);            // fade in
+      g.gain.setValueCurveAtTime(this._fadeOut, t + period, XF);  // fade out
+      src.start(t);
+      src.stop(t + period + XF + 0.05);
+      this._musicSources.push(src);
+      src.onended = () => {
+        const i = this._musicSources.indexOf(src);
+        if (i >= 0) this._musicSources.splice(i, 1);
+      };
+      // Queue the next pass to begin exactly as this one starts fading out.
+      const nextT = t + period;
+      const delayMs = Math.max(0, (nextT - ctx.currentTime - 0.25) * 1000);
+      this._loopTimer = setTimeout(() => scheduleAt(nextT), delayMs);
+    };
+    scheduleAt(ctx.currentTime + 0.06);
+  }
+
+  _stopAllMusic() {
+    if (this._loopTimer) { clearTimeout(this._loopTimer); this._loopTimer = null; }
+    this._loopKey = null;
+    if (this._musicSources) {
+      for (const s of this._musicSources) { try { s.stop(); } catch (e) { /* already stopped */ } }
+      this._musicSources = [];
+    }
+    if (this.currentMusic) { this.currentMusic.pause(); this.currentMusic = null; }
+  }
+
   playMusic(key) {
     this._wantKey = key;
-    if (!this.musicEls) return;
-    const el = this.musicEls[key] || (key !== 'menu' ? this.musicEls.race : null) || null;
-    if (this.currentMusic === el) {
-      if (el && el.paused) el.play();
+    if (!this.ctx) return;
+    if (this._loopKey === key) return; // already looping this track gaplessly
+
+    // Prefer a decoded buffer (gapless). Fall back to race.mp3 for world tracks.
+    let effKey = key, buf = this.musicBuffers[key];
+    if (!buf && key !== 'menu' && this.musicBuffers.race) { effKey = 'race'; buf = this.musicBuffers.race; }
+    if (buf) {
+      this._stopAllMusic();
+      this._loopKey = key; // remember the requested key for the early-out above
+      this._startGaplessLoop(key, buf);
       return;
     }
+
+    // No buffer yet: kick off a decode (for a gapless upgrade) and play the
+    // HTMLAudio fallback meanwhile.
+    this._decodeMusic(key);
+    const el = this.musicEls[key] || (key !== 'menu' ? this.musicEls.race : null) || null;
+    if (this.currentMusic === el) { if (el && el.paused) el.play(); return; }
     if (this.currentMusic) this.currentMusic.pause();
     this.currentMusic = el;
     if (el) { el.currentTime = 0; el.play(); }
@@ -255,8 +406,7 @@ export class AudioEngine {
 
   stopMusic() {
     this._wantKey = null;
-    if (this.currentMusic) this.currentMusic.pause();
-    this.currentMusic = null;
+    this._stopAllMusic();
   }
 
   // ---- controls -------------------------------------------------------------

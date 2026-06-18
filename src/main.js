@@ -21,6 +21,7 @@ import { AudioEngine } from './core/audio.js';
 import { Race } from './race.js';
 import { Menu } from './ui/menu.js';
 import { Podium } from './ui/podium.js';
+import { PodiumScene } from './ui/podiumScene.js';
 import { Achievements } from './ui/achievements.js';
 import { TEAMS, CALLSIGNS } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
@@ -70,6 +71,7 @@ const achievements = new Achievements(audio);
 const tally = { wallHits: 0, contacts: 0, perfectStart: false, pads: 0 };
 let lastPlace = 0; // for the overtake trophy
 const podium = new Podium(document.getElementById('podium'));
+const podiumScene = new PodiumScene(document.getElementById('podium-scene'));
 const postfx = new PostFX(renderer, scene, camera);
 
 // Environment snapshot for the track card: rendered from a showcase point in
@@ -370,6 +372,49 @@ function celebrateChampion() {
   juice.addTrauma(0.15);
 }
 
+// Top-three standings as podium entries, each with a ship variant to render.
+// The player gets their real hull/livery; rivals get their accent on a clean
+// hull so the three ships read as distinct teams.
+function podiumEntries() {
+  const sorted = [...champ.points.values()].sort((a, b) => b.pts - a.pts);
+  const playerRank = sorted.findIndex((e) => e.player) + 1;
+  const team = TEAMS[selection.team];
+  const playerVariant = { ...team.variant, ...liveryOf(team, selection.livery) };
+  const top3 = sorted.slice(0, 3).map((e) => ({
+    name: e.name,
+    player: e.player,
+    variant: e.player
+      ? playerVariant
+      : { scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1, hull: 0xd8d4e8, accent: e.accent },
+  }));
+  return { top3, playerRank };
+}
+
+const podiumTitleEl = document.getElementById('podium-title');
+const podiumSceneEl = document.getElementById('podium-scene');
+
+function enterPodium() {
+  const { top3, playerRank } = podiumEntries();
+  state = 'podium';
+  podiumScene.show(top3);
+  podiumSceneEl.classList.remove('hidden');
+  podiumTitleEl.className = playerRank === 1 ? 'champ' : '';
+  podiumTitleEl.querySelector('.pt-tag').textContent =
+    `CHAMPIONSHIP · ${CLASSES[champ.classIndex].name} CLASS`;
+  podiumTitleEl.querySelector('.pt-title').textContent =
+    playerRank === 1 ? 'CHAMPION' : `P${playerRank} OVERALL`;
+  podiumTitleEl.querySelector('.pt-sub').textContent = 'ENTER — STANDINGS';
+  podiumTitleEl.classList.remove('hidden');
+  audio.championFanfare();
+  if (playerRank <= 3) juice.addTrauma(0.12);
+}
+
+function exitPodium() {
+  podiumScene.hide();
+  podiumSceneEl.classList.add('hidden');
+  podiumTitleEl.classList.add('hidden');
+}
+
 // Spark hookups need world positions — resolved here, not in physics.
 const _f = makeFrame();
 const _v = new THREE.Vector3();
@@ -562,6 +607,7 @@ function tick(now) {
   input.update(realDt);
   handleKeys();
   if (paused) return;
+  if (state === 'podium') { podiumScene.update(realDt); return; }
 
   // State machine.
   let simInput = NULL_INPUT;
@@ -676,6 +722,9 @@ function tick(now) {
   hud.update(realDt, ship, TOTAL_LAPS);
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
+  audio.updateOpponentEngines(realDt,
+    state === 'race' ? race.racers.map((r) => r.phys) : null,
+    ship.s, spline.length, state === 'race');
   if (state === 'attract' || state === 'intro') {
     podium.update(realDt);
     if (audio.ctx && audio._wantKey !== 'menu') audio.playMusic('menu');
@@ -826,6 +875,14 @@ function showRecordsBoard() {
 }
 
 function onEnter() {
+  if (state === 'podium') {
+    audio.uiSelect();
+    exitPodium();
+    state = 'finished';
+    finishedView = 'standings';
+    hud.showResults(buildStandingsView());
+    return;
+  }
   if (state === 'attract') {
     if (recordsOpen || trophiesOpen) { closePanels(); return; }
     // The confirm button activates the focused row: open a panel, or race.
@@ -861,9 +918,11 @@ function onEnter() {
         const me = [...champ.points.values()].find((e) => e.player);
         if (me && me.wins >= TRACKS.length) achievements.unlock('sweep');
       }
-      const view = buildStandingsView();
-      hud.showResults(view);
-      if (view.champ) celebrateChampion();
+      if (last) {
+        enterPodium();           // 3D ceremony first; the board follows on confirm
+      } else {
+        hud.showResults(buildStandingsView());
+      }
     } else if (champ.active && champ.round < TRACKS.length - 1) {
       champ.round += 1;
       trackIndex = champ.round;
@@ -886,6 +945,7 @@ function onEscape() {
 }
 
 function backToMenu() {
+  exitPodium();
   state = 'attract';
   paused = false;
   hud.hideResults();
@@ -959,12 +1019,39 @@ window.__game = {
   get spline() { return spline; },
   get trackDef() { return trackDef; },
   get race() { return race; },
+  get podiumScene() { return podiumScene; },
   juice, input, audio, hud, achievements,
   state: () => state,
   menu,
   menuKey: applyMenuKey,
   enter: onEnter,
   escape: onEscape,
+  // Jump straight to the podium ceremony with the player at a given overall
+  // rank (1-8), no championship required — for previewing the scene.
+  podiumDemo: (rank = 1) => {
+    rank = Math.max(1, Math.min(8, Math.round(rank)));
+    const pTeam = TEAMS[selection.team];
+    const rivals = TEAMS.map((_, i) => i).filter((i) => i !== selection.team);
+    let ri = 0;
+    const top3 = [0, 1, 2].map((i) => {
+      const isPlayer = i + 1 === rank;
+      if (isPlayer) {
+        return { name: 'YOU', player: true, variant: { ...pTeam.variant, ...liveryOf(pTeam, selection.livery) } };
+      }
+      const team = TEAMS[rivals[ri++ % rivals.length]];
+      return { name: team.fullName || team.name, player: false, variant: { ...team.variant, ...team.liveries[1] } };
+    });
+    state = 'podium';
+    podiumScene.show(top3);
+    podiumSceneEl.classList.remove('hidden');
+    podiumTitleEl.className = rank === 1 ? 'champ' : '';
+    podiumTitleEl.querySelector('.pt-tag').textContent = 'CHAMPIONSHIP · DEMO';
+    podiumTitleEl.querySelector('.pt-title').textContent = rank === 1 ? 'CHAMPION' : `P${rank} OVERALL`;
+    podiumTitleEl.querySelector('.pt-sub').textContent = 'ENTER — STANDINGS';
+    podiumTitleEl.classList.remove('hidden');
+    audio.championFanfare();
+    return 'podium demo, rank ' + rank;
+  },
   champ,
   selection,
   start: () => { hud.setCenter(null); startCountdown(); state = 'race'; },
