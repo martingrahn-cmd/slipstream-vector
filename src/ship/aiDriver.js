@@ -24,6 +24,8 @@ export class AiDriver {
     this.padTargetId = -1;
     this.padRolledId = -1;
     this.wobbleT = this.rng() * 100;
+    // Route-fork temperament: brave drivers take the fast (pad) inside lane.
+    this.takesFastLane = this.rng() < 0.25 + skill.boost * 0.6;
   }
 
   lineAt(s) {
@@ -58,6 +60,18 @@ export class AiDriver {
 
     // Small human wobble, fading with skill.
     dT += Math.sin(this.wobbleT * 0.9) * (1 - sk.line) * 1.2;
+
+    // Route fork: commit to a lane on approach and hold it through the island.
+    // Brave drivers take the fast (pad) side; the rest take the safe outside.
+    for (const split of sp.splits || []) {
+      const toStart = sdist(ship.s, split.s0, sp.length);
+      const toEnd = sdist(ship.s, split.s1, sp.length);
+      if (toStart < 35 && toEnd > -2) {
+        const side = this.takesFastLane ? split.fast : -split.fast;
+        dT = side * (split.gap + 3.5);
+        break;
+      }
+    }
 
     // Clamp inside the walls with margin.
     const sc = sp.scalarsAt(ship.s, this.scalars);

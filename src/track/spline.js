@@ -37,6 +37,41 @@ export class TrackSpline {
     this._applyBank();
 
     this.pads = this._buildPads(ex);
+    this.splits = this._buildSplits(ex);
+  }
+
+  // Resolve {from,to (cp), gap, fast} splits to arc length and bake a per-sample
+  // central-island half-width (splitBand) with a wedge nose at each end so the
+  // road separates smoothly — no lateral snap. Physics reads it via scalarsAt;
+  // the mesh reads splitHalfAt for the island geometry.
+  _buildSplits(td) {
+    this.splitBand = new Float32Array(this.n);
+    const RAMP = 18; // metres of wedge at each end — a long, easy nose to pick a lane
+    const splits = (td.splits || []).map((sp) => {
+      const s0 = this._sAt(sp.from);
+      const s1 = this._sAt(sp.to);
+      const span = (s1 - s0 + this.length) % this.length || this.length;
+      const gap = sp.gap ?? 4.5;
+      const ramp = Math.min(RAMP, span / 2);
+      for (let i = 0; i < this.n; i++) {
+        const ds = (i * this.step - s0 + this.length) % this.length;
+        if (ds > span) continue;
+        const wedge = Math.min(1, ds / ramp, (span - ds) / ramp);
+        this.splitBand[i] = Math.max(this.splitBand[i], gap * wedge);
+      }
+      return { s0: this.wrap(s0), s1: this.wrap(s1), span, gap, fast: sp.fast ?? 1 };
+    });
+    return splits;
+  }
+
+  // Interpolated central-island half-width at arc length s (0 = no island).
+  splitHalfAt(s) {
+    s = this.wrap(s);
+    const f = s / this.step;
+    const i0 = Math.floor(f) % this.n;
+    const i1 = (i0 + 1) % this.n;
+    const t = f - Math.floor(f);
+    return this.splitBand[i0] * (1 - t) + this.splitBand[i1] * t;
   }
 
   // Turn {type:'loop', cp, dir, radius, twist} features into 6 inserted control
@@ -48,7 +83,7 @@ export class TrackSpline {
     const loops = (td.features || []).filter((f) => f.type === 'loop');
     const others = (td.features || []).filter((f) => f.type !== 'loop');
     if (!loops.length) {
-      return { points: td.points, boostPads: td.boostPads || [], features: others };
+      return { points: td.points, boostPads: td.boostPads || [], features: others, splits: td.splits || [] };
     }
     const anchors = loops.map((l) => Math.round(l.cp)).sort((a, b) => a - b);
     const points = [];
@@ -65,7 +100,8 @@ export class TrackSpline {
         ? { ...f, from: remap(f.from), to: remap(f.to) }
         : { ...f, cp: remap(f.cp) },
     );
-    return { points, boostPads, features };
+    const splits = (td.splits || []).map((s) => ({ ...s, from: remap(s.from), to: remap(s.to) }));
+    return { points, boostPads, features, splits };
   }
 
   // The 6 control points after the loop's anchor (the anchor itself is the
@@ -317,6 +353,7 @@ export class TrackSpline {
     out.bank = this.bank[i0] * (1 - t) + this.bank[i1] * t;
     out.width = this.width[i0] * (1 - t) + this.width[i1] * t;
     out.slope = this.tan[i0 * 3 + 1] * (1 - t) + this.tan[i1 * 3 + 1] * t;
+    out.splitHalf = this.splitBand[i0] * (1 - t) + this.splitBand[i1] * t;
     return out;
   }
 

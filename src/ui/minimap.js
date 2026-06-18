@@ -99,6 +99,49 @@ export class Minimap {
     ctx.lineTo(sx + nx * 5, sy + nz * 5);
     ctx.stroke();
     ctx.shadowBlur = 0;
+
+    // Route forks: the centerline splays into two bowed arcs that rejoin (a
+    // "lens") — the only place on the map where one line becomes two, so it
+    // reads instantly as a fork. The real ~4.5m gap is sub-pixel here, so the
+    // separation is deliberately exaggerated to a fixed ~5px. The safe arc
+    // matches the track body; the fast/boost arc runs a notch hotter in cyan.
+    const OFF = 5.0;  // px half-separation (diagrammatic, not to scale)
+    const NS = 16;
+    for (const sp of (spline.splits || [])) {
+      const fast = [], safe = [];
+      const fSide = sp.fast >= 0 ? 1 : -1;
+      for (let k = 0; k <= NS; k++) {
+        const t = k / NS;
+        const s = spline.wrap(sp.s0 + t * sp.span);
+        const i = Math.round(spline.wrap(s) / spline.step) % spline.n;
+        const wx = spline.pos[i * 3], wz = spline.pos[i * 3 + 2];
+        const [cx, cy] = this.toMap(wx, wz);
+        const [rxp, ryp] = this.toMap(wx + spline.right[i * 3], wz + spline.right[i * 3 + 2]);
+        let dx = rxp - cx, dy = ryp - cy;             // map-space RIGHT (px)
+        const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
+        // Bow: 0 at both noses, fat in the middle (echoes the in-world wedge).
+        const bow = Math.pow(Math.sin(t * Math.PI), 0.7) * OFF * fSide;
+        fast.push([cx + dx * bow, cy + dy * bow]);
+        safe.push([cx - dx * bow, cy - dy * bow]);
+      }
+      strokeArc(ctx, safe, 'rgba(36, 16, 82, 0.95)', 5);
+      strokeArc(ctx, safe, 'rgba(255, 255, 255, 0.8)', 1.6, 'rgba(0, 240, 255, 0.9)', 5);
+      strokeArc(ctx, fast, 'rgba(36, 16, 82, 0.95)', 5);
+      strokeArc(ctx, fast, 'rgba(125, 249, 255, 0.95)', 1.8, 'rgba(0, 240, 255, 1)', 6);
+      // Entry-nose anchor: a dark-backed cyan dot where the choice begins.
+      const ni = Math.round(spline.wrap(sp.s0) / spline.step) % spline.n;
+      const [nx2, ny2] = this.toMap(spline.pos[ni * 3], spline.pos[ni * 3 + 2]);
+      ctx.beginPath();
+      ctx.arc(nx2, ny2, 2.0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(10, 4, 28, 0.9)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#7df9ff';
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.9)';
+      ctx.shadowBlur = 4;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
   }
 
   _frameXZ(spline, s) {
@@ -138,6 +181,19 @@ export class Minimap {
     ctx.arc(mx, my, 1.4, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+// Stroke a pixel polyline, optionally with a neon glow. Used for the fork lens.
+function strokeArc(ctx, pts, color, w, glow, blur) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = blur; } else { ctx.shadowBlur = 0; }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 }
 
 function roundRect(ctx, x, y, w, h, r) {

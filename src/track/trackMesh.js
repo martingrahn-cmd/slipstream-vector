@@ -9,6 +9,7 @@ export function buildTrackMesh(spline, theme) {
   const group = new THREE.Group();
   group.add(buildSurface(spline, theme));
   group.add(buildWalls(spline));
+  if (spline.splits && spline.splits.length) group.add(buildSplitIslands(spline));
   group.add(buildEdgeStrips(spline));
   group.add(buildGlowRibbons(spline));
   const pads = buildBoostPads(spline);
@@ -181,6 +182,109 @@ function buildWalls(spline) {
 
   const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
     vertexColors: true, fog: true, side: THREE.DoubleSide,
+  }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// ----------------------------------------------------- split islands
+// A raised central divider that follows the baked split band (wedge nose ->
+// hold -> wedge tail), splitting the road into TWO bordered lanes. A low dark
+// median caps in hot-yellow, and each lane gets its own neon lip — magenta on
+// the left lane's right edge, cyan on the right lane's left edge — so it reads
+// as two roads, not one obstacle. Matte body + additive-free neon, two meshes.
+function buildSplitIslands(spline) {
+  const group = new THREE.Group();
+  group.add(buildIslandBody(spline));
+  group.add(buildIslandNeon(spline));
+  group.matrixAutoUpdate = false;
+  return group;
+}
+
+function buildIslandBody(spline) {
+  const positions = [], colors = [], idx = [];
+  const v = new THREE.Vector3();
+  const H = 0.8; // low median, not a wall — you read over it to the far lane
+  const cSide = new THREE.Color(TUNING.COL.WALL).multiplyScalar(1.4);
+  const cCap = new THREE.Color(TUNING.COL.WARNING);
+  const f = makeFrame();
+  for (const sp of spline.splits) {
+    const segs = Math.max(2, Math.ceil(sp.span / TUNING.SLICE_STEP));
+    const base = positions.length / 3;
+    for (let i = 0; i <= segs; i++) {
+      const s = sp.s0 + (i / segs) * sp.span;
+      spline.frameAt(s, f);
+      const h = Math.max(0.05, spline.splitHalfAt(s));
+      // 4 verts: left base, left cap, right cap, right base.
+      const defs = [[-h, 0, cSide], [-h, H, cCap], [h, H, cCap], [h, 0, cSide]];
+      for (const [x, y, c] of defs) {
+        v.copy(f.pos).addScaledVector(f.R, x).addScaledVector(f.U, y + 0.04);
+        positions.push(v.x, v.y, v.z);
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+    for (let i = 0; i < segs; i++) {
+      const a = base + i * 4, b = a + 4;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);             // left face
+      idx.push(a + 1, a + 2, b + 1, b + 1, a + 2, b + 2); // cap
+      idx.push(a + 2, a + 3, b + 2, b + 2, a + 3, b + 3); // right face
+    }
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+  geom.setIndex(idx);
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+    vertexColors: true, fog: true, side: THREE.DoubleSide,
+  }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// Glowing rails along the top lips of the median — colored to each lane's edge
+// language so the player instantly reads "two roads". fog:false, like the
+// track-edge neon, so it telegraphs the fork through the haze.
+function buildIslandNeon(spline) {
+  const positions = [], colors = [], idx = [];
+  const v = new THREE.Vector3();
+  const cL = new THREE.Color(TUNING.COL.EDGE_L); // cyan — left edge of the right lane
+  const cR = new THREE.Color(TUNING.COL.EDGE_R); // magenta — right edge of the left lane
+  const f = makeFrame();
+  const Y = 0.86; // along the top lip, just above the cap
+  for (const sp of spline.splits) {
+    const segs = Math.max(2, Math.ceil(sp.span / TUNING.SLICE_STEP));
+    const base = positions.length / 3;
+    for (let i = 0; i <= segs; i++) {
+      const s = sp.s0 + (i / segs) * sp.span;
+      spline.frameAt(s, f);
+      const h = Math.max(0.05, spline.splitHalfAt(s));
+      const defs = [
+        [-h - 0.18, -h + 0.06, cR], // left lip (magenta)
+        [h - 0.06, h + 0.18, cL],   // right lip (cyan)
+      ];
+      for (const [x0, x1, c] of defs) {
+        for (let e = 0; e < 2; e++) {
+          v.copy(f.pos).addScaledVector(f.R, e ? x1 : x0).addScaledVector(f.U, Y);
+          positions.push(v.x, v.y, v.z);
+          colors.push(c.r, c.g, c.b);
+        }
+      }
+    }
+    for (let i = 0; i < segs; i++) {
+      for (let j = 0; j < 2; j++) {
+        const a = base + (i * 2 + j) * 2, b = a + 4;
+        idx.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+  geom.setIndex(idx);
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+    vertexColors: true, fog: false, side: THREE.DoubleSide,
   }));
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;

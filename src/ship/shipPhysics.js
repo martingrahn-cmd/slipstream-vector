@@ -23,7 +23,7 @@ export class ShipPhysics {
     this.VMAX = T.VMAX * (st.vmax ?? 1) * c.vmax;
     this.DRAG = this.ACCEL / this.VMAX; // keeps vmax = ACCEL/DRAG by construction
     this.STEER = st.steer ?? 1;
-    this.scalars = { kappa: 0, bank: 0, width: 8, slope: 0 };
+    this.scalars = { kappa: 0, bank: 0, width: 8, slope: 0, splitHalf: 0 };
     this.reset(0);
   }
 
@@ -40,6 +40,7 @@ export class ShipPhysics {
     this.boostTimer = 0;
     this.driftHeld = 0;
     this.scraping = false;
+    this.splitLane = 0;    // 0 = not in a split; ±1 = the lane committed to
     this.activePad = -1;
     this.lap = 0;
     this.lapTime = 0;
@@ -139,6 +140,34 @@ export class ShipPhysics {
         this.scraping = true;
         this.events.emit('scrape', { side });
       }
+    }
+
+    // ---- split island: a central forbidden d-band you must commit around ----
+    // Latch the lane on entry, then clamp to that side exactly like a wall —
+    // pure d-domain, so no colliders and no tunneling, same as everything else.
+    const splitH = sc.splitHalf;
+    if (splitH > 0.01 && !this.jumping) {
+      if (this.splitLane === 0) {
+        this.splitLane = this.d > 0.05 ? 1 : this.d < -0.05 ? -1 : (this.vd >= 0 ? 1 : -1);
+      }
+      const lane = this.splitLane;
+      const edge = lane * splitH; // inner edge of the chosen lane
+      if (lane > 0 ? this.d < edge : this.d > edge) {
+        const impact = -lane * this.vd; // closing speed toward the island
+        this.d = edge;
+        if (impact > T.WALL_HARD_VD) {
+          this.v *= T.WALL_HIT_KEEP;
+          this.vd = -T.WALL_BOUNCE * this.vd;
+          this.events.emit('wallHit', { side: -lane, severity: Math.min(impact / 20, 1) });
+        } else {
+          this.v = Math.max(0, this.v - T.WALL_SCRAPE_DECEL * dt);
+          if (lane * this.vd < 0) this.vd = 0;
+          this.scraping = true;
+          this.events.emit('scrape', { side: -lane });
+        }
+      }
+    } else {
+      this.splitLane = 0;
     }
 
     // ---- jumps: launch off a ramp, fly a ballistic arc over the gap ----
