@@ -22,6 +22,7 @@ import { Race } from './race.js';
 import { Menu } from './ui/menu.js';
 import { Podium } from './ui/podium.js';
 import { PodiumScene } from './ui/podiumScene.js';
+import { PauseMenu } from './ui/pauseMenu.js';
 import { Achievements } from './ui/achievements.js';
 import { TEAMS, CALLSIGNS } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
@@ -65,6 +66,7 @@ const trails = new ExhaustTrails(scene);
 const input = new Input();
 const hud = new Hud(juice);
 const menu = new Menu();
+const pauseMenu = new PauseMenu();
 const achievements = new Achievements(audio);
 
 // Per-race tally for achievements, reset at each countdown.
@@ -793,6 +795,65 @@ function applyMenuKey(code) {
   audio.uiMove();
 }
 
+// ---- pause menu -----------------------------------------------------------
+function openPause() {
+  paused = true;
+  document.body.classList.add('paused');
+  audio.setPaused(true);
+  pauseMenu.open(audio.volume, !!document.fullscreenElement);
+  input.clearPressed();
+  audio.uiSelect();
+}
+
+function closePause() {
+  paused = false;
+  document.body.classList.remove('paused');
+  pauseMenu.close();
+  input.clearPressed();
+}
+
+function resumeRace() {
+  closePause();
+  audio.setPaused(false);
+  audio.uiMove();
+}
+
+function confirmPause() {
+  if (pauseMenu.inOptions) {
+    if (pauseMenu.currentOptRow() === 'fullscreen') { toggleFullscreen(); audio.uiSelect(); }
+    return;
+  }
+  const row = pauseMenu.currentRow();
+  audio.uiSelect();
+  if (row === 'resume') resumeRace();
+  else if (row === 'restart') { closePause(); audio.setPaused(false); startCountdown(); }
+  else if (row === 'options') pauseMenu.inOptions = true;
+  else if (row === 'quit') { closePause(); audio.setPaused(false); onEscape(); }
+}
+
+// Esc steps back: out of Options to the list, then out of the list to the race.
+function backPause() {
+  if (pauseMenu.inOptions) { pauseMenu.inOptions = false; audio.uiMove(); }
+  else resumeRace();
+}
+
+function applyPauseKeys() {
+  for (const [code, dir] of [['ArrowUp', -1], ['KeyW', -1], ['ArrowDown', 1], ['KeyS', 1]]) {
+    if (input.consume(code)) { pauseMenu.moveFocus(dir); audio.uiMove(); }
+  }
+  if (pauseMenu.inOptions) {
+    for (const [code, dir] of [['ArrowLeft', -1], ['KeyA', -1], ['ArrowRight', 1], ['KeyD', 1]]) {
+      if (input.consume(code) && pauseMenu.currentOptRow() === 'audio') {
+        audio.setVolume(audio.volume + dir); audio.uiMove();
+      }
+    }
+  }
+  if (input.consume('KeyP')) resumeRace();        // P toggles pause off
+  else if (input.consume('Enter')) confirmPause();
+  else if (input.consume('Escape')) backPause();
+  if (paused) pauseMenu.render(audio.volume, !!document.fullscreenElement);
+}
+
 function handleKeys() {
   // Title gate: Enter/Space reveals the menu, console-style.
   if (state === 'intro') {
@@ -804,6 +865,14 @@ function handleKeys() {
     }
     return;
   }
+
+  // The pause menu owns all input while open; otherwise Esc or P opens it mid-race.
+  if (paused) { applyPauseKeys(); return; }
+  if (state === 'race' && (input.consume('Escape') || input.consume('KeyP'))) {
+    openPause();
+    return;
+  }
+
   if (state === 'attract') {
     // A panel open? Confirm/back closes it; nav is suspended underneath.
     if (recordsOpen || trophiesOpen) {
@@ -825,11 +894,6 @@ function handleKeys() {
     rig.reset(ship);
   }
   if (input.consume('KeyM')) debugCam = !debugCam;
-  if (input.consume('KeyP')) {
-    paused = !paused;
-    hud.setCenter(paused ? 'PAUSED' : null);
-    audio.setPaused(paused);
-  }
 }
 
 // Records / trophies open as menu actions (confirm button), not key shortcuts.
@@ -946,6 +1010,8 @@ function onEscape() {
 
 function backToMenu() {
   exitPodium();
+  pauseMenu.close();
+  document.body.classList.remove('paused');
   state = 'attract';
   paused = false;
   hud.hideResults();
@@ -1021,6 +1087,9 @@ window.__game = {
   get race() { return race; },
   get podiumScene() { return podiumScene; },
   get menuPodium() { return podium; },
+  get pauseMenu() { return pauseMenu; },
+  openPause: () => openPause(),
+  resumeRace: () => resumeRace(),
   juice, input, audio, hud, achievements,
   state: () => state,
   menu,

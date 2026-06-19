@@ -142,6 +142,28 @@
     <div class="pt-sub"></div>
   </div>
 
+  <div class="hud hidden" id="pause-menu">
+    <div class="pause-panel">
+      <div class="pause-title">PAUSED</div>
+      <div class="pause-list" id="pause-list">
+        <div class="prow focus" id="prow-resume"><span class="play">&#9656;</span><span class="value">RESUME</span></div>
+        <div class="prow" id="prow-restart"><span class="play">&#9656;</span><span class="value">RESTART</span></div>
+        <div class="prow" id="prow-options"><span class="play">&#9656;</span><span class="value">OPTIONS</span></div>
+        <div class="prow" id="prow-quit"><span class="play">&#9656;</span><span class="value">QUIT TO MENU</span></div>
+      </div>
+      <div class="pause-options hidden" id="pause-options">
+        <div class="prow small" id="popt-audio">
+          <label>AUDIO</label>
+          <span class="arrow">&#9664;</span><span class="value" id="pause-volume"></span><span class="arrow">&#9654;</span>
+        </div>
+        <div class="prow small" id="popt-fullscreen">
+          <label>FULLSCREEN</label><span class="value" id="pause-fullscreen">OFF</span>
+        </div>
+      </div>
+      <div class="pause-hint">&uarr;&darr; select &nbsp; &larr;&rarr; change &nbsp; ENTER confirm &nbsp; ESC back</div>
+    </div>
+  </div>
+
   <button class="hud" id="fs-btn" type="button" title="Fullscreen (F)" aria-label="Toggle fullscreen">&#9974;</button>
 
   <script type="importmap">

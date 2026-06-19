@@ -643,4 +643,66 @@ body.in-menu #minimap { display: none !important; }
   animation: champPulse 1.6s ease-in-out infinite;
 }
 
+/* In-race pause menu — a centered panel over the frozen race. */
+#pause-menu {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 2, 12, 0.66);
+  backdrop-filter: blur(3px);
+}
+.pause-panel {
+  min-width: 320px; padding: 26px 36px 18px;
+  background: rgba(9, 5, 22, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 3px solid #00f0ff;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pause-title {
+  font-family: 'Orbitron', sans-serif; font-weight: 800;
+  font-size: 28px; letter-spacing: 0.26em; color: #00f0ff;
+  text-shadow: 0 0 16px rgba(0, 240, 255, 0.55); text-align: center;
+}
+.pause-list { display: flex; flex-direction: column; gap: 2px; transition: opacity 140ms; }
+.pause-list.dim { opacity: 0.32; }
+.prow {
+  display: flex; align-items: center; gap: 12px; padding: 7px 10px;
+  position: relative; opacity: 0.6; transition: opacity 140ms;
+}
+.prow.focus { opacity: 1; }
+.prow.focus::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 72%; background: #00f0ff; box-shadow: 0 0 8px #00f0ff;
+}
+.prow .play { color: #00f0ff; font-size: 11px; opacity: 0; transition: opacity 140ms; }
+.prow.focus .play { opacity: 1; }
+.prow .value {
+  font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 18px;
+  letter-spacing: 0.08em; color: #fff;
+  transition: transform 140ms, color 140ms; transform-origin: left center;
+}
+.prow.focus .value { color: #00f0ff; transform: scale(1.06); }
+.prow.small .value { font-size: 14px; }
+.prow.small label {
+  font-size: 11px; letter-spacing: 0.26em; color: rgba(255, 255, 255, 0.5); width: 96px;
+}
+.prow .arrow { color: #00f0ff; font-size: 11px; visibility: hidden; }
+.prow.focus .arrow { visibility: visible; }
+.pause-options {
+  display: flex; flex-direction: column; gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 12px;
+}
+.pause-panel .bar { display: inline-flex; gap: 3px; }
+.pause-panel .bar i {
+  width: 12px; height: 7px; background: rgba(255, 255, 255, 0.18); transform: skewX(-18deg);
+}
+.pause-panel .bar i.on { background: #00f0ff; box-shadow: 0 0 6px rgba(0, 240, 255, 0.7); }
+.pause-hint {
+  font-size: 11px; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.4);
+  text-align: center; margin-top: 6px;
+}
+/* Dim the race HUD behind the pause panel. */
+body.paused #lap-block, body.paused #speed-block,
+body.paused #boost-meter, body.paused #minimap { opacity: 0.25; }
+
 .hidden { display: none !important; }

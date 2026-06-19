@@ -68,6 +68,12 @@ A gliding accent cursor + value-pop tracks the focused row, every move has a
 blip, and sub-panels (records, trophies) slide in. ESC always returns to the
 menu (never back to the title gate).
 
+**Pause menu** (`ui/pauseMenu.js`): ESC or P (gamepad B / Select) mid-race opens
+a centered panel — Resume / Restart / Options / Quit — navigable by keyboard or
+gamepad, in the same neon style. Options exposes the audio volume and a
+fullscreen toggle. Restart re-runs the current race/round (championship keeps
+its standings); Quit returns to the menu.
+
 ## Game modes
 
 Top row of the menu: **CHAMPIONSHIP** (all six tracks in roster order, points
@@ -219,6 +225,7 @@ src/
   ui/minimap.js            canvas minimap: track outline, pads, start line, ship + rivals
   ui/podium.js             spinning 3D ship model for the menu ship card
   ui/podiumScene.js        full-screen 3D championship podium ceremony
+  ui/pauseMenu.js          in-race pause menu (resume/restart/options/quit)
 assets/music/              drop-in music slots (see Sound & music)
 ```
 
