@@ -11,3 +11,5 @@ Världslåten startar vid START och byts vid retur till menyn (menylåten
 tar över där). Saknas en fil är det bara tyst för den platsen — inget fel.
 
 Volymen styrs av AUDIO-raden i menyn (master för musik + effekter).
+
+Suno-prompts för racingkänsla (per värld) finns i MUSIC.md i projektroten.

@@ -681,6 +681,7 @@ function tick(now) {
     accumulator += dt;
     let guard = 8;
     while (accumulator >= FIXED_DT && guard-- > 0) {
+      race.computeDraft(ship); // slipstream targets from current positions
       ship.step(FIXED_DT, simInput);
       race.stepFixed(FIXED_DT, state === 'race' || state === 'finished');
       race.interact(ship, FIXED_DT);
@@ -722,6 +723,8 @@ function tick(now) {
   // Keep the gameplay HUD off the title/menu screens (console front-end feel).
   document.body.classList.toggle('in-menu', state === 'intro' || state === 'attract');
   pauseBtn.classList.toggle('hidden', !(state === 'race' && !paused));
+  // Slipstream cue fades in with the draft (readable feedback for the tow).
+  slipEl.style.opacity = state === 'race' ? Math.max(0, Math.min(1, (ship.draft - 0.25) / 0.4)) : 0;
   hud.update(realDt, ship, TOTAL_LAPS);
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
@@ -1064,6 +1067,7 @@ addEventListener('resize', () => {
 // renderer and composer rescale through the handler above.
 const fsBtn = document.getElementById('fs-btn');
 const pauseBtn = document.getElementById('pause-btn');
+const slipEl = document.getElementById('slipstream');
 function toggleFullscreen() {
   const el = document.documentElement;
   if (!document.fullscreenElement) {
@@ -1191,6 +1195,7 @@ window.__game = {
     const ai = over.ai !== false;
     const steps = Math.round(seconds / FIXED_DT);
     for (let i = 0; i < steps; i++) {
+      if (ai) race.computeDraft(ship);
       ship.step(FIXED_DT, simInput);
       if (ai) {
         race.stepFixed(FIXED_DT, true);

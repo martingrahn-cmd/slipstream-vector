@@ -48,6 +48,8 @@ export class ShipPhysics {
     this.bestLap = 0;
     this.accel = 0;        // last frame's dv/dt, for camera/HUD juice
     this.latG = 0;         // lateral acceleration in g, for ship roll
+    this.draft = 0;        // 0..1 slipstream strength (eased), set by race.computeDraft
+    this.draftTarget = 0;  // raw slipstream target for this frame
   }
 
   get speedNorm() {
@@ -66,8 +68,14 @@ export class ShipPhysics {
 
     // ---- longitudinal ----
     const vPrev = this.v;
-    const dragK = T.COAST_K + (this.DRAG - T.COAST_K) * input.throttle;
-    let a = this.ACCEL * input.throttle - dragK * this.v - T.BRAKE * input.brake;
+    // Slipstream: ease the draft factor toward this frame's target, then spend
+    // it as reduced drag + a thrust nudge. Clean air (no one ahead) = no draft;
+    // identical for player and AI, so it never rubber-bands.
+    this.draft += (this.draftTarget - this.draft) * Math.min(1, T.DRAFT_ATTACK * dt);
+    const dragK = (T.COAST_K + (this.DRAG - T.COAST_K) * input.throttle)
+      * (1 - T.DRAFT_DRAG_CUT * this.draft);
+    let a = this.ACCEL * input.throttle - dragK * this.v - T.BRAKE * input.brake
+      + T.DRAFT_ACCEL * this.draft * input.throttle;
     if (this.boostTimer > 0) {
       a += T.BOOST_ACCEL;
       this.boostTimer -= dt;

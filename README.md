@@ -151,6 +151,14 @@ confidence, line tightness, boost-pad usage. No rubber-banding, ever. Teams
 have personalities (Halcyon: smooth lines; Razorback: late brakers;
 NovaSurge: boost hunters).
 
+**Slipstream:** sit in another ship's wake — just behind, roughly in line — and
+the reduced drag plus a small thrust nudge give you ~6–12% more top speed to
+close and slingshot past (`race.computeDraft`, tuned in `config.js`). It's the
+*fair* catch-up the game is named for: the clean-air leader gets none, and the
+exact same physics apply to the AI, so it never rubber-bands — the wake just
+keeps the pack together and rewards whoever positions into it. A cyan
+SLIPSTREAM cue fades in when you're in the tow.
+
 **Contact is solid:** ship-to-ship collisions separate positionally and trade
 momentum — you can't drive through the ship ahead. A hard shunt (with a
 per-pair cooldown so it doesn't machine-gun) costs the rammer speed and shoves

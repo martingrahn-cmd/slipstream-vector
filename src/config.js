@@ -46,6 +46,16 @@ export const TUNING = {
   JUMP_GRAVITY: 24.0,     // m/s^2 pulling the ship back down while airborne
   JUMP_LAND_TRAUMA: 0.3,  // x landing severity
 
+  // ---- Slipstream / draft (fair catch-up: clean-air leader gets none, the
+  // wake helps whoever sits in it — player and AI alike, no rubber-banding) ----
+  DRAFT_RANGE: 22,        // m behind a ship that its wake reaches
+  DRAFT_HALF_W: 4.2,      // m lateral half-width of the wake cone
+  DRAFT_DRAG_CUT: 0.08,   // fraction of drag removed deep in the tow (terminal
+                          //   speed is very sensitive to this — keep it small;
+                          //   ~+6-10% top speed in a tight tow, never a free pass)
+  DRAFT_ACCEL: 2.5,       // m/s^2 extra thrust at full draft (only on power)
+  DRAFT_ATTACK: 5.0,      // how fast the draft factor eases in/out per second
+
   // ---- Input ramps ----
   STEER_RISE: 10.0,       // per second
   STEER_RELEASE: 14.0,

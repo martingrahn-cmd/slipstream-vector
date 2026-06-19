@@ -66,6 +66,27 @@ export class Race {
     this.clock = 0;
   }
 
+  // Slipstream: set each ship's draftTarget from the nearest ship just ahead,
+  // within the wake cone. The frontmost ship sits in clean air and gets none.
+  // Player and AI go through the identical rule — no rubber-banding.
+  computeDraft(player) {
+    const ships = [player, ...this.racers.map((r) => r.phys)];
+    const len = this.spline.length;
+    for (const s of ships) {
+      let best = 0;
+      for (const o of ships) {
+        if (o === s) continue;
+        const ds = (((o.s - s.s) % len) + len) % len; // how far o is ahead of s
+        if (ds < 0.5 || ds > T.DRAFT_RANGE) continue;
+        const dd = Math.abs(o.d - s.d);
+        if (dd > T.DRAFT_HALF_W) continue;
+        const f = (1 - ds / T.DRAFT_RANGE) * (1 - dd / T.DRAFT_HALF_W);
+        if (f > best) best = f;
+      }
+      s.draftTarget = best;
+    }
+  }
+
   // Fixed-step AI simulation; `racing` gates driving (false during countdown).
   // The race clock is THE clock for results — player and AI alike.
   stepFixed(dt, racing) {

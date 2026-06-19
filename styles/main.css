@@ -726,6 +726,16 @@ body.in-menu #minimap { display: none !important; }
 body.paused #lap-block, body.paused #speed-block,
 body.paused #boost-meter, body.paused #minimap { opacity: 0.25; }
 
+/* Slipstream cue — fades in with the draft so the tow is readable. */
+#slipstream {
+  left: 0; right: 0; bottom: 27%;
+  text-align: center; pointer-events: none;
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  font-size: 22px; letter-spacing: 0.34em;
+  color: #00f0ff; text-shadow: 0 0 18px rgba(0, 240, 255, 0.85);
+  opacity: 0; transition: opacity 120ms;
+}
+
 /* The HUD overlay is pointer-events:none so it never eats canvas input; opt the
    interactive menu/pause controls back in so the whole UI is clickable. */
 #overlay .menu-row, #overlay .mode-opt, #overlay #menu-go,
