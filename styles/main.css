@@ -356,6 +356,23 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink)
   opacity: 1; color: #fff; outline: none;
   box-shadow: 0 0 14px rgba(0, 240, 255, 0.5);
 }
+#pause-btn {
+  left: 58px; bottom: 16px;
+  z-index: 30; pointer-events: auto; cursor: pointer;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; line-height: 1; letter-spacing: -2px;
+  color: var(--cyan);
+  background: rgba(9, 5, 22, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 7px 100%, 0 calc(100% - 7px));
+  opacity: 0.6;
+  transition: opacity 140ms, box-shadow 140ms, color 140ms;
+}
+#pause-btn:hover, #pause-btn:focus-visible {
+  opacity: 1; color: #fff; outline: none;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.5);
+}
 
 /* Start overlay */
 #overlay {
@@ -460,9 +477,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink)
   width: 52px;
 }
 #overlay .arrow {
-  color: var(--cyan); font-size: 13px; visibility: hidden;
+  color: var(--cyan); font-size: 13px;
+  visibility: visible; opacity: 0.35; padding: 2px 6px;
+  transition: opacity 140ms;
 }
-#overlay .menu-row.focus .arrow { visibility: visible; }
+#overlay .menu-row.focus .arrow { opacity: 1; }
+#overlay .arrow:hover { opacity: 1; }
 #overlay .track-data { display: flex; gap: 14px; align-items: center; }
 #overlay .track-col { display: flex; flex-direction: column; gap: 3px; }
 #overlay .profile-label {
@@ -686,8 +706,9 @@ body.in-menu #minimap { display: none !important; }
 .prow.small label {
   font-size: 11px; letter-spacing: 0.26em; color: rgba(255, 255, 255, 0.5); width: 96px;
 }
-.prow .arrow { color: #00f0ff; font-size: 11px; visibility: hidden; }
-.prow.focus .arrow { visibility: visible; }
+.prow .arrow { color: #00f0ff; font-size: 11px; opacity: 0.4; padding: 2px 6px; transition: opacity 140ms; }
+.prow.focus .arrow { opacity: 1; }
+.prow .arrow:hover { opacity: 1; }
 .pause-options {
   display: flex; flex-direction: column; gap: 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 12px;
@@ -704,5 +725,12 @@ body.in-menu #minimap { display: none !important; }
 /* Dim the race HUD behind the pause panel. */
 body.paused #lap-block, body.paused #speed-block,
 body.paused #boost-meter, body.paused #minimap { opacity: 0.25; }
+
+/* The HUD overlay is pointer-events:none so it never eats canvas input; opt the
+   interactive menu/pause controls back in so the whole UI is clickable. */
+#overlay .menu-row, #overlay .mode-opt, #overlay #menu-go,
+#pause-menu .prow {
+  pointer-events: auto; cursor: pointer;
+}
 
 .hidden { display: none !important; }

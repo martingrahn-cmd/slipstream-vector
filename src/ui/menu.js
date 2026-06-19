@@ -4,7 +4,7 @@
 import { TEAMS, CALLSIGNS } from '../worlds/teams.js';
 import { fmt } from './hud.js';
 
-const ROWS = ['mode', 'track', 'class', 'difficulty', 'team', 'livery', 'pilot', 'audio', 'records', 'trophies'];
+const ROWS = ['mode', 'track', 'class', 'difficulty', 'team', 'livery', 'pilot', 'audio', 'records', 'trophies', 'fullscreen'];
 
 export class Menu {
   constructor() {
@@ -53,6 +53,37 @@ export class Menu {
 
   // The id of the currently focused row — lets main route the confirm button.
   currentRow() { return ROWS[this.focus]; }
+
+  focusRow(name) {
+    const i = ROWS.indexOf(name);
+    if (i >= 0) { this.focus = i; this._applyFocus(); }
+  }
+
+  // Wire pointer clicks so the whole menu is operable without the keyboard.
+  // handlers: { edit(row, dir), activate(row), focus(row) }.
+  bindClicks(handlers) {
+    const focus = (name) => { this.focusRow(name); handlers.focus(name); };
+    // Mode strip: click an option to pick that mode directly.
+    ['mode-0', 'mode-1', 'mode-2'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => { this.focusRow('mode'); handlers.setMode(i); });
+    });
+    this.el.rows.forEach((el, i) => {
+      const name = ROWS[i];
+      if (!el || name === 'mode') return;
+      const arrows = el.querySelectorAll('.arrow');
+      if (arrows.length === 2) {
+        arrows[0].addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, -1); });
+        arrows[1].addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, 1); });
+        const val = el.querySelector('.value');
+        if (val) val.addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, 1); });
+        el.addEventListener('click', () => focus(name));
+      } else {
+        // Action rows (records / trophies): a click activates them.
+        el.addEventListener('click', () => { focus(name); handlers.activate(name); });
+      }
+    });
+  }
 
   // data: { trackDef, theme, spline, trackIndex, trackCount, best, selection,
   //         volume, mode, championship }

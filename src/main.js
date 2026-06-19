@@ -721,6 +721,7 @@ function tick(now) {
 
   // Keep the gameplay HUD off the title/menu screens (console front-end feel).
   document.body.classList.toggle('in-menu', state === 'intro' || state === 'attract');
+  pauseBtn.classList.toggle('hidden', !(state === 'race' && !paused));
   hud.update(realDt, ship, TOTAL_LAPS);
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
@@ -747,51 +748,55 @@ function tick(now) {
   renderer.info.reset();
 }
 
-function applyMenuKey(code) {
-  const act = menu.handleKey(code);
-  if (act && act.row) {
-    const n = (mod, cur, dir) => ((cur + dir) % mod + mod) % mod;
-    if (act.row === 'mode') {
-      selection.mode = n(MODES.length, selection.mode, act.dir);
-      localStorage.setItem('sv-mode', String(selection.mode));
-      if (selection.mode === 0 && trackIndex !== 0) {
-        trackIndex = 0;
-        buildWorld(0);
-      } else {
-        buildField(); // the menu backdrop field follows the mode (solo in TT)
-      }
-    } else if (act.row === 'track') {
-      if (selection.mode !== 0) { // locked to the roster in championship
-        trackIndex = n(TRACKS.length, trackIndex, act.dir);
-        buildWorld(trackIndex);
-      }
-    } else if (act.row === 'class') {
-      // Clamp to what's been unlocked; nudging past it just bumps the lock hint.
-      const next = selection.classIdx + act.dir;
-      selection.classIdx = Math.max(0, Math.min(unlockedClasses(), next));
-      buildField();
-    } else if (act.row === 'difficulty') {
-      selection.difficulty = n(DIFFICULTIES.length, selection.difficulty, act.dir);
-      buildField(); // rebuilds the AI field with the new skill level
-    } else if (act.row === 'team') {
-      selection.team = n(TEAMS.length, selection.team, act.dir);
-      buildField();
-    } else if (act.row === 'livery') {
-      selection.livery = n(liveryCount(), selection.livery, act.dir);
-      buildField();
-    } else if (act.row === 'pilot') {
-      selection.pilot = n(CALLSIGNS.length, selection.pilot, act.dir);
-      localStorage.setItem('sv-pilot', String(selection.pilot));
-    } else if (act.row === 'audio') {
-      audio.setVolume(audio.volume + act.dir);
+// Change a menu row's value by dir (±1) — shared by the keyboard, the gamepad
+// and the on-screen arrows. Action rows (records/trophies) have nothing to edit.
+function editRow(row, dir) {
+  const n = (mod, cur, d) => ((cur + d) % mod + mod) % mod;
+  if (row === 'mode') {
+    selection.mode = n(MODES.length, selection.mode, dir);
+    localStorage.setItem('sv-mode', String(selection.mode));
+    if (selection.mode === 0 && trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
+    else buildField(); // the menu backdrop field follows the mode (solo in TT)
+  } else if (row === 'track') {
+    if (selection.mode !== 0) { // locked to the roster in championship
+      trackIndex = n(TRACKS.length, trackIndex, dir);
+      buildWorld(trackIndex);
     }
-    updateMenu();
+  } else if (row === 'class') {
+    // Clamp to what's been unlocked; nudging past it just bumps the lock hint.
+    selection.classIdx = Math.max(0, Math.min(unlockedClasses(), selection.classIdx + dir));
+    buildField();
+  } else if (row === 'difficulty') {
+    selection.difficulty = n(DIFFICULTIES.length, selection.difficulty, dir);
+    buildField(); // rebuilds the AI field with the new skill level
+  } else if (row === 'team') {
+    selection.team = n(TEAMS.length, selection.team, dir);
+    buildField();
+  } else if (row === 'livery') {
+    selection.livery = n(liveryCount(), selection.livery, dir);
+    buildField();
+  } else if (row === 'pilot') {
+    selection.pilot = n(CALLSIGNS.length, selection.pilot, dir);
+    localStorage.setItem('sv-pilot', String(selection.pilot));
+  } else if (row === 'audio') {
+    audio.setVolume(audio.volume + dir);
   }
-  // The footer reflects what the confirm button will do on the focused row.
+  updateMenu();
+}
+
+// The footer reflects what the confirm button (or a click on it) will do.
+function refreshGoLabel() {
   const row = menu.currentRow();
   document.getElementById('menu-go').innerHTML = row === 'records'
     ? 'ENTER &mdash; VIEW RECORDS'
-    : row === 'trophies' ? 'ENTER &mdash; VIEW TROPHIES' : 'ENTER &mdash; RACE';
+    : row === 'trophies' ? 'ENTER &mdash; VIEW TROPHIES'
+      : row === 'fullscreen' ? 'ENTER &mdash; FULLSCREEN' : 'ENTER &mdash; RACE';
+}
+
+function applyMenuKey(code) {
+  const act = menu.handleKey(code);
+  if (act && act.row) editRow(act.row, act.dir);
+  refreshGoLabel();
   audio.uiMove();
 }
 
@@ -850,7 +855,9 @@ function applyPauseKeys() {
   }
   if (input.consume('KeyP')) resumeRace();        // P toggles pause off
   else if (input.consume('Enter')) confirmPause();
-  else if (input.consume('Escape')) backPause();
+  // Backspace is the reliable "back" — Escape is hijacked by the browser to
+  // leave fullscreen, so it can't be depended on (gamepad B maps to Escape too).
+  else if (input.consume('Backspace') || input.consume('Escape')) backPause();
   if (paused) pauseMenu.render(audio.volume, !!document.fullscreenElement);
 }
 
@@ -953,6 +960,7 @@ function onEnter() {
     const row = menu.currentRow();
     if (row === 'records') { toggleRecords(); audio.uiSelect(); updateMenu(); return; }
     if (row === 'trophies') { toggleTrophies(); audio.uiSelect(); updateMenu(); return; }
+    if (row === 'fullscreen') { toggleFullscreen(); audio.uiSelect(); return; }
     audio.uiSelect();
     if (selection.mode === 0) {
       champ.active = true;
@@ -1055,6 +1063,7 @@ addEventListener('resize', () => {
 // is intentionally NOT bound here. Entering/leaving fires a resize, so the
 // renderer and composer rescale through the handler above.
 const fsBtn = document.getElementById('fs-btn');
+const pauseBtn = document.getElementById('pause-btn');
 function toggleFullscreen() {
   const el = document.documentElement;
   if (!document.fullscreenElement) {
@@ -1071,10 +1080,55 @@ document.addEventListener('fullscreenchange', () => {
   fsBtn.title = document.fullscreenElement ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
 });
 
+// Pointer support: every menu/pause action is also a click target, so nothing
+// is keyboard-only. Clicks reuse the exact same actions as the keys/gamepad.
+function wireClicks() {
+  const fsOn = () => !!document.fullscreenElement;
+  menu.bindClicks({
+    edit: (row, dir) => { editRow(row, dir); refreshGoLabel(); audio.uiMove(); },
+    setMode: (i) => { if (selection.mode !== i) editRow('mode', i - selection.mode); refreshGoLabel(); audio.uiSelect(); },
+    activate: (row) => {
+      if (row === 'records') { toggleRecords(); updateMenu(); }
+      else if (row === 'trophies') { toggleTrophies(); updateMenu(); }
+      else if (row === 'fullscreen') { toggleFullscreen(); }
+      audio.uiSelect();
+    },
+    focus: () => { refreshGoLabel(); audio.uiMove(); },
+  });
+  document.getElementById('menu-go').addEventListener('click', () => onEnter());
+
+  // Pause menu rows + Options are click targets too.
+  const clickRow = (name) => {
+    pauseMenu.focusRow(name);
+    confirmPause();
+    if (paused) pauseMenu.render(audio.volume, fsOn());
+  };
+  for (const name of ['resume', 'restart', 'options', 'quit']) {
+    document.getElementById(`prow-${name}`).addEventListener('click', () => clickRow(name));
+  }
+  document.getElementById('popt-audio').querySelectorAll('.arrow').forEach((a, i) => {
+    a.addEventListener('click', (e) => {
+      e.stopPropagation();
+      audio.setVolume(audio.volume + (i === 0 ? -1 : 1));
+      pauseMenu.focusOptRow('audio');
+      pauseMenu.render(audio.volume, fsOn());
+    });
+  });
+  document.getElementById('popt-fullscreen').addEventListener('click', () => {
+    toggleFullscreen();
+    pauseMenu.focusOptRow('fullscreen');
+    pauseMenu.render(audio.volume, fsOn());
+  });
+
+  // The in-race pause button opens the menu without the P key.
+  pauseBtn.addEventListener('click', () => { if (state === 'race' && !paused) openPause(); });
+}
+
 // ------------------------------------------------------------------- boot
 if (selection.mode === 0) trackIndex = 0; // championship always opens on round 1
 buildWorld(trackIndex);
 hud.showOverlay(true);
+wireClicks();
 requestAnimationFrame((t) => { last = t; tick(t); });
 
 // Dev/debug hook: lets tooling (and tuning sessions) step the sim without

@@ -68,11 +68,21 @@ A gliding accent cursor + value-pop tracks the focused row, every move has a
 blip, and sub-panels (records, trophies) slide in. ESC always returns to the
 menu (never back to the title gate).
 
-**Pause menu** (`ui/pauseMenu.js`): ESC or P (gamepad B / Select) mid-race opens
-a centered panel — Resume / Restart / Options / Quit — navigable by keyboard or
-gamepad, in the same neon style. Options exposes the audio volume and a
-fullscreen toggle. Restart re-runs the current race/round (championship keeps
-its standings); Quit returns to the menu.
+**Everything is clickable** — the whole front-end works by mouse as well as
+keyboard/gamepad. The row arrows (◀ ▶) change values, the mode strip picks the
+mode, RECORDS / TROPHIES / FULLSCREEN are buttons in the menu bar, and the RACE
+prompt starts the race; the pause menu rows/options click too, and an in-race
+PAUSE button sits by the fullscreen button. (The HUD overlay is
+`pointer-events:none` so it never eats canvas input; the interactive controls
+opt back in.)
+
+**Pause menu** (`ui/pauseMenu.js`): P (or Esc) mid-race opens a centered panel —
+Resume / Restart / Options / Quit — navigable by keyboard or gamepad, in the
+same neon style. Back is **Backspace** (Esc is hijacked by the browser to leave
+fullscreen, so it isn't depended on); on a gamepad B backs out and Select
+toggles pause. Options exposes the audio volume and a fullscreen toggle. Restart
+re-runs the current race/round (championship keeps its standings); Quit returns
+to the menu.
 
 ## Game modes
 

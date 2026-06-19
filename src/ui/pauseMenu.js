@@ -42,6 +42,9 @@ export class PauseMenu {
   currentRow() { return this.rows[this.focus]; }
   currentOptRow() { return this.optRows[this.optFocus]; }
 
+  focusRow(name) { const i = this.rows.indexOf(name); if (i >= 0) { this.focus = i; this.inOptions = false; } }
+  focusOptRow(name) { const i = this.optRows.indexOf(name); if (i >= 0) { this.optFocus = i; this.inOptions = true; } }
+
   render(volume, fsOn) {
     const opts = this.inOptions;
     this.listEl.classList.toggle('dim', opts);
