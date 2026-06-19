@@ -1020,6 +1020,7 @@ window.__game = {
   get trackDef() { return trackDef; },
   get race() { return race; },
   get podiumScene() { return podiumScene; },
+  get menuPodium() { return podium; },
   juice, input, audio, hud, achievements,
   state: () => state,
   menu,
