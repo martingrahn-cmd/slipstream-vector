@@ -142,9 +142,11 @@ export class Achievements {
   }
 
   // ---- gallery ----
-  renderGallery(el) {
+  // `filter` is 'all' or a tier key (bronze/silver/gold/platinum).
+  renderGallery(el, filter = 'all') {
     const order = ['bronze', 'silver', 'gold', 'platinum'];
-    const groups = order.map((tier) => {
+    const shown = filter === 'all' ? order : order.filter((t) => t === filter);
+    const groups = shown.map((tier) => {
       const items = ACHIEVEMENTS.filter((a) => a.tier === tier);
       const got = items.filter((a) => this.unlocked[a.id]).length;
       const cards = items.map((a) => {
@@ -159,10 +161,6 @@ export class Achievements {
           ${TIERS[tier].label} · ${got}/${items.length}</div>
         <div class="trophy-grid">${cards}</div>`;
     }).join('');
-    el.innerHTML = `
-      <div class="results-tag">${this.count()} / ${this.total()} TROPHIES</div>
-      <h2>TROPHIES</h2>
-      ${groups}
-      <div class="press">T — CLOSE</div>`;
+    el.innerHTML = groups;
   }
 }

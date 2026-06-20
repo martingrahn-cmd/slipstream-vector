@@ -16,14 +16,14 @@ import { SpeedLines, Sparks, ExhaustTrails } from './fx/particles.js';
 import { PostFX } from './fx/postfx.js';
 import { Hud, fmt } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
-import { Input, NULL_INPUT } from './core/input.js';
+import { Input, NULL_INPUT, REBINDABLE, keyLabel } from './core/input.js';
 import { AudioEngine } from './core/audio.js';
 import { Race } from './race.js';
-import { Menu } from './ui/menu.js';
+import { Menu, drawThumb, drawProfile, bar, hex } from './ui/menu.js';
 import { Podium } from './ui/podium.js';
 import { PodiumScene } from './ui/podiumScene.js';
 import { PauseMenu } from './ui/pauseMenu.js';
-import { Achievements } from './ui/achievements.js';
+import { Achievements, TIERS } from './ui/achievements.js';
 import { TEAMS, CALLSIGNS } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
 import { DIFFICULTIES } from './worlds/difficulty.js';
@@ -128,6 +128,8 @@ function captureEnvThumb() {
 
 // --------------------------------------------------- world (per track)
 let trackIndex = parseInt(localStorage.getItem('sv-track') || '0', 10) || 0;
+const TROPHY_FILTERS = ['all', 'bronze', 'silver', 'gold', 'platinum'];
+let trophyTier = 'all';
 trackIndex = ((trackIndex % TRACKS.length) + TRACKS.length) % TRACKS.length;
 let trackDef, theme, spline, track, scenery, ship, shipVisual, rig, minimap, race;
 let TOTAL_LAPS = 3;
@@ -190,6 +192,7 @@ function buildWorld(idx) {
   trackDef = TRACKS[idx];
   theme = THEMES[trackDef.world];
   TOTAL_LAPS = trackDef.laps;
+  audio.prewarmMusic(theme.music); // decode this world's track ahead of GO (no-op pre-unlock)
 
   spline = new TrackSpline(trackDef);
   track = buildTrackMesh(spline, theme);
@@ -249,25 +252,102 @@ function buildField() {
   localStorage.setItem('sv-difficulty', String(selection.difficulty));
 }
 
+const DEADZONES = [0.08, 0.18, 0.30];
+const DZ_LABEL = ['LOW', 'MEDIUM', 'HIGH'];
+const CONTROLS_LEGEND = '<div class="lg-row"><span>STEER</span><b>&larr; &rarr; / A D / stick</b></div>'
+  + '<div class="lg-row"><span>THROTTLE</span><b>&uarr; / W / RT</b></div>'
+  + '<div class="lg-row"><span>BRAKE</span><b>&darr; / S / LT</b></div>'
+  + '<div class="lg-row"><span>AIRBRAKE</span><b>SHIFT / LB RB</b></div>'
+  + '<div class="lg-row"><span>RESPAWN</span><b>R / X</b></div>'
+  + '<div class="lg-row"><span>PAUSE</span><b>P / ESC / START</b></div>';
+
+function setTxt(id, t) { const e = document.getElementById(id); if (e) e.textContent = t; }
+function setHTML(id, h) { const e = document.getElementById(id); if (e) e.innerHTML = h; }
+function volBar(n) { let c = ''; for (let i = 0; i < 10; i++) c += `<i class="${i < n ? 'on' : ''}"></i>`; return `<span class="bar vbar">${c}</span>`; }
+function recordsSet() { return TRACKS.filter((t) => localStorage.getItem(`sv-best-${t.id}`)).length; }
+
+function renderRecordsList() {
+  const list = document.getElementById('rec-list'); if (!list) return;
+  list.innerHTML = TRACKS.map((t, i) => {
+    const lap = parseFloat(localStorage.getItem(`sv-best-${t.id}`) || 'NaN');
+    return `<div class="rec-row" data-i="${i}"><span class="rt">${t.name}</span><span class="rv">${Number.isFinite(lap) ? fmt(lap) : '—'}</span></div>`;
+  }).join('');
+  menu.recCount = TRACKS.length;
+  const sel = TRACKS[Math.min(menu.recSel, TRACKS.length - 1)];
+  const lap = parseFloat(localStorage.getItem(`sv-best-${sel.id}`) || 'NaN');
+  const race = parseFloat(localStorage.getItem(`sv-racebest-${sel.id}`) || 'NaN');
+  setTxt('rec-detail', `${sel.name.toUpperCase()} — LAP ${Number.isFinite(lap) ? fmt(lap) : '—'} · RACE ${Number.isFinite(race) ? fmt(race) : '—'}`);
+  menu._applyRecSel();
+}
+
+function renderControlsList() {
+  const list = document.getElementById('ctl-list'); if (!list) return;
+  const rows = REBINDABLE.map((a, i) => {
+    const keys = input.bindingCodes(a.id).map(keyLabel).join(' / ') || '—';
+    return `<div class="rec-row kb-row" data-i="${i}"><span class="rt">${a.label}</span><span class="leader"></span><span class="kb-key">${keys}</span></div>`;
+  });
+  rows.push(`<div class="rec-row kb-reset" data-i="${REBINDABLE.length}"><span class="rt">RESET TO DEFAULTS</span><span class="rv">&#8635;</span></div>`);
+  list.innerHTML = rows.join('');
+  menu.ctlCount = REBINDABLE.length + 1;
+  menu._applyCtlSel();
+}
+
 function updateMenu() {
   const unlocked = unlockedClasses();
   const cls = CLASSES[selection.classIdx];
-  menu.render({
-    trackDef, theme, spline,
-    trackIndex, trackCount: TRACKS.length,
-    best: parseFloat(localStorage.getItem(bestKey()) || 'NaN'),
-    selection,
-    volume: audio.volume,
-    mode: selection.mode,
-    cls,
-    classKmh: classKmh(cls, T.VMAX),
-    diff: DIFFICULTIES[selection.difficulty],
-    // The next locked class and what unlocks it — shown as a hint.
-    classLockHint: selection.classIdx >= unlocked && unlocked < CLASSES.length - 1
-      ? `WIN ${CLASSES[unlocked].name} CUP` : null,
-    liveryCount: liveryCount(),
-    championLivery: CHAMPION_LIVERY,
-  });
+  const clsHTML = `<span style="color:#${hex(cls.color)}">${cls.name}</span> <small>${classKmh(cls, T.VMAX)} KM/H</small>`;
+  const diff = DIFFICULTIES[selection.difficulty];
+  const diffHTML = `<span style="color:#${hex(diff.color)}">${diff.name}</span> <small>${diff.tag}</small>`;
+  const team = TEAMS[selection.team];
+
+  for (const id of ['menu-class', 's-class', 't-class']) setHTML(id, clsHTML);
+  for (const id of ['menu-difficulty', 's-diff']) setHTML(id, diffHTML);
+  for (const id of ['menu-track', 't-track']) setTxt(id, trackDef.name);
+  const lockEl = document.getElementById('menu-class-lock');
+  const lockHint = selection.classIdx >= unlocked && unlocked < CLASSES.length - 1 ? `WIN ${CLASSES[unlocked].name} CUP` : '';
+  if (lockEl) { lockEl.textContent = lockHint; lockEl.classList.toggle('hidden', !lockHint); }
+
+  setTxt('menu-team', team.fullName.toUpperCase());
+  setTxt('menu-blurb', team.blurb);
+  setHTML('menu-stats', ['speed', 'thrust', 'handling'].map((k) => `<div class="stat"><label>${k.toUpperCase()}</label>${bar(team.bars[k])}</div>`).join(''));
+  const liveries = team.liveries.slice(); if (liveryCount() > 2) liveries.push(CHAMPION_LIVERY);
+  setHTML('menu-livery', liveries.map((lv, i) => `<span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`).join(''));
+  setTxt('menu-pilot', CALLSIGNS[selection.pilot]);
+
+  setHTML('opt-music', volBar(audio.musicVolume));
+  setHTML('opt-sfx', volBar(audio.sfxVolume));
+  let dzi = DEADZONES.indexOf(input.deadzone); if (dzi < 0) dzi = 1;
+  setTxt('opt-dz', DZ_LABEL[dzi]);
+  setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
+  setTxt('opt-fs', document.fullscreenElement ? 'ON' : 'OFF');
+  setTxt('opt-motion', document.body.classList.contains('reduced-motion') ? 'REDUCED' : 'FULL');
+  setTxt('opt-gp-state', input.gamepadActive ? 'CONNECTED' : 'NONE');
+  const legend = document.getElementById('opt-legend');
+  if (legend && !legend.dataset.filled) { legend.dataset.filled = '1'; legend.innerHTML = CONTROLS_LEGEND; }
+
+  setTxt('ns-single', trackDef.name);
+  setTxt('ns-garage', team.name);
+  setTxt('ns-options', `MUSIC ${audio.musicVolume}`);
+  setTxt('ns-records', `${recordsSet()}/${TRACKS.length} SET`);
+  setTxt('ns-trophies', `${achievements.count()}/${achievements.total()}`);
+  setHTML('status-tele', `CLASS &#9656; <b>${cls.name}</b> &middot; RIVALS &#9656; <b>${diff.name}</b> &middot; &#9672; ${achievements.count()}/${achievements.total()}`);
+
+  const best = parseFloat(localStorage.getItem(bestKey()) || 'NaN');
+  setTxt('menu-best', Number.isFinite(best) ? `RECORD ${fmt(best)}` : 'NO RECORD SET');
+  setTxt('tt-best', Number.isFinite(best) ? `BEST LAP ${fmt(best)}` : 'NO RECORD — SET ONE');
+
+  setTxt('ns-controls', 'REBIND');
+  setHTML('cup-ladder', TRACKS.map((t, i) => `<div class="cup-rd${i === 0 ? ' lit' : ''}"><span class="rn">${i + 1}</span>${t.name}</div>`).join(''));
+  renderRecordsList();
+  renderControlsList();
+  setTxt('tro-count', `${achievements.count()}/${achievements.total()} UNLOCKED`);
+  const tierLabel = trophyTier === 'all' ? 'ALL' : TIERS[trophyTier].label;
+  const tierColor = trophyTier === 'all' ? '#9fd8ff' : TIERS[trophyTier].color;
+  setHTML('tro-tier', `<span style="color:${tierColor}">${tierLabel}</span>`);
+  const gal = document.getElementById('tro-gallery'); if (gal) achievements.renderGallery(gal, trophyTier);
+
+  drawThumb(document.getElementById('menu-thumb'), spline);
+  drawProfile(document.getElementById('menu-profile'), spline);
 }
 
 // ------------------------------------------------------ result/standing views
@@ -427,7 +507,7 @@ juice.on('wallHit', ({ side, severity }) => {
   _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
   _vel.copy(_f.T).multiplyScalar(ship.v * 0.5);
   sparks.spawn(_v, _vel, 14 + severity * 10, T.SPARK_HIT_COUNT);
-  if (state === 'race') tally.wallHits++;
+  if (state === 'race') { tally.wallHits++; input.rumble(Math.min(1, 0.45 + severity * 0.5), 220); }
 });
 let scrapeAcc = 0;
 juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
@@ -436,6 +516,7 @@ const _boostColB = new THREE.Color(0xffffff);
 juice.on('boost', ({ pad } = {}) => {
   _vel.set(0, 1.5, 0);
   sparks.spawn(shipVisual.root.position, _vel, 9, 26, _boostColA, _boostColB);
+  if (state === 'race') input.rumble(0.5, 200);
   if (state === 'race' && pad >= 0) {
     achievements.unlock('first_boost');
     if (++tally.pads >= 3) achievements.unlock('pad_chain');
@@ -449,7 +530,7 @@ const _bumpColB = new THREE.Color(0x8fa0c0);
 juice.on('bump', ({ severity = 0.5 } = {}) => {
   _vel.set(0, 2, 0);
   sparks.spawn(shipVisual.root.position, _vel, 7, 8 + Math.round(severity * 14), _bumpColA, _bumpColB);
-  if (state === 'race') tally.contacts++;
+  if (state === 'race') { tally.contacts++; input.rumble(0.3 + severity * 0.3, 140); }
 });
 
 // ------------------------------------------------------------------ state
@@ -480,6 +561,7 @@ function attractCamera(t) {
   if (camera.fov !== 50) { camera.fov = 50; camera.updateProjectionMatrix(); }
 }
 let countdownT = 0;
+let countdownIntro = 0;   // cinematic camera-sweep lead-in before the 3-2-1
 let raceTime = 0;
 let launchHold = 0;       // throttle held during countdown — launch boost timing
 let launchMsg = null;     // PERFECT START / BOOST START, shown after the START word
@@ -497,10 +579,12 @@ function startCountdown() {
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
   ship.lap = 1;
   rig.reset(ship);
+  rig.playIntro(ship, 1.1); // cinematic sweep down to the ship before the lights
   race.grid();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
   countdownT = 3.2;
+  countdownIntro = 1.1;     // hold the 3-2-1 (and the launch window) until the sweep lands
   raceTime = 0;
   playerFinishTime = null;
   finishedView = 'race';
@@ -511,7 +595,7 @@ function startCountdown() {
   trophiesOpen = false; trophiesEl.classList.add('hidden');
   tally.wallHits = 0; tally.contacts = 0; tally.perfectStart = false; tally.pads = 0;
   lastPlace = 0;
-  audio.stopMusic();
+  audio.playMusic(theme.music); // world music starts now, crossfading from the menu
   input.clearPressed(); // stale edges from the previous state must not fire
   hud.showOverlay(false);
   hud.hideResults();
@@ -614,33 +698,38 @@ function tick(now) {
   // State machine.
   let simInput = NULL_INPUT;
   if (state === 'countdown') {
-    countdownT -= realDt;
-    const n = Math.min(3, Math.ceil(countdownT));
-    // Launch timing: press and hold the throttle late in the countdown.
-    if (input.throttle > 0.5) launchHold += realDt; else launchHold = 0;
-    if (countdownT <= 0) {
-      state = 'race';
-      ship.lapTime = 0; // the clock starts at GO, not at countdown
-      hud.countdown(0); // START
-      juice.addTrauma(0.2);
-      audio.count(0);
-      audio.playMusic(theme.music); // each world has its own music slot
-      hud.setSub(null);
-      // Launch boost: nail the window and you fly off the line.
-      if (launchHold > 0.05 && launchHold <= 0.55) {
-        ship.boostTimer = 1.5;
-        juice.emit('boost', { pad: -1 });
-        launchMsg = 'PERFECT START'; launchMsgT = 0.8; tally.perfectStart = true;
-      } else if (launchHold > 0.55 && launchHold <= 1.3) {
-        ship.boostTimer = 0.7;
-        juice.emit('miniboost', {});
-        launchMsg = 'BOOST START'; launchMsgT = 0.8;
-      } // held the whole countdown = flooded engines: nothing.
-      race.launchBoosts();
-    } else if (n !== lastCountN) {
-      lastCountN = n;
-      hud.countdown(n);
-      audio.count(n);
+    if (countdownIntro > 0) {
+      // The cinematic sweep plays (rig.playIntro); the lights and the launch
+      // window wait until it lands, and the music is already fading up.
+      countdownIntro -= realDt;
+    } else {
+      countdownT -= realDt;
+      const n = Math.min(3, Math.ceil(countdownT));
+      // Launch timing: press and hold the throttle late in the countdown.
+      if (input.throttle > 0.5) launchHold += realDt; else launchHold = 0;
+      if (countdownT <= 0) {
+        state = 'race';
+        ship.lapTime = 0; // the clock starts at GO, not at countdown
+        hud.countdown(0); // START
+        juice.addTrauma(0.2);
+        audio.count(0);
+        hud.setSub(null);
+        // Launch boost: nail the window and you fly off the line.
+        if (launchHold > 0.05 && launchHold <= 0.55) {
+          ship.boostTimer = 1.5;
+          juice.emit('boost', { pad: -1 });
+          launchMsg = 'PERFECT START'; launchMsgT = 0.8; tally.perfectStart = true;
+        } else if (launchHold > 0.55 && launchHold <= 1.3) {
+          ship.boostTimer = 0.7;
+          juice.emit('miniboost', {});
+          launchMsg = 'BOOST START'; launchMsgT = 0.8;
+        } // held the whole countdown = flooded engines: nothing.
+        race.launchBoosts();
+      } else if (n !== lastCountN) {
+        lastCountN = n;
+        hud.countdown(n);
+        audio.count(n);
+      }
     }
   } else if (state === 'race') {
     raceTime += realDt;
@@ -732,6 +821,7 @@ function tick(now) {
     state === 'race' ? race.racers.map((r) => r.phys) : null,
     ship.s, spline.length, state === 'race');
   if (state === 'attract' || state === 'intro') {
+    if (state === 'attract' && menu.sec === 'garage' && podium.W < 120) podium.resize();
     podium.update(realDt);
     if (audio.ctx && audio._wantKey !== 'menu') audio.playMusic('menu');
     if (!debugCam) attractCamera(now / 1000);
@@ -751,56 +841,145 @@ function tick(now) {
   renderer.info.reset();
 }
 
-// Change a menu row's value by dir (±1) — shared by the keyboard, the gamepad
-// and the on-screen arrows. Action rows (records/trophies) have nothing to edit.
+// Reduced-motion: gates the heavy menu effects. Defaults to the OS preference;
+// the OPTIONS toggle flips it explicitly.
+function applyReducedMotion(toggle) {
+  const cur = localStorage.getItem('sv-reducedmotion');
+  let on;
+  if (toggle) { on = !(cur === '1'); localStorage.setItem('sv-reducedmotion', on ? '1' : '0'); }
+  else on = cur === '1' || (cur === null && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  document.body.classList.toggle('reduced-motion', on);
+  return on;
+}
+
+// Change a menu row's value by dir (±1) — shared by keyboard, gamepad, clicks.
 function editRow(row, dir) {
   const n = (mod, cur, d) => ((cur + d) % mod + mod) % mod;
-  if (row === 'mode') {
-    selection.mode = n(MODES.length, selection.mode, dir);
-    localStorage.setItem('sv-mode', String(selection.mode));
-    if (selection.mode === 0 && trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
-    else buildField(); // the menu backdrop field follows the mode (solo in TT)
-  } else if (row === 'track') {
-    if (selection.mode !== 0) { // locked to the roster in championship
-      trackIndex = n(TRACKS.length, trackIndex, dir);
-      buildWorld(trackIndex);
-    }
+  if (row === 'track') {
+    if (selection.mode !== 0) { trackIndex = n(TRACKS.length, trackIndex, dir); buildWorld(trackIndex); }
   } else if (row === 'class') {
-    // Clamp to what's been unlocked; nudging past it just bumps the lock hint.
     selection.classIdx = Math.max(0, Math.min(unlockedClasses(), selection.classIdx + dir));
     buildField();
   } else if (row === 'difficulty') {
     selection.difficulty = n(DIFFICULTIES.length, selection.difficulty, dir);
-    buildField(); // rebuilds the AI field with the new skill level
+    buildField();
   } else if (row === 'team') {
-    selection.team = n(TEAMS.length, selection.team, dir);
-    buildField();
+    selection.team = n(TEAMS.length, selection.team, dir); buildField();
   } else if (row === 'livery') {
-    selection.livery = n(liveryCount(), selection.livery, dir);
-    buildField();
+    selection.livery = n(liveryCount(), selection.livery, dir); buildField();
   } else if (row === 'pilot') {
     selection.pilot = n(CALLSIGNS.length, selection.pilot, dir);
     localStorage.setItem('sv-pilot', String(selection.pilot));
-  } else if (row === 'audio') {
-    audio.setVolume(audio.volume + dir);
+  } else if (row === 'music') {
+    audio.setMusicVolume(audio.musicVolume + dir);
+  } else if (row === 'sfx') {
+    audio.setSfxVolume(audio.sfxVolume + dir);
+  } else if (row === 'deadzone') {
+    let i = DEADZONES.indexOf(input.deadzone); if (i < 0) i = 1;
+    input.setDeadzone(DEADZONES[Math.max(0, Math.min(DEADZONES.length - 1, i + dir))]);
+  } else if (row === 'rumble') {
+    input.setRumble(!input.rumbleOn); if (input.rumbleOn) input.rumble(0.6, 200);
+  } else if (row === 'fullscreen') {
+    toggleFullscreen();
+  } else if (row === 'motion') {
+    applyReducedMotion(true);
+  } else if (row === 'tier') {
+    trophyTier = TROPHY_FILTERS[n(TROPHY_FILTERS.length, TROPHY_FILTERS.indexOf(trophyTier), dir)];
   }
   updateMenu();
 }
 
-// The footer reflects what the confirm button (or a click on it) will do.
-function refreshGoLabel() {
-  const row = menu.currentRow();
-  document.getElementById('menu-go').innerHTML = row === 'records'
-    ? 'ENTER &mdash; VIEW RECORDS'
-    : row === 'trophies' ? 'ENTER &mdash; VIEW TROPHIES'
-      : row === 'fullscreen' ? 'ENTER &mdash; FULLSCREEN' : 'ENTER &mdash; RACE';
+// Start the race for the current selection (mode set on section entry).
+function startRace() {
+  if (selection.mode === 0) {
+    champ.active = true; champ.round = 0; champ.classIndex = selection.classIdx;
+    champ.unlockMsg = null; champ.points.clear();
+    achievements.unlock('champ_play');
+    if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
+  } else {
+    champ.active = false;
+  }
+  hud.setCenter(null);
+  startCountdown();
 }
 
+// Close any armed key-capture (called when leaving / re-entering CONTROLS).
+function closeRebind() {
+  input.cancelCapture();
+  const cap = document.getElementById('rebind-capture'); if (cap) cap.classList.add('hidden');
+  document.querySelectorAll('#ctl-list .kb-row.binding').forEach((r) => r.classList.remove('binding'));
+}
+
+// Arm a key capture for the action at `idx` (or reset, on the last row).
+function beginRebind(idx) {
+  closeRebind();
+  if (idx >= REBINDABLE.length) {        // the RESET TO DEFAULTS row
+    input.resetBindings(); renderControlsList(); audio.uiSelect();
+    return;
+  }
+  const action = REBINDABLE[idx];
+  setTxt('rebind-action', `BIND: ${action.label}`);
+  document.getElementById('rebind-capture')?.classList.remove('hidden');
+  const rows = document.querySelectorAll('#ctl-list .kb-row');
+  rows.forEach((r, i) => r.classList.toggle('binding', i === idx));
+  input.beginCapture((code) => {
+    closeRebind();
+    if (code === 'Escape') { audio.uiMove(); return; }       // silent cancel
+    if (input.isReserved(code)) { audio.uiMove(); renderControlsList(); return; }
+    input.setBinding(action.id, code);                       // clears it elsewhere
+    audio.uiSelect();
+    renderControlsList();
+  });
+}
+
+// Entering a section sets the mode (race sections) and resizes the garage stage.
+function onSectionEnter(sec) {
+  closeRebind();
+  if (sec === 'championship') {
+    selection.mode = 0;
+    if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); } else buildField();
+  } else if (sec === 'single') {
+    selection.mode = 1; buildField();
+  } else if (sec === 'time') {
+    selection.mode = 2; buildField();
+  } else if (sec === 'garage') {
+    podium.resize();
+  }
+  if (sec === 'championship' || sec === 'single' || sec === 'time') {
+    localStorage.setItem('sv-mode', String(selection.mode));
+    audio.prewarmMusic(theme.music); // head-start the decode so GO crossfades cleanly
+  }
+  updateMenu();
+}
+
+function activateRow(row) {
+  audio.uiSelect();
+  if (row === 'go') {
+    const sec = menu.sec;
+    selection.mode = sec === 'championship' ? 0 : sec === 'single' ? 1 : 2;
+    localStorage.setItem('sv-mode', String(selection.mode));
+    startRace();
+    return;
+  }
+  if (row === 'reclist') return;  // the detail already reflects the selection
+  if (row === 'ctllist') { beginRebind(menu.ctlSel); return; }
+  editRow(row, 1);                // toggles (rumble/fullscreen/motion) flip on ENTER too
+}
+
+// Route a key through the menu state machine to the matching action.
 function applyMenuKey(code) {
   const act = menu.handleKey(code);
-  if (act && act.row) editRow(act.row, act.dir);
-  refreshGoLabel();
-  audio.uiMove();
+  if (!act) return;
+  switch (act.type) {
+    case 'navmove': case 'rowmove': audio.uiMove(); break;
+    case 'recmove': audio.uiMove(); renderRecordsList(); break;
+    case 'ctlmove': audio.uiMove(); renderControlsList(); break;
+    case 'enter': audio.uiSelect(); onSectionEnter(act.sec); break;
+    case 'edit': editRow(act.row, act.dir); audio.uiMove(); break;
+    case 'activate': activateRow(act.row); break;
+    case 'back': audio.uiMove(); break;
+    default: break;
+  }
 }
 
 // ---- pause menu -----------------------------------------------------------
@@ -808,7 +987,7 @@ function openPause() {
   paused = true;
   document.body.classList.add('paused');
   audio.setPaused(true);
-  pauseMenu.open(audio.volume, !!document.fullscreenElement);
+  pauseMenu.open(audio.sfxVolume, !!document.fullscreenElement);
   input.clearPressed();
   audio.uiSelect();
 }
@@ -852,16 +1031,16 @@ function applyPauseKeys() {
   if (pauseMenu.inOptions) {
     for (const [code, dir] of [['ArrowLeft', -1], ['KeyA', -1], ['ArrowRight', 1], ['KeyD', 1]]) {
       if (input.consume(code) && pauseMenu.currentOptRow() === 'audio') {
-        audio.setVolume(audio.volume + dir); audio.uiMove();
+        audio.setVolume(audio.sfxVolume + dir); audio.uiMove();
       }
     }
   }
-  if (input.consume('KeyP')) resumeRace();        // P toggles pause off
+  if (input.consumeAction('pause')) resumeRace();  // the pause key toggles off
   else if (input.consume('Enter')) confirmPause();
   // Backspace is the reliable "back" — Escape is hijacked by the browser to
   // leave fullscreen, so it can't be depended on (gamepad B maps to Escape too).
   else if (input.consume('Backspace') || input.consume('Escape')) backPause();
-  if (paused) pauseMenu.render(audio.volume, !!document.fullscreenElement);
+  if (paused) pauseMenu.render(audio.sfxVolume, !!document.fullscreenElement);
 }
 
 function handleKeys() {
@@ -871,6 +1050,8 @@ function handleKeys() {
       state = 'attract';
       overlayEl.classList.remove('intro');
       revealMenu();
+      onSectionEnter(menu.sec); // size the garage stage / sync the landed section
+      updateMenu();
       audio.uiSelect();
     }
     return;
@@ -878,25 +1059,21 @@ function handleKeys() {
 
   // The pause menu owns all input while open; otherwise Esc or P opens it mid-race.
   if (paused) { applyPauseKeys(); return; }
-  if (state === 'race' && (input.consume('Escape') || input.consume('KeyP'))) {
+  if (state === 'race' && (input.consume('Escape') || input.consumeAction('pause'))) {
     openPause();
     return;
   }
 
   if (state === 'attract') {
-    // A panel open? Confirm/back closes it; nav is suspended underneath.
-    if (recordsOpen || trophiesOpen) {
-      if (input.consume('Enter') || input.consume('Escape')) { closePanels(); audio.uiMove(); }
-      return;
-    }
-    if (input.consume('Escape')) closePanels();
-    for (const code of ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS', 'ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD']) {
+    // The console menu owns all attract input (nav up/down, enter, edit, back).
+    for (const code of ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS', 'ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD', 'Enter', 'Backspace', 'Escape']) {
       if (input.consume(code)) applyMenuKey(code);
     }
+    return;
   }
   if (input.consume('Enter')) onEnter();
   if (input.consume('Escape') && state !== 'attract') onEscape();
-  if (input.consume('KeyR') && state === 'race') {
+  if (input.consumeAction('respawn') && state === 'race') {
     ship.d = 0; ship.vd = 0; ship.v = Math.min(ship.v, 15);
     ship.boostTimer = 0;
     juice.hitstopT = 0;
@@ -958,26 +1135,8 @@ function onEnter() {
     return;
   }
   if (state === 'attract') {
-    if (recordsOpen || trophiesOpen) { closePanels(); return; }
-    // The confirm button activates the focused row: open a panel, or race.
-    const row = menu.currentRow();
-    if (row === 'records') { toggleRecords(); audio.uiSelect(); updateMenu(); return; }
-    if (row === 'trophies') { toggleTrophies(); audio.uiSelect(); updateMenu(); return; }
-    if (row === 'fullscreen') { toggleFullscreen(); audio.uiSelect(); return; }
     audio.uiSelect();
-    if (selection.mode === 0) {
-      champ.active = true;
-      champ.round = 0;
-      champ.classIndex = selection.classIdx;
-      champ.unlockMsg = null;
-      champ.points.clear();
-      achievements.unlock('champ_play');
-      if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
-    } else {
-      champ.active = false;
-    }
-    hud.setCenter(null);
-    startCountdown();
+    startRace();
   } else if (state === 'finished') {
     audio.uiSelect();
     if (champ.active && finishedView === 'race') {
@@ -1078,6 +1237,7 @@ function toggleFullscreen() {
 }
 fsBtn.addEventListener('click', () => { toggleFullscreen(); fsBtn.blur(); });
 addEventListener('keydown', (e) => {
+  if (input.capturing()) return;   // a rebind capture owns the next key
   if (e.code === 'KeyF' && !e.repeat) toggleFullscreen();
 });
 document.addEventListener('fullscreenchange', () => {
@@ -1088,24 +1248,45 @@ document.addEventListener('fullscreenchange', () => {
 // is keyboard-only. Clicks reuse the exact same actions as the keys/gamepad.
 function wireClicks() {
   const fsOn = () => !!document.fullscreenElement;
-  menu.bindClicks({
-    edit: (row, dir) => { editRow(row, dir); refreshGoLabel(); audio.uiMove(); },
-    setMode: (i) => { if (selection.mode !== i) editRow('mode', i - selection.mode); refreshGoLabel(); audio.uiSelect(); },
-    activate: (row) => {
-      if (row === 'records') { toggleRecords(); updateMenu(); }
-      else if (row === 'trophies') { toggleTrophies(); updateMenu(); }
-      else if (row === 'fullscreen') { toggleFullscreen(); }
-      audio.uiSelect();
-    },
-    focus: () => { refreshGoLabel(); audio.uiMove(); },
+  // Left-nav clicks: jump straight into a section.
+  document.querySelectorAll('#nav-list .navitem').forEach((b) => {
+    b.addEventListener('click', () => { audio.uiSelect(); menu.enterSection(b.dataset.sec); onSectionEnter(b.dataset.sec); });
   });
-  document.getElementById('menu-go').addEventListener('click', () => onEnter());
+  // Control rows: arrows edit, the row body focuses, GO buttons launch.
+  document.querySelectorAll('#bay [data-row]').forEach((rowEl) => {
+    const sec = rowEl.closest('.section').dataset.sec;
+    const row = rowEl.dataset.row;
+    const focus = () => menu.focusRow(sec, row);
+    const lEl = rowEl.querySelector('.arrow.l');
+    const rEl = rowEl.querySelector('.arrow.r');
+    if (lEl) lEl.addEventListener('click', (e) => { e.stopPropagation(); focus(); editRow(row, -1); audio.uiMove(); });
+    if (rEl) rEl.addEventListener('click', (e) => { e.stopPropagation(); focus(); editRow(row, 1); audio.uiMove(); });
+    if (rowEl.classList.contains('go-btn')) rowEl.addEventListener('click', () => { focus(); activateRow('go'); });
+    else rowEl.addEventListener('click', focus);
+  });
+  // Records list rows (delegated — the list is rebuilt on update).
+  const recList = document.getElementById('rec-list');
+  if (recList) recList.addEventListener('click', (e) => {
+    const r = e.target.closest('.rec-row'); if (!r) return;
+    menu.enterSection('records'); menu.recSel = +r.dataset.i; renderRecordsList(); audio.uiMove();
+  });
+  // Controls list: click an action row to rebind it (delegated — rebuilt on update).
+  const ctlList = document.getElementById('ctl-list');
+  if (ctlList) ctlList.addEventListener('click', (e) => {
+    const r = e.target.closest('.rec-row'); if (!r) return;
+    menu.enterSection('controls'); onSectionEnter('controls');
+    menu.ctlSel = +r.dataset.i; menu._applyCtlSel();
+    beginRebind(menu.ctlSel);
+  });
+  // Clicking the capture scrim cancels the pending rebind.
+  const cap = document.getElementById('rebind-capture');
+  if (cap) cap.addEventListener('click', () => { closeRebind(); audio.uiMove(); });
 
   // Pause menu rows + Options are click targets too.
   const clickRow = (name) => {
     pauseMenu.focusRow(name);
     confirmPause();
-    if (paused) pauseMenu.render(audio.volume, fsOn());
+    if (paused) pauseMenu.render(audio.sfxVolume, fsOn());
   };
   for (const name of ['resume', 'restart', 'options', 'quit']) {
     document.getElementById(`prow-${name}`).addEventListener('click', () => clickRow(name));
@@ -1113,15 +1294,15 @@ function wireClicks() {
   document.getElementById('popt-audio').querySelectorAll('.arrow').forEach((a, i) => {
     a.addEventListener('click', (e) => {
       e.stopPropagation();
-      audio.setVolume(audio.volume + (i === 0 ? -1 : 1));
+      audio.setVolume(audio.sfxVolume + (i === 0 ? -1 : 1));
       pauseMenu.focusOptRow('audio');
-      pauseMenu.render(audio.volume, fsOn());
+      pauseMenu.render(audio.sfxVolume, fsOn());
     });
   });
   document.getElementById('popt-fullscreen').addEventListener('click', () => {
     toggleFullscreen();
     pauseMenu.focusOptRow('fullscreen');
-    pauseMenu.render(audio.volume, fsOn());
+    pauseMenu.render(audio.sfxVolume, fsOn());
   });
 
   // The in-race pause button opens the menu without the P key.
@@ -1132,6 +1313,7 @@ function wireClicks() {
 if (selection.mode === 0) trackIndex = 0; // championship always opens on round 1
 buildWorld(trackIndex);
 hud.showOverlay(true);
+applyReducedMotion();
 wireClicks();
 requestAnimationFrame((t) => { last = t; tick(t); });
 

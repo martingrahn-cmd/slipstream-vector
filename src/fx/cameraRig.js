@@ -26,6 +26,17 @@ export class CameraRig {
     this._lookT = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
     this._m = new THREE.Matrix4();
+
+    // Cinematic intro sweep (a descent to the chase pose at the start line).
+    this.introT = 0;
+    this.introDur = 1;
+    this.introPos = new THREE.Vector3();
+    this.introLook = new THREE.Vector3();
+    this.introUp = new THREE.Vector3(0, 1, 0);
+    this.introFov = T.FOV_BASE;
+    this._appPos = new THREE.Vector3();
+    this._appLook = new THREE.Vector3();
+    this._appUp = new THREE.Vector3();
   }
 
   reset(ship) {
@@ -35,6 +46,20 @@ export class CameraRig {
     const f = this.spline.frameAt(ship.s + T.CAM_LOOKAHEAD, this.lookFrame);
     this.look.copy(f.pos);
     this.fov = T.FOV_BASE;
+    this.introT = 0; // any pending sweep is cancelled by a reset
+  }
+
+  // Kick off a ~1s sweep that eases from a high vantage behind the ship down
+  // into the normal chase pose. update() blends it in while introT > 0.
+  playIntro(ship, dur = 1.1) {
+    this.introDur = dur;
+    this.introT = dur;
+    const f = this.spline.frameAt(ship.s, this.frame);
+    this.introPos.copy(f.pos).addScaledVector(f.R, ship.d).addScaledVector(f.T, -6);
+    this.introPos.y += 9;                                   // high above the ship
+    this.introLook.copy(f.pos).addScaledVector(f.R, ship.d);
+    this.introLook.y += 0.5;                                // looking down at it
+    this.introFov = 54;
   }
 
   update(dt, ship, input, juice, drifting) {
@@ -84,11 +109,7 @@ export class CameraRig {
     // --- FOV: the loudest instrument ---
     const fovT = T.FOV_BASE + T.FOV_SPEED * Math.pow(sn, 1.5);
     this.fov += (fovT - this.fov) * k(T.CAM_LAMBDA_FOV);
-    const fovNow = Math.min(this.fov + juice.fovSpike, T.FOV_MAX);
-    if (Math.abs(this.camera.fov - fovNow) > 0.01) {
-      this.camera.fov = fovNow;
-      this.camera.updateProjectionMatrix();
-    }
+    const fovNow = Math.min(this.fov + juice.fovSpike, T.FOV_MAX); // applied below
 
     // --- trauma shake: noise, never random ---
     this.noiseT += dt * T.SHAKE_FREQ;
@@ -107,12 +128,30 @@ export class CameraRig {
     if (this._upT.lengthSq() < 1e-4) this._upT.copy(f.U); // fully inverted
     this._upT.normalize();
     this.upVec.lerp(this._upT, k(8)).normalize();
-    this.camera.position.copy(this._pos)
-      .addScaledVector(f.R, nx)
-      .addScaledVector(f.U, ny);
-    this.camera.up.copy(this.upVec);
-    this.camera.lookAt(this.look);
-    this.camera.rotateZ(this.roll + nr);
+    this._appPos.copy(this._pos).addScaledVector(f.R, nx).addScaledVector(f.U, ny);
+    this._appLook.copy(this.look);
+    this._appUp.copy(this.upVec);
+    let fov = fovNow, roll = this.roll + nr;
+    // Ease from the cinematic intro pose into the chase pose while the sweep runs.
+    if (this.introT > 0) {
+      this.introT = Math.max(0, this.introT - dt);
+      const a = this.introDur > 0 ? 1 - this.introT / this.introDur : 1;
+      const e = a * a * (3 - 2 * a); // smoothstep
+      const inv = 1 - e;
+      this._appPos.lerp(this.introPos, inv);
+      this._appLook.lerp(this.introLook, inv);
+      this._appUp.lerp(this.introUp, inv).normalize();
+      fov = fovNow + (this.introFov - fovNow) * inv;
+      roll *= e; // roll + shake ease in as the sweep settles
+    }
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.camera.position.copy(this._appPos);
+    this.camera.up.copy(this._appUp);
+    this.camera.lookAt(this._appLook);
+    this.camera.rotateZ(roll);
   }
 }
 

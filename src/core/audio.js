@@ -6,7 +6,10 @@
 export class AudioEngine {
   constructor(juice) {
     this.ctx = null;
-    this.volume = clampVol(parseInt(localStorage.getItem('sv-volume') ?? '7', 10));
+    // Separate Music and SFX volumes (0-10). Migrate from the old single sv-volume.
+    const old = localStorage.getItem('sv-volume');
+    this.musicVolume = clampVol(parseInt(localStorage.getItem('sv-music') ?? old ?? '7', 10));
+    this.sfxVolume = clampVol(parseInt(localStorage.getItem('sv-sfx') ?? old ?? '7', 10));
     this.stateScale = 0.3; // menu idle vs racing
     this.scrapeLevel = 0;
     this.lastBump = 0;
@@ -31,12 +34,13 @@ export class AudioEngine {
     this.ctx = ctx;
 
     this.master = ctx.createGain();
-    this.master.gain.value = (this.volume / 10) * 0.9;
+    this.master.gain.value = 0.9; // fixed headroom; Music/SFX are mixed below
     this.master.connect(ctx.destination);
     this.sfx = ctx.createGain();
+    this.sfx.gain.value = this.sfxVolume / 10;
     this.sfx.connect(this.master);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = 0.55;
+    this.musicBus.gain.value = (this.musicVolume / 10) * 0.6;
     this.musicBus.connect(this.master);
 
     // Shared noise source material.
@@ -64,7 +68,7 @@ export class AudioEngine {
       const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
       osc.connect(filt); sub.connect(subG); subG.connect(filt);
       filt.connect(gain);
-      if (pan) { gain.connect(pan); pan.connect(this.master); } else { gain.connect(this.master); }
+      if (pan) { gain.connect(pan); pan.connect(this.sfx); } else { gain.connect(this.sfx); }
       osc.start(); sub.start();
       this.oppVoices.push({ osc, sub, filt, gain, pan });
     }
@@ -114,7 +118,7 @@ export class AudioEngine {
     this.engGain = ctx.createGain();
     this.engGain.gain.value = 0;
     this.engFilter.connect(this.engGain);
-    this.engGain.connect(this.master);
+    this.engGain.connect(this.sfx);
 
     this.osc1 = ctx.createOscillator();
     this.osc1.type = 'sawtooth';      // harmonic body (turbine, not two-stroke)
@@ -150,7 +154,7 @@ export class AudioEngine {
     this.windGain.gain.value = 0;
     this.wind.connect(this.windFilter);
     this.windFilter.connect(this.windGain);
-    this.windGain.connect(this.master);
+    this.windGain.connect(this.sfx);
     this.wind.start();
 
     // Scrape: harsh filtered noise, gated by physics scrape events.
@@ -165,7 +169,7 @@ export class AudioEngine {
     this.scrapeGain.gain.value = 0;
     this.scrape.connect(this.scrapeFilter);
     this.scrapeFilter.connect(this.scrapeGain);
-    this.scrapeGain.connect(this.master);
+    this.scrapeGain.connect(this.sfx);
     this.scrape.start();
   }
 
@@ -288,9 +292,7 @@ export class AudioEngine {
     this.musicEls = {};       // HTMLAudio fallbacks (used until a buffer decodes)
     this.musicBuffers = {};   // decoded AudioBuffers for gapless looping
     this._decoding = {};
-    this._musicSources = [];  // live BufferSourceNodes of the current loop
-    this._loopKey = null;     // track currently looping gaplessly
-    this._loopTimer = null;
+    this._loop = null;        // active gapless loop {key, gain, timer, sources}
     this._wantKey = null;
     this.currentMusic = null; // HTMLAudio element currently playing, if any
     // Equal-power crossfade curves (reused for every loop boundary).
@@ -312,7 +314,7 @@ export class AudioEngine {
         node.connect(this.musicBus);
         this.musicEls[key] = el;
         // If this slot was requested before the file loaded, start it now.
-        if (this._wantKey === key && !this._loopKey && !this.currentMusic) this.playMusic(key);
+        if (this._wantKey === key && !this._loop && !this.currentMusic) this.playMusic(key);
       }, { once: true });
       el.addEventListener('error', () => {}, { once: true });
       el.load();
@@ -329,7 +331,7 @@ export class AudioEngine {
       .then((ab) => this.ctx.decodeAudioData(ab))
       .then((buf) => {
         this.musicBuffers[key] = buf;
-        if (this._wantKey === key && this._loopKey !== key) this.playMusic(key);
+        if (this._wantKey === key && !(this._loop && this._loop.key === key)) this.playMusic(key);
       })
       .catch(() => {})
       .finally(() => { this._decoding[key] = false; });
@@ -337,60 +339,91 @@ export class AudioEngine {
 
   // Seamless loop: each pass overlaps the next by a short equal-power crossfade,
   // so the end melts into the start instead of clicking/gapping like <audio loop>.
+  // Build a self-rescheduling gapless loop as a {key, gain, timer, sources}
+  // object on its own gain node, so two loops can cross-fade on a track switch.
   _startGaplessLoop(reqKey, buffer) {
     const ctx = this.ctx;
-    const XF = Math.min(0.5, buffer.duration * 0.25); // crossfade seconds
+    const XF = Math.min(0.5, buffer.duration * 0.25); // per-pass crossfade seconds
     const period = Math.max(0.3, buffer.duration - XF);
-    this._loopKey = reqKey;
+    const loop = { key: reqKey, gain: ctx.createGain(), timer: null, sources: [] };
+    loop.gain.connect(this.musicBus);
     const scheduleAt = (t) => {
-      if (this._loopKey !== reqKey) return;          // track changed
+      if (this._loop !== loop) return;               // superseded by a track switch
       if (ctx.state !== 'running') {                 // paused — wait, don't stack
-        this._loopTimer = setTimeout(() => scheduleAt(t), 250);
+        loop.timer = setTimeout(() => scheduleAt(t), 250);
         return;
       }
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       const g = ctx.createGain();
-      src.connect(g); g.connect(this.musicBus);
+      src.connect(g); g.connect(loop.gain);
       g.gain.setValueCurveAtTime(this._fadeIn, t, XF);            // fade in
       g.gain.setValueCurveAtTime(this._fadeOut, t + period, XF);  // fade out
       src.start(t);
       src.stop(t + period + XF + 0.05);
-      this._musicSources.push(src);
+      loop.sources.push(src);
       src.onended = () => {
-        const i = this._musicSources.indexOf(src);
-        if (i >= 0) this._musicSources.splice(i, 1);
+        const i = loop.sources.indexOf(src);
+        if (i >= 0) loop.sources.splice(i, 1);
       };
-      // Queue the next pass to begin exactly as this one starts fading out.
       const nextT = t + period;
       const delayMs = Math.max(0, (nextT - ctx.currentTime - 0.25) * 1000);
-      this._loopTimer = setTimeout(() => scheduleAt(nextT), delayMs);
+      loop.timer = setTimeout(() => scheduleAt(nextT), delayMs);
     };
+    this._loop = loop;
     scheduleAt(ctx.currentTime + 0.06);
+    return loop;
+  }
+
+  // Fade a loop's gain to silence over `dur`, then stop its sources and unwire.
+  _retireLoop(loop, dur) {
+    if (!loop) return;
+    if (loop.timer) { clearTimeout(loop.timer); loop.timer = null; }
+    const ctx = this.ctx, t = ctx.currentTime;
+    try {
+      loop.gain.gain.cancelScheduledValues(t);
+      loop.gain.gain.setValueAtTime(Math.max(0.0001, loop.gain.gain.value), t);
+      loop.gain.gain.linearRampToValueAtTime(0.0001, t + dur);
+    } catch (e) { /* */ }
+    setTimeout(() => {
+      for (const s of loop.sources) { try { s.stop(); } catch (e) { /* */ } }
+      loop.sources = [];
+      try { loop.gain.disconnect(); } catch (e) { /* */ }
+    }, (dur + 0.1) * 1000);
   }
 
   _stopAllMusic() {
-    if (this._loopTimer) { clearTimeout(this._loopTimer); this._loopTimer = null; }
-    this._loopKey = null;
-    if (this._musicSources) {
-      for (const s of this._musicSources) { try { s.stop(); } catch (e) { /* already stopped */ } }
-      this._musicSources = [];
-    }
+    if (this._loop) { this._retireLoop(this._loop, 0.001); this._loop = null; }
     if (this.currentMusic) { this.currentMusic.pause(); this.currentMusic = null; }
   }
 
+  // Switch tracks with an equal-power-ish crossfade (the outgoing loop keeps
+  // playing while it fades, the incoming one fades up) instead of a hard cut.
   playMusic(key) {
     this._wantKey = key;
     if (!this.ctx) return;
-    if (this._loopKey === key) return; // already looping this track gaplessly
+    if (this._loop && this._loop.key === key) return; // already looping this track
+    // Belt-and-suspenders: never let another track's <audio> element keep
+    // playing under the new one (covers any missed pause across decode upgrades).
+    if (this.musicEls) {
+      for (const k in this.musicEls) {
+        if (k !== key && this.musicEls[k] && !this.musicEls[k].paused) this.musicEls[k].pause();
+      }
+    }
 
-    // Prefer a decoded buffer (gapless). Fall back to race.mp3 for world tracks.
-    let effKey = key, buf = this.musicBuffers[key];
-    if (!buf && key !== 'menu' && this.musicBuffers.race) { effKey = 'race'; buf = this.musicBuffers.race; }
+    let buf = this.musicBuffers[key];
+    if (!buf && key !== 'menu' && this.musicBuffers.race) buf = this.musicBuffers.race;
     if (buf) {
-      this._stopAllMusic();
-      this._loopKey = key; // remember the requested key for the early-out above
-      this._startGaplessLoop(key, buf);
+      const XFADE = 0.7;
+      const old = this._loop;
+      if (this.currentMusic) { this.currentMusic.pause(); this.currentMusic = null; }
+      const loop = this._startGaplessLoop(key, buf); // sets this._loop = loop
+      const t = this.ctx.currentTime;
+      loop.gain.gain.setValueAtTime(old ? 0.0001 : 1, t);
+      if (old) {
+        loop.gain.gain.linearRampToValueAtTime(1, t + XFADE); // fade the new one up
+        this._retireLoop(old, XFADE);                         // fade the old one out
+      }
       return;
     }
 
@@ -399,10 +432,17 @@ export class AudioEngine {
     this._decodeMusic(key);
     const el = this.musicEls[key] || (key !== 'menu' ? this.musicEls.race : null) || null;
     if (this.currentMusic === el) { if (el && el.paused) el.play(); return; }
+    // Retire the outgoing gapless loop too — otherwise the previous track (e.g.
+    // the menu) keeps looping under this fallback until its buffer decodes.
+    if (this._loop) { this._retireLoop(this._loop, 0.4); this._loop = null; }
     if (this.currentMusic) this.currentMusic.pause();
     this.currentMusic = el;
     if (el) { el.currentTime = 0; el.play(); }
   }
+
+  // Decode a track ahead of time (e.g. when entering a race section) so the
+  // eventual playMusic() gets the clean gapless crossfade, not the HTMLAudio cut.
+  prewarmMusic(key) { if (this.ctx && key) this._decodeMusic(key); }
 
   stopMusic() {
     this._wantKey = null;
@@ -410,11 +450,19 @@ export class AudioEngine {
   }
 
   // ---- controls -------------------------------------------------------------
-  setVolume(v) {
-    this.volume = clampVol(v);
-    localStorage.setItem('sv-volume', String(this.volume));
-    if (this.master) this.master.gain.value = (this.volume / 10) * 0.9;
+  setMusicVolume(v) {
+    this.musicVolume = clampVol(v);
+    localStorage.setItem('sv-music', String(this.musicVolume));
+    if (this.musicBus) this.musicBus.gain.value = (this.musicVolume / 10) * 0.6;
   }
+
+  setSfxVolume(v) {
+    this.sfxVolume = clampVol(v);
+    localStorage.setItem('sv-sfx', String(this.sfxVolume));
+    if (this.sfx) this.sfx.gain.value = this.sfxVolume / 10;
+  }
+
+  setVolume(v) { this.setMusicVolume(v); this.setSfxVolume(v); } // legacy alias
 
   setPaused(p) {
     if (!this.ctx) return;

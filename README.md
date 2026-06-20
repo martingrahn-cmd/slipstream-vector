@@ -1,7 +1,7 @@
 # SLIPSTREAM VECTOR
 
-A WipEout × Horizon Chase arcade racing prototype. Anti-grav ship, three
-low-poly worlds, six tracks, built for graphics and game feel first.
+A WipEout × Horizon Chase arcade racer. Anti-grav ship, three low-poly worlds,
+six tracks, built for graphics and game feel first.
 
 **Worlds & tracks** (pick with ← → on the start screen; lap records persist):
 
@@ -60,33 +60,59 @@ rail, a lit cyan/magenta neon frame (echoing the track edges), cap beacons and
 an additive checker band, merged down to ~2 draw calls. The checkered line on
 the road surface itself comes from the track shader (`trackMesh.js`).
 
-## Front-end
+## Front-end — "THE BAY"
 
 Console-style flow: boot to a **PRESS START** title over a slow cinematic
-orbit of the parked ship (gameplay HUD hidden), then the menu cards slide in.
-A gliding accent cursor + value-pop tracks the focused row, every move has a
-blip, and sub-panels (records, trophies) slide in. ESC always returns to the
-menu (never back to the title gate).
+orbit of the parked ship (gameplay HUD hidden), then the console slides in.
+It's laid out like a ship's operating system: a **left nav rail** lists the
+sections vertically — Championship · Single Race · Time Trial · Garage ·
+Options · Controls · Records · Trophies — which you move through with ↑ ↓ (a
+glowing caret tracks the highlight). **Enter drops *into* a section**, focus moving to its
+content rows in the middle column; Backspace returns you to the rail. A top
+status rail shows the current section + live telemetry, and a huge ghost numeral
+sits behind the content. Every section slides in with its own boot label.
+
+The **Garage** is the showpiece: a wide neon display bay where your hull turns
+on a lit pedestal between sensor pillars and corner ticks, team identity to the
+left, livery / pilot to the right. The race sections (Championship / Single /
+Time) put the circuit previews — environment snapshot, top-down outline,
+elevation profile — in a framed viewport beside the settings, and a big **GO**
+button (pulsing when focused) launches the race. The 3D ship viewer and the
+preview canvases are shared and **reparented** into whichever section is active.
+
+**Options** has its own section: separate **MUSIC** and **SFX** volume bars,
+gamepad **DEADZONE** (low / medium / high) and **RUMBLE** toggle, **FULLSCREEN**,
+a **MOTION FX** switch (reduced-motion — disables the slide-ins, pulses and
+camera shake), and a controls legend.
+
+**Controls** is a live key-rebinding screen: a list of the driving actions
+(steer left/right, accelerate, brake, airbrake) plus respawn and pause, each
+showing its current key. Press Enter on a row and a **PRESS A KEY** overlay
+captures the next keypress as the new binding (Esc cancels); binding a key that
+another action already uses moves it off the old action, and a **RESET TO
+DEFAULTS** row restores everything. Bindings persist to localStorage. Menu
+navigation, confirm/back and fullscreen stay fixed, and the gamepad keeps its
+standard W3C mapping (so it still works regardless of how the keys are remapped).
 
 **Everything is clickable** — the whole front-end works by mouse as well as
-keyboard/gamepad. The row arrows (◀ ▶) change values, the mode strip picks the
-mode, RECORDS / TROPHIES / FULLSCREEN are buttons in the menu bar, and the RACE
-prompt starts the race; the pause menu rows/options click too, and an in-race
-PAUSE button sits by the fullscreen button. (The HUD overlay is
-`pointer-events:none` so it never eats canvas input; the interactive controls
-opt back in.)
+keyboard/gamepad. Click a nav item to enter its section, click a row to focus it
+and its ◀ ▶ arrows to change the value, click GO to race; the pause menu rows/
+options click too, and an in-race PAUSE button sits by the fullscreen button.
+(The HUD overlay is `pointer-events:none` so it never eats canvas input; the
+interactive controls opt back in.) Below ~1120px the layout tightens and below
+~900px it collapses to the rail plus a single content column.
 
 **Pause menu** (`ui/pauseMenu.js`): P (or Esc) mid-race opens a centered panel —
 Resume / Restart / Options / Quit — navigable by keyboard or gamepad, in the
 same neon style. Back is **Backspace** (Esc is hijacked by the browser to leave
 fullscreen, so it isn't depended on); on a gamepad B backs out and Select
-toggles pause. Options exposes the audio volume and a fullscreen toggle. Restart
+toggles pause. Options exposes the SFX volume and a fullscreen toggle. Restart
 re-runs the current race/round (championship keeps its standings); Quit returns
 to the menu.
 
 ## Game modes
 
-Top row of the menu: **CHAMPIONSHIP** (all six tracks in roster order, points
+The nav rail's race sections: **CHAMPIONSHIP** (all six tracks in roster order, points
 10-8-6-5-4-3-2-1 per race, standings between rounds, and at the end a full
 **3D podium ceremony** (`ui/podiumScene.js`) — the top-three ships rise onto
 gold/silver/bronze tiers under spotlights, confetti rains, the camera dollies
@@ -98,21 +124,20 @@ track vs the field) and **TIME TRIAL** (alone, chasing records). ESC aborts
 any session back to the menu. During the countdown a banner announces the
 round and circuit; the last lap gets a FINAL LAP call.
 
-The menu's ship card spins a live 3D model of your hull; the circuit card
-shows a real in-world environment snapshot, the top-down outline and the
-elevation profile (loops read as spikes). **RECORDS** and **TROPHIES** are
-selectable buttons at the bottom of the ship card — navigate to them and press
-the confirm button (Enter / a gamepad face button) to open; confirm or back
-closes. No keyboard-letter shortcuts.
+The Garage spins a live 3D model of your hull; the race sections show a real
+in-world environment snapshot, the top-down outline and the elevation profile
+(loops read as spikes). **RECORDS** and **TROPHIES** are their own nav-rail
+sections — move to them and press Enter to open; Backspace returns to the rail.
+No keyboard-letter shortcuts, so the whole menu maps cleanly to a gamepad.
 
 **Records & trophies:** beating a track's best lap or best full race is
 celebrated with a slide-in banner and written to localStorage (the records
-board is the high-score screen; reached via the RECORDS menu button).
+board is the high-score screen; reached via the RECORDS nav section).
 **Trophies** are 31 achievements (15 bronze · 10 silver · 5 gold · 1 platinum)
 — finishing, winning, clean wins, loops, records, class wins, championships, a
 clean sweep, and a platinum for completing every other one. They unlock from
 gameplay, persist, and pop a queued toast with a tier jingle; the gallery (the
-TROPHIES menu button) shows locked/unlocked with progress per tier.
+TROPHIES nav section) shows locked/unlocked with progress per tier.
 `src/ui/achievements.js`.
 
 **Speed classes & unlocks:** the CLASS row picks a global tier — **PULSE**
@@ -139,10 +164,12 @@ Halcyon Raceworks handling, Razorback Velocity top speed, NovaSurge
 Industries thrust), **livery** (2 per team) and **callsign** (10 to choose
 from).
 
-**Launch boost:** hold thrust through the last beat of the countdown. Nail
-the 0.05–0.55 s window before START for a PERFECT START (full boost); a bit
-early gives a smaller BOOST START; hold the whole countdown and you flood the
-engines — nothing. The AI gets the same skill-gated chance.
+**Race start:** entering a track plays a ~1s cinematic camera sweep down to your
+ship while the world music fades up (crossfading from the menu, no hard cut),
+then the 3-2-1 lights. **Launch boost:** hold thrust through the last beat of the
+countdown. Nail the 0.05–0.55 s window before START for a PERFECT START (full
+boost); a bit early gives a smaller BOOST START; hold the whole countdown and you
+flood the engines — nothing. The AI gets the same skill-gated chance.
 
 **Fairness:** ship stats belong to the hull — an AI in a Razorback gets the
 same +3% top speed you would. Drivers never cheat: difficulty (the RIVALS
@@ -179,18 +206,23 @@ python3 -m http.server 8741
 
 ## Controls
 
+The driving keys below are defaults — **remap them in the Controls menu section**
+(steer, accelerate, brake, airbrake, respawn, pause). Menu navigation, confirm/
+back and fullscreen are fixed.
+
 | Key | Action |
 |---|---|
 | `↑` / `W` | thrust (hold at the line for a launch boost) |
-| `← →` / `A D` | steer / menu select |
-| `↑ ↓` | menu rows |
+| `← →` / `A D` | steer · change the focused menu value |
+| `↑ ↓` / `W S` | move the nav rail / section rows |
 | `↓` / `S` | brake |
 | `Shift` | airbrake drift — release after >0.7 s for a mini-boost |
-| `Enter` | confirm / start / advance / restart |
-| `Esc` | back / abort to menu |
+| `Enter` | confirm · enter a section · start · advance |
+| `Backspace` | back (menu section → rail, pause) |
+| `Esc` | pause (in race) — also leaves fullscreen, so menu back is Backspace |
 | `R` | respawn on the centerline (in race) |
 | `P` | pause |
-| `F` | toggle fullscreen (also the ⛶ button, bottom-left) |
+| `F` | toggle fullscreen (also the ⛶ button, bottom-left, and an Options row) |
 | `M` | debug top-down view |
 
 **Gamepad** (W3C standard mapping, auto-detected — just press a button):
@@ -207,8 +239,10 @@ python3 -m http.server 8741
 
 Triggers are read analog, so you can feather the throttle. Fullscreen stays
 keyboard/mouse only — `requestFullscreen` needs a user gesture a gamepad can't
-grant. RECORDS and TROPHIES are selectable menu buttons (confirm to open), not
-keyboard shortcuts, so they map cleanly to a pad.
+grant. RECORDS and TROPHIES are their own nav-rail sections (Enter to open), not
+keyboard shortcuts, so they map cleanly to a pad. The stick **deadzone** and
+**rumble** are tunable in the Options section (rumble fires on wall hits, ship
+contact and boosts).
 
 Ride the blue chevron pads for a 1.2 s boost; the chain of three on the start
 straight sits on the risk line next to the left wall.
@@ -239,9 +273,9 @@ src/
   fx/particles.js          speed-line tunnel, sparks, exhaust ribbons
   fx/postfx.js             composer + one JuicePass (vignette/chroma/radial blur/flash)
   ui/hud.js                DOM speed/laps/position/boost, countdown, results & standings boards
-  ui/menu.js               attract menu: mode strip, track/team/livery/pilot rows, thumbnails
+  ui/menu.js               "THE BAY" console controller: nav rail + section focus, thumbnails
   ui/minimap.js            canvas minimap: track outline, pads, start line, ship + rivals
-  ui/podium.js             spinning 3D ship model for the menu ship card
+  ui/podium.js             spinning 3D ship model for the Garage display bay
   ui/podiumScene.js        full-screen 3D championship podium ceremony
   ui/pauseMenu.js          in-race pause menu (resume/restart/options/quit)
 assets/music/              drop-in music slots (see Sound & music)
@@ -270,14 +304,16 @@ in `race.js`.
 All effects are synthesized in WebAudio at runtime — engine hum (pitch
 follows speed, filter opens with throttle/boost), wind, boost whoosh, wall
 thuds, scrape, ship-contact bumps, countdown, lap chime, finish & champion
-fanfares and menu blips. `src/core/audio.js`. Master volume on the AUDIO menu
-row (0–10, persisted).
+fanfares and menu blips. `src/core/audio.js`. **Music and SFX have separate
+volumes** (0–10 each, persisted), set on their own rows in the Options section;
+SFX is also adjustable from the in-race pause menu.
 
-**Music is yours to make:** five optional slots in `assets/music/` —
-`menu.mp3` (the menu), `sunset.mp3` (Sunset Mesa) / `coast.mp3` (Palm Coast) /
-`sprawl.mp3` (Neon Sprawl), one per world starting at START, plus `race.mp3`
-as a fallback for any missing world slot. The countdown stays music-free for
-tension. No file — silence, no error.
+**The soundtrack is Martin's own** and ships with the game: `menu.mp3` (the
+menu), `sunset.mp3` (Sunset Mesa), `coast.mp3` (Palm Coast) and `sprawl.mp3`
+(Neon Sprawl), each world's track starting at START. The system reads five
+slots in `assets/music/` — those four plus an optional `race.mp3` fallback for
+any world slot left empty. The countdown stays music-free for tension. Missing
+file — silence, no error.
 
 ## Debug
 
@@ -293,11 +329,10 @@ Done: 3 worlds × 2 tracks (two with F-Zero loops), 8-ship AI field (4 teams ×
 2 liveries, no rubber-banding), Championship / Single Race / Time Trial, three
 speed classes with an unlock ladder + prestige livery, a chosen RIVALS
 difficulty (decoupled from the track), full menu + ship select, keyboard +
-gamepad input, fullscreen, procedural audio + music hooks, launch boosts,
-solid collisions, records, trackside liveliness.
+gamepad input, fullscreen, procedural audio + Martin's original soundtrack,
+launch boosts, solid collisions, records, trackside liveliness.
 
 Not yet built (rough priority):
-- **Music** — Martin composes the four tracks himself (drop-in slots ready).
 - **Weapons** — under discussion; WipEout-style pad pickups (no position
   weighting, to protect the no-rubber-band rule), optionally with a hull
   energy/shield bar. Cheap in the spline domain. A natural Eliminator mode

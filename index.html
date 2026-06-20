@@ -48,96 +48,143 @@
 
     <div class="intro-prompt" id="intro-prompt">PRESS START</div>
 
-    <div class="menu-row mode-strip" id="row-mode">
-      <span class="mode-opt" id="mode-0"><span>CHAMPIONSHIP</span></span>
-      <span class="mode-opt" id="mode-1"><span>SINGLE RACE</span></span>
-      <span class="mode-opt" id="mode-2"><span>TIME TRIAL</span></span>
-    </div>
+    <div id="console">
+      <aside id="nav-rail">
+        <div class="os-word">SLIPSTREAM<span>//</span>OS</div>
+        <nav id="nav-list">
+          <button class="navitem" data-sec="championship"><span class="ix">01</span><span class="nl">CHAMPIONSHIP</span><span class="ns" id="ns-championship">6 ROUNDS</span></button>
+          <button class="navitem" data-sec="single"><span class="ix">02</span><span class="nl">SINGLE RACE</span><span class="ns" id="ns-single">—</span></button>
+          <button class="navitem" data-sec="time"><span class="ix">03</span><span class="nl">TIME TRIAL</span><span class="ns" id="ns-time">SOLO</span></button>
+          <button class="navitem" data-sec="garage"><span class="ix">04</span><span class="nl">GARAGE</span><span class="ns" id="ns-garage">VEKTOR</span></button>
+          <button class="navitem" data-sec="options"><span class="ix">05</span><span class="nl">OPTIONS</span><span class="ns" id="ns-options">AUDIO</span></button>
+          <button class="navitem" data-sec="controls"><span class="ix">06</span><span class="nl">CONTROLS</span><span class="ns" id="ns-controls">REBIND</span></button>
+          <button class="navitem" data-sec="records"><span class="ix">07</span><span class="nl">RECORDS</span><span class="ns" id="ns-records">—</span></button>
+          <button class="navitem" data-sec="trophies"><span class="ix">08</span><span class="nl">TROPHIES</span><span class="ns" id="ns-trophies">—</span></button>
+        </nav>
+        <div class="rail-caret" id="rail-caret"></div>
+      </aside>
 
-    <div class="menu-body">
-    <div class="menu-cards">
-      <section class="card" id="card-track">
-        <header>
-          <span class="tag">CIRCUIT</span>
-          <span class="tag-dim" id="menu-world">SUNSET MESA</span>
-        </header>
-        <canvas id="env-thumb"></canvas>
-        <div class="menu-row" id="row-track">
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-track">Sunset Circuit</span>
-          <span class="arrow">&#9654;</span>
-        </div>
-        <div class="track-data">
-          <canvas id="menu-thumb"></canvas>
-          <div class="track-col">
-            <canvas id="menu-profile"></canvas>
-            <div class="profile-label">ELEVATION</div>
-            <div id="menu-best">NO RECORD</div>
+      <header id="status-rail">
+        <span class="crumb">SYS / <b id="crumb-sec">GARAGE</b></span>
+        <span class="telemetry" id="status-tele"></span>
+      </header>
+
+      <div id="bay">
+        <div class="ghostnum" id="ghostnum">04</div>
+
+        <section class="section" data-sec="championship">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; CHAMPIONSHIP CUP"></div>
+            <div class="cup-ladder" id="cup-ladder"></div>
+            <div class="ctl-row" data-row="class"><label>CLASS</label><span class="arrow l">&#9664;</span><span class="value" id="menu-class"></span><span class="arrow r">&#9654;</span><span class="lock-note hidden" id="menu-class-lock"></span></div>
+            <div class="ctl-row" data-row="difficulty"><label>RIVALS</label><span class="arrow l">&#9664;</span><span class="value" id="menu-difficulty"></span><span class="arrow r">&#9654;</span></div>
+            <button class="go-btn" data-row="go">START CUP</button>
           </div>
-        </div>
-        <div class="menu-row small" id="row-class">
-          <label>CLASS</label>
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-class">RAPIER</span>
-          <span class="arrow">&#9654;</span>
-          <span class="lock-note hidden" id="menu-class-lock"></span>
-        </div>
-        <div class="menu-row small" id="row-difficulty">
-          <label>RIVALS</label>
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-difficulty">PRO</span>
-          <span class="arrow">&#9654;</span>
-        </div>
-      </section>
+          <div class="col right"><div class="vp-frame"><div class="vp-slot" data-vp="champ"></div></div><div class="vp-note">6 ROUNDS &middot; 10-8-6-5-4-3-2-1 PTS &middot; PRESTIGE LIVERY AT OVERDRIVE</div></div>
+        </section>
 
-      <section class="card" id="card-ship">
-        <header><span class="tag">YOUR SHIP</span></header>
-        <canvas id="podium"></canvas>
-        <div class="menu-row" id="row-team">
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-team">VEKTOR DYNAMICS</span>
-          <span class="arrow">&#9654;</span>
-        </div>
-        <div id="menu-blurb"></div>
-        <div id="menu-stats"></div>
-        <div class="menu-row small" id="row-livery">
-          <label>LIVERY</label>
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-livery"></span>
-          <span class="arrow">&#9654;</span>
-        </div>
-        <div class="menu-row small" id="row-pilot">
-          <label>PILOT</label>
-          <span class="arrow">&#9664;</span>
-          <span class="value" id="menu-pilot">VANTA</span>
-          <span class="arrow">&#9654;</span>
-        </div>
-      </section>
-    </div>
+        <section class="section" data-sec="single">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; SINGLE RACE"></div>
+            <div class="ctl-row" data-row="track"><label>TRACK</label><span class="arrow l">&#9664;</span><span class="value" id="menu-track"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="class"><label>CLASS</label><span class="arrow l">&#9664;</span><span class="value" id="s-class"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="difficulty"><label>RIVALS</label><span class="arrow l">&#9664;</span><span class="value" id="s-diff"></span><span class="arrow r">&#9654;</span></div>
+            <button class="go-btn" data-row="go">RACE</button>
+          </div>
+          <div class="col right"><div class="vp-frame"><div class="vp-slot" data-vp="track"></div></div><div class="vp-note" id="menu-best">NO RECORD</div></div>
+        </section>
 
-    <div class="menu-bar">
-      <div class="menu-row small" id="row-audio">
-        <label>AUDIO</label>
-        <span class="arrow">&#9664;</span>
-        <span class="value" id="menu-volume"></span>
-        <span class="arrow">&#9654;</span>
+        <section class="section" data-sec="time">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; TIME TRIAL"></div>
+            <div class="badge">SOLO &middot; NO RIVALS</div>
+            <div class="ctl-row" data-row="track"><label>TRACK</label><span class="arrow l">&#9664;</span><span class="value" id="t-track"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="class"><label>CLASS</label><span class="arrow l">&#9664;</span><span class="value" id="t-class"></span><span class="arrow r">&#9654;</span></div>
+            <button class="go-btn" data-row="go">SET A TIME</button>
+          </div>
+          <div class="col right"><div class="vp-frame"><div class="vp-slot" data-vp="tt"></div></div><div class="vp-note" id="tt-best">NO RECORD &mdash; SET ONE</div></div>
+        </section>
+
+        <section class="section garage" data-sec="garage">
+          <div class="col gleft">
+            <div class="boot" data-boot="&gt;&gt; GARAGE ONLINE"></div>
+            <div class="ctl-row big" data-row="team"><span class="arrow l">&#9664;</span><span class="value" id="menu-team"></span><span class="arrow r">&#9654;</span></div>
+            <div id="menu-stats"></div>
+            <div id="menu-blurb"></div>
+            <div class="garage-foot">TEAM SHIP &mdash; applies to you and the field</div>
+          </div>
+          <div class="stage">
+            <div class="bay-pillar l"></div><div class="bay-pillar r"></div>
+            <div class="bay-beam b1"></div><div class="bay-beam b2"></div>
+            <div class="vp-slot stage-slot" data-vp="garage"></div>
+            <div class="bay-tick tl"></div><div class="bay-tick tr"></div><div class="bay-tick bl"></div><div class="bay-tick br"></div>
+            <div class="bay-label">BAY 01</div>
+          </div>
+          <div class="col gright">
+            <div class="ctl-row" data-row="livery"><label>LIVERY</label><span class="arrow l">&#9664;</span><span class="value" id="menu-livery"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="pilot"><label>PILOT</label><span class="arrow l">&#9664;</span><span class="value" id="menu-pilot"></span><span class="arrow r">&#9654;</span></div>
+          </div>
+        </section>
+
+        <section class="section" data-sec="options">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; OPTIONS"></div>
+            <div class="opt-grp">AUDIO</div>
+            <div class="ctl-row" data-row="music"><label>MUSIC</label><span class="arrow l">&#9664;</span><span class="value" id="opt-music"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="sfx"><label>SFX</label><span class="arrow l">&#9664;</span><span class="value" id="opt-sfx"></span><span class="arrow r">&#9654;</span></div>
+            <div class="opt-grp">GAMEPAD</div>
+            <div class="ctl-row" data-row="deadzone"><label>DEADZONE</label><span class="arrow l">&#9664;</span><span class="value" id="opt-dz"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="rumble"><label>RUMBLE</label><span class="arrow l">&#9664;</span><span class="value" id="opt-rumble"></span><span class="arrow r">&#9654;</span></div>
+            <div class="opt-grp">DISPLAY</div>
+            <div class="ctl-row" data-row="fullscreen"><label>FULLSCREEN</label><span class="arrow l">&#9664;</span><span class="value" id="opt-fs"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="motion"><label>MOTION FX</label><span class="arrow l">&#9664;</span><span class="value" id="opt-motion"></span><span class="arrow r">&#9654;</span></div>
+          </div>
+          <div class="col right"><div class="vp-frame"><div class="legend" id="opt-legend"></div></div><div class="vp-note" id="opt-gp">GAMEPAD: <span id="opt-gp-state">—</span></div></div>
+        </section>
+
+        <section class="section" data-sec="controls">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; CONTROLS"></div>
+            <div class="opt-grp">KEYBOARD</div>
+            <div class="rec-list" id="ctl-list"></div>
+          </div>
+          <div class="col right">
+            <div class="vp-frame"><div class="legend">
+              <div class="lg-row"><span>REBIND</span><b>ENTER a row</b></div>
+              <div class="lg-row"><span>CANCEL</span><b>ESC</b></div>
+              <div class="lg-row"><span>RESET</span><b>last row</b></div>
+            </div></div>
+            <div class="vp-note">GAMEPAD keeps the standard mapping &middot; stick + A / B / X / START</div>
+          </div>
+          <div id="rebind-capture" class="kb-capture hidden">
+            <div class="kb-cap-tag" id="rebind-action">BIND</div>
+            <div class="prompt">PRESS A KEY</div>
+            <div class="cancel-hint"><b>ESC</b> to cancel</div>
+          </div>
+        </section>
+
+        <section class="section" data-sec="records">
+          <div class="col mid"><div class="boot" data-boot="&gt;&gt; RECORDS"></div><div class="rec-list" id="rec-list"></div></div>
+          <div class="col right"><div class="vp-frame"><div class="vp-slot" data-vp="rec"></div></div><div class="vp-note" id="rec-detail">SELECT A TRACK</div></div>
+        </section>
+
+        <section class="section" data-sec="trophies">
+          <div class="col mid"><div class="boot" data-boot="&gt;&gt; TROPHIES"></div><div class="ctl-row" data-row="tier"><label>TIER</label><span class="arrow l">&#9664;</span><span class="value" id="tro-tier">ALL</span><span class="arrow r">&#9654;</span></div><div class="tro-count" id="tro-count"></div></div>
+          <div class="col right wide"><div class="tro-gallery" id="tro-gallery"></div></div>
+        </section>
       </div>
-      <div class="menu-actions">
-        <div class="menu-row action" id="row-records">
-          <span class="play">&#9656;</span><span class="value">RECORDS</span>
-        </div>
-        <div class="menu-row action" id="row-trophies">
-          <span class="play">&#9656;</span><span class="value">TROPHIES</span>
-        </div>
-        <div class="menu-row action" id="row-fullscreen">
-          <span class="play">&#9974;</span><span class="value">FULLSCREEN</span>
-        </div>
-      </div>
-    </div>
     </div>
 
-    <div class="press" id="menu-go">ENTER &mdash; RACE</div>
-    <div class="keys-hint">&uarr;&darr; select &nbsp; &larr;&rarr; change &nbsp; ENTER confirm &nbsp; ESC back &nbsp; SHIFT airbrake &nbsp; F fullscreen &nbsp; &#127918; gamepad ready</div>
+    <!-- hidden canvases reparented into the active section's viewport -->
+    <div id="canvas-pool" class="hidden">
+      <canvas id="env-thumb"></canvas>
+      <canvas id="menu-thumb"></canvas>
+      <canvas id="menu-profile"></canvas>
+      <canvas id="podium"></canvas>
+    </div>
+    <span id="menu-world" class="hidden"></span>
+
+    <div class="keys-hint">&uarr;&darr; navigate &nbsp; ENTER open &nbsp; &larr;&rarr; change &nbsp; &#9003; back &nbsp; F fullscreen &nbsp; &#127918; gamepad ready</div>
   </div>
 
   <canvas id="podium-scene" class="hidden"></canvas>

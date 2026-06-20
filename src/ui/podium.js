@@ -114,6 +114,19 @@ export class Podium {
     this.spin = 0.6;
   }
 
+  // Resize to fill the current parent (the garage stage uses this to go hero-size).
+  resize(w, h) {
+    const c = this.renderer.domElement;
+    const pw = Math.round(w || (c.parentElement ? c.parentElement.clientWidth : this.W));
+    const ph = Math.round(h || (c.parentElement ? c.parentElement.clientHeight : this.H));
+    if (pw < 20 || ph < 20) return;
+    this.W = pw; this.H = ph;
+    this.renderer.setSize(pw, ph, false);
+    this.camera.aspect = pw / ph;
+    this.camera.updateProjectionMatrix();
+    c.style.width = `${pw}px`; c.style.height = `${ph}px`;
+  }
+
   setShip(variant) {
     if (this.ship) {
       this.scene.remove(this.ship);

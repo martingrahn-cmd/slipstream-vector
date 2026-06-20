@@ -1,173 +1,182 @@
-// The attract-screen menu: track picker (with top-down thumbnail + elevation
-// profile), team picker (stat bars + blurb), livery and callsign pickers.
-// Navigation: up/down moves focus, left/right edits, Enter races.
-import { TEAMS, CALLSIGNS } from '../worlds/teams.js';
-import { fmt } from './hud.js';
+// "THE BAY" console menu controller: a left nav rail of sections, navigated
+// up/down (DEPTH 0); ENTER drops focus into the section's middle-column rows
+// (DEPTH 1); ←→ edit, ENTER activates, Backspace/Esc returns to the rail. Pure
+// structure/navigation/focus — main.js owns the data fill and the actions.
 
-const ROWS = ['mode', 'track', 'class', 'difficulty', 'team', 'livery', 'pilot', 'audio', 'records', 'trophies', 'fullscreen'];
+const NAV = ['championship', 'single', 'time', 'garage', 'options', 'controls', 'records', 'trophies'];
+// Ordered focusable rows per section (data-row values). 'go' = the action button.
+const STAGE = {
+  championship: ['class', 'difficulty', 'go'],
+  single: ['track', 'class', 'difficulty', 'go'],
+  time: ['track', 'class', 'go'],
+  garage: ['team', 'livery', 'pilot'],
+  options: ['music', 'sfx', 'deadzone', 'rumble', 'fullscreen', 'motion'],
+  controls: ['ctllist'],
+  records: ['reclist'],
+  trophies: ['tier'],
+};
 
 export class Menu {
   constructor() {
-    this.focus = 0;
-    this.el = {
-      world: document.getElementById('menu-world'),
-      track: document.getElementById('menu-track'),
-      best: document.getElementById('menu-best'),
-      team: document.getElementById('menu-team'),
-      blurb: document.getElementById('menu-blurb'),
-      stats: document.getElementById('menu-stats'),
-      livery: document.getElementById('menu-livery'),
-      pilot: document.getElementById('menu-pilot'),
-      class: document.getElementById('menu-class'),
-      classLock: document.getElementById('menu-class-lock'),
-      difficulty: document.getElementById('menu-difficulty'),
-      volume: document.getElementById('menu-volume'),
-      thumb: document.getElementById('menu-thumb'),
-      profile: document.getElementById('menu-profile'),
-      rows: ROWS.map((r) => document.getElementById(`row-${r}`)),
-    };
-    this._applyFocus();
+    this.view = 'nav';          // 'nav' | 'section'
+    this.navFocus = 3;          // default land on GARAGE
+    this.rowFocus = 0;
+    this.recSel = 0;            // selected track row in RECORDS
+    this.recCount = 6;
+    this.ctlSel = 0;            // selected action row in CONTROLS
+    this.ctlCount = 8;
+    this.navEls = {};
+    document.querySelectorAll('#nav-list .navitem').forEach((b) => { this.navEls[b.dataset.sec] = b; });
+    this.sectionEls = {};
+    document.querySelectorAll('#bay .section').forEach((s) => { this.sectionEls[s.dataset.sec] = s; });
+    this.caret = document.getElementById('rail-caret');
+    this.crumb = document.getElementById('crumb-sec');
+    this.ghost = document.getElementById('ghostnum');
+    this._show();
+    this._applyNav();
+    this._applyRows();
   }
 
-  // Returns {row, dir} when the key edits a value, true when consumed, null otherwise.
+  get sec() { return NAV[this.navFocus]; }
+  stageRows() { return STAGE[this.sec] || []; }
+  currentRow() { return this.stageRows()[this.rowFocus]; }
+
+  // Returns an intent for main: {type, ...}. Null if the key isn't ours.
   handleKey(code) {
-    if (code === 'ArrowUp' || code === 'KeyW') {
-      this.focus = (this.focus + ROWS.length - 1) % ROWS.length;
-      this._applyFocus();
-      return true;
+    const up = code === 'ArrowUp' || code === 'KeyW';
+    const down = code === 'ArrowDown' || code === 'KeyS';
+    const left = code === 'ArrowLeft' || code === 'KeyA';
+    const right = code === 'ArrowRight' || code === 'KeyD';
+
+    if (this.view === 'nav') {
+      if (up || down) { this._moveNav(up ? -1 : 1); return { type: 'navmove' }; }
+      if (code === 'Enter') { this.view = 'section'; this.rowFocus = 0; this._applyNav(); this._applyRows(); return { type: 'enter', sec: this.sec }; }
+      return null;
     }
-    if (code === 'ArrowDown' || code === 'KeyS') {
-      this.focus = (this.focus + 1) % ROWS.length;
-      this._applyFocus();
-      return true;
+
+    // DEPTH 1 — inside a section.
+    if (code === 'Backspace' || code === 'Escape') { this.toNav(); return { type: 'back' }; }
+
+    if (this.sec === 'records') { // a 1D list, no go button
+      if (up || down) { this.recSel = Math.max(0, Math.min(this.recCount - 1, this.recSel + (up ? -1 : 1))); return { type: 'recmove' }; }
+      if (code === 'Enter') return { type: 'activate', row: 'reclist' };
+      return null;
     }
-    const dir = (code === 'ArrowRight' || code === 'KeyD') ? 1
-      : (code === 'ArrowLeft' || code === 'KeyA') ? -1 : 0;
-    if (dir !== 0) return { row: ROWS[this.focus], dir };
+
+    if (this.sec === 'controls') { // a 1D list of action rows; ENTER rebinds
+      if (up || down) { this.ctlSel = Math.max(0, Math.min(this.ctlCount - 1, this.ctlSel + (up ? -1 : 1))); return { type: 'ctlmove' }; }
+      if (code === 'Enter') return { type: 'activate', row: 'ctllist' };
+      return null;
+    }
+
+    const rows = this.stageRows();
+    if (up || down) { this.rowFocus = (this.rowFocus + rows.length + (up ? -1 : 1)) % rows.length; this._applyRows(); return { type: 'rowmove' }; }
+    if (left || right) return { type: 'edit', row: this.currentRow(), dir: right ? 1 : -1 };
+    if (code === 'Enter') return { type: 'activate', row: this.currentRow() };
     return null;
   }
 
-  _applyFocus() {
-    this.el.rows.forEach((el, i) => el.classList.toggle('focus', i === this.focus));
+  enterSection(sec) { // mouse: jump straight into a section
+    const i = NAV.indexOf(sec); if (i < 0) return;
+    this.navFocus = i; this.view = 'section'; this.rowFocus = 0;
+    this._show(); this._applyNav(); this._applyRows();
+  }
+  focusRow(sec, row) { // mouse: focus a specific row in a section
+    this.enterSection(sec);
+    const i = (STAGE[sec] || []).indexOf(row);
+    if (i >= 0) { this.rowFocus = i; this._applyRows(); }
+  }
+  toNav() { this.view = 'nav'; this._applyNav(); this._applyRows(); }
+
+  _moveNav(d) { this.navFocus = (this.navFocus + NAV.length + d) % NAV.length; this._show(); this._applyNav(); }
+
+  _show() {
+    const sec = this.sec;
+    for (const k of NAV) this.sectionEls[k] && this.sectionEls[k].classList.toggle('active', k === sec);
+    document.getElementById('console').classList.toggle('garage', sec === 'garage');
+    if (this.crumb) this.crumb.textContent = sec.toUpperCase() === 'TIME' ? 'TIME TRIAL' : sec.toUpperCase();
+    if (this.ghost) this.ghost.textContent = String(NAV.indexOf(sec) + 1).padStart(2, '0');
+    this._reparent(sec);
   }
 
-  // The id of the currently focused row — lets main route the confirm button.
-  currentRow() { return ROWS[this.focus]; }
-
-  focusRow(name) {
-    const i = ROWS.indexOf(name);
-    if (i >= 0) { this.focus = i; this._applyFocus(); }
+  // Move the shared canvases into the active section's viewport slot.
+  _reparent(sec) {
+    const pool = document.getElementById('canvas-pool');
+    const env = document.getElementById('env-thumb');
+    const thumb = document.getElementById('menu-thumb');
+    const prof = document.getElementById('menu-profile');
+    const pod = document.getElementById('podium');
+    const slot = this.sectionEls[sec] && this.sectionEls[sec].querySelector('.vp-slot');
+    const park = (el) => { if (el && el.parentElement !== pool) pool.appendChild(el); };
+    if (sec === 'garage') { park(env); park(thumb); park(prof); if (slot && pod.parentElement !== slot) slot.appendChild(pod); return; }
+    park(pod);
+    if (sec === 'championship') { park(thumb); park(prof); if (slot) slot.appendChild(env); }
+    else if (sec === 'single' || sec === 'time') { if (slot) { slot.appendChild(env); slot.appendChild(thumb); slot.appendChild(prof); } }
+    else { park(env); park(thumb); park(prof); }
   }
 
-  // Wire pointer clicks so the whole menu is operable without the keyboard.
-  // handlers: { edit(row, dir), activate(row), focus(row) }.
-  bindClicks(handlers) {
-    const focus = (name) => { this.focusRow(name); handlers.focus(name); };
-    // Mode strip: click an option to pick that mode directly.
-    ['mode-0', 'mode-1', 'mode-2'].forEach((id, i) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('click', () => { this.focusRow('mode'); handlers.setMode(i); });
-    });
-    this.el.rows.forEach((el, i) => {
-      const name = ROWS[i];
-      if (!el || name === 'mode') return;
-      const arrows = el.querySelectorAll('.arrow');
-      if (arrows.length === 2) {
-        arrows[0].addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, -1); });
-        arrows[1].addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, 1); });
-        const val = el.querySelector('.value');
-        if (val) val.addEventListener('click', (e) => { e.stopPropagation(); focus(name); handlers.edit(name, 1); });
-        el.addEventListener('click', () => focus(name));
-      } else {
-        // Action rows (records / trophies): a click activates them.
-        el.addEventListener('click', () => { focus(name); handlers.activate(name); });
-      }
-    });
-  }
-
-  // data: { trackDef, theme, spline, trackIndex, trackCount, best, selection,
-  //         volume, mode, championship }
-  render(data) {
-    const { trackDef, theme, spline, trackIndex, trackCount, best, selection } = data;
-    for (let i = 0; i < 3; i++) {
-      document.getElementById(`mode-${i}`).classList.toggle('sel', data.mode === i);
+  _applyNav() {
+    for (const k of NAV) {
+      const el = this.navEls[k]; if (!el) continue;
+      el.classList.toggle('hi', k === this.sec);
+      el.classList.toggle('active', k === this.sec && this.view === 'section');
     }
-    const champ = data.mode === 0;
-    document.getElementById('row-track').classList.toggle('locked', champ);
-    this.el.world.textContent = theme.name;
-    this.el.track.textContent = champ
-      ? `ROUND 1/${trackCount}  ·  ${trackDef.name}`
-      : `${trackDef.name}  ·  ${trackIndex + 1}/${trackCount}`;
-    this.el.best.textContent = Number.isFinite(best) ? `RECORD ${fmt(best)}` : 'NO RECORD SET';
+    const el = this.navEls[this.sec];
+    if (this.caret && el) this.caret.style.transform = `translateY(${el.offsetTop + el.offsetHeight / 2 - 6}px)`;
+  }
 
-    // Speed class row: name + headline top speed, with a lock hint if the
-    // next class isn't earned yet.
-    const cls = data.cls;
-    this.el.class.innerHTML = `<span style="color:#${hex(cls.color)}">${cls.name}</span>`
-      + `<small>${data.classKmh} KM/H</small>`;
-    this.el.classLock.textContent = data.classLockHint || '';
-    this.el.classLock.classList.toggle('hidden', !data.classLockHint);
+  _applyRows() {
+    const inSec = this.view === 'section';
+    for (const k of NAV) {
+      const s = this.sectionEls[k]; if (!s) continue;
+      s.querySelectorAll('[data-row]').forEach((r) => r.classList.remove('focus'));
+    }
+    const s = this.sectionEls[this.sec];
+    if (inSec && s && this.sec !== 'records' && this.sec !== 'controls') {
+      const row = this.currentRow();
+      const el = s.querySelector(`[data-row="${row}"]`);
+      if (el) el.classList.add('focus');
+    }
+    if (this.sec === 'records') this._applyRecSel();
+    if (this.sec === 'controls') this._applyCtlSel();
+  }
 
-    // Rival difficulty: name in its tier color + a one-word feel tag. Always
-    // available — no lock hint (unlike speed class).
-    const diff = data.diff;
-    this.el.difficulty.innerHTML = `<span style="color:#${hex(diff.color)}">${diff.name}</span>`
-      + `<small>${diff.tag}</small>`;
+  _applyRecSel() {
+    const list = document.getElementById('rec-list'); if (!list) return;
+    [...list.children].forEach((c, i) => c.classList.toggle('focus', this.view === 'section' && i === this.recSel));
+  }
 
-    const team = TEAMS[selection.team];
-    this.el.team.textContent = team.fullName.toUpperCase();
-    this.el.blurb.textContent = team.blurb;
-    this.el.stats.innerHTML = ['speed', 'thrust', 'handling'].map((k) => `
-      <div class="stat"><label>${k.toUpperCase()}</label>${bar(team.bars[k])}</div>`).join('');
-
-    // Liveries: the team's two, plus the prestige champion livery if unlocked.
-    const liveries = team.liveries.slice();
-    if (data.liveryCount > 2) liveries.push(data.championLivery);
-    this.el.livery.innerHTML = liveries.map((lv, i) => `
-      <span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}">
-        <i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i>
-      </span>`).join('');
-
-    this.el.pilot.textContent = CALLSIGNS[selection.pilot];
-
-    let volCells = '';
-    for (let i = 0; i < 10; i++) volCells += `<i class="${i < data.volume ? 'on' : ''}"></i>`;
-    this.el.volume.innerHTML = `<span class="bar">${volCells}</span>`;
-
-    drawThumb(this.el.thumb, spline, theme);
-    drawProfile(this.el.profile, spline, theme);
+  _applyCtlSel() {
+    const list = document.getElementById('ctl-list'); if (!list) return;
+    [...list.children].forEach((c, i) => c.classList.toggle('focus', this.view === 'section' && i === this.ctlSel));
   }
 }
 
-function bar(n) {
+// ---- shared draw helpers (used by main's updateMenu) ----
+export function bar(n) {
   let cells = '';
   for (let i = 0; i < 5; i++) cells += `<i class="${i < n ? 'on' : ''}"></i>`;
   return `<span class="bar">${cells}</span>`;
 }
+export function hex(c) { return c.toString(16).padStart(6, '0'); }
 
-function hex(c) {
-  return c.toString(16).padStart(6, '0');
-}
-
-// Top-down outline of the track, fitted to the canvas.
-function drawThumb(canvas, spline, theme) {
+export function drawThumb(canvas, spline) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 104, H = 92;
+  const W = 150, H = 120;
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < spline.n; i++) {
     const x = spline.pos[i * 3], z = spline.pos[i * 3 + 2];
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
   }
-  const pad = 10;
+  const pad = 12;
   const sc = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxZ - minZ));
   const ox = (W - (maxX - minX) * sc) / 2, oz = (H - (maxZ - minZ) * sc) / 2;
-
   ctx.beginPath();
   const step = Math.max(1, Math.round(6 / spline.step));
   for (let i = 0; i <= spline.n; i += step) {
@@ -178,30 +187,21 @@ function drawThumb(canvas, spline, theme) {
   }
   ctx.closePath();
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(30, 14, 70, 0.9)';
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.8;
-  ctx.shadowColor = 'rgba(0, 240, 255, 0.9)';
-  ctx.shadowBlur = 6;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  // start tick
+  ctx.strokeStyle = 'rgba(30, 14, 70, 0.9)'; ctx.lineWidth = 5; ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8;
+  ctx.shadowColor = 'rgba(0, 240, 255, 0.9)'; ctx.shadowBlur = 6; ctx.stroke(); ctx.shadowBlur = 0;
   const tx = ox + (spline.pos[0] - minX) * sc, ty = oz + (spline.pos[2] - minZ) * sc;
-  ctx.fillStyle = '#ffd23f';
-  ctx.fillRect(tx - 2.5, ty - 2.5, 5, 5);
+  ctx.fillStyle = '#ffd23f'; ctx.fillRect(tx - 2.5, ty - 2.5, 5, 5);
 }
 
-// Elevation profile: height along the lap — hills, dives and loop spikes.
-function drawProfile(canvas, spline, theme) {
+export function drawProfile(canvas, spline) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 196, H = 46;
+  const W = 230, H = 54;
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
   let minY = Infinity, maxY = -Infinity;
   for (let i = 0; i < spline.n; i++) {
     const y = spline.pos[i * 3 + 1];
@@ -210,28 +210,16 @@ function drawProfile(canvas, spline, theme) {
   const span = Math.max(maxY - minY, 10);
   const px = (i) => 4 + (i / spline.n) * (W - 8);
   const py = (y) => H - 7 - ((y - minY) / span) * (H - 14);
-
-  ctx.beginPath();
-  ctx.moveTo(px(0), H - 4);
+  ctx.beginPath(); ctx.moveTo(px(0), H - 4);
   const step = Math.max(1, Math.round(8 / spline.step));
-  for (let i = 0; i <= spline.n; i += step) {
-    ctx.lineTo(px(Math.min(i, spline.n)), py(spline.pos[(i % spline.n) * 3 + 1]));
-  }
-  ctx.lineTo(px(spline.n), H - 4);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.16)';
-  ctx.fill();
-
+  for (let i = 0; i <= spline.n; i += step) ctx.lineTo(px(Math.min(i, spline.n)), py(spline.pos[(i % spline.n) * 3 + 1]));
+  ctx.lineTo(px(spline.n), H - 4); ctx.closePath();
+  ctx.fillStyle = 'rgba(0, 240, 255, 0.16)'; ctx.fill();
   ctx.beginPath();
   for (let i = 0; i <= spline.n; i += step) {
-    const x = px(Math.min(i, spline.n));
-    const y = py(spline.pos[(i % spline.n) * 3 + 1]);
+    const x = px(Math.min(i, spline.n)), y = py(spline.pos[(i % spline.n) * 3 + 1]);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.strokeStyle = '#7df9ff';
-  ctx.lineWidth = 1.6;
-  ctx.shadowColor = 'rgba(0, 240, 255, 0.8)';
-  ctx.shadowBlur = 4;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#7df9ff'; ctx.lineWidth = 1.6;
+  ctx.shadowColor = 'rgba(0, 240, 255, 0.8)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
 }
