@@ -3,7 +3,7 @@ Pilot portraits — drop a PNG here named <slug>.png and it shows in the garage.
 Slug = pilot name, lowercased, spaces/punctuation -> "-". Square images, ~256px.
 No file = a neon initials badge shows instead (graceful fallback).
 
-  JUNO VEX       -> juno-vex.png
+  JUNO VEX       -> 
   KAIDE SORO     -> kaide-soro.png
   MERIDIAN BLUE  -> meridian-blue.png
   SOL ANARA      -> sol-anara.png

@@ -265,6 +265,33 @@ const CONTROLS_LEGEND = '<div class="lg-row"><span>STEER</span><b>&larr; &rarr; 
 
 function setTxt(id, t) { const e = document.getElementById(id); if (e) e.textContent = t; }
 function setHTML(id, h) { const e = document.getElementById(id); if (e) e.innerHTML = h; }
+
+// Pilot portrait: initials sit behind, the photo covers them. Drop-in art lives
+// at assets/pilots/<slug>.png OR .jpg — we try png, fall back to jpg, and if both
+// 404 the <img> removes itself so the neon initials show through.
+function pilotInitials(name) { return name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2); }
+function pilotFaceInner(name) {
+  const slug = pilotSlug(name);
+  return `<span class="face-init">${pilotInitials(name)}</span>`
+    + `<img src="assets/pilots/${slug}.png" alt=""`
+    + ` onerror="if(this.dataset.jpg){this.remove()}else{this.dataset.jpg=1;this.src='assets/pilots/${slug}.jpg'}">`;
+}
+// "Your entry" loadout card shown on the race-setup screens so the chosen team /
+// pilot / livery is unmistakable before you commit. GARAGE ▸ jumps to the garage.
+function entryCardHTML() {
+  const team = TEAMS[selection.team];
+  const name = team.pilots[selection.pilot] || team.pilots[0];
+  const lv = liveryOf(team, selection.livery);
+  const acc = `#${hex(lv.accent)}`;
+  return `<div class="entry-face" style="--pa:${acc}">${pilotFaceInner(name)}</div>`
+    + `<div class="entry-meta">`
+      + `<div class="entry-team">${team.fullName.toUpperCase()}</div>`
+      + `<div class="entry-pilot" style="color:${acc}">${name}</div>`
+      + `<div class="entry-tags"><span class="entry-livery"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`
+        + `<span class="entry-ship">${team.name} SHIP</span></div>`
+    + `</div>`
+    + `<button class="entry-edit" onclick="document.querySelector('#nav-list .navitem[data-sec=garage]').click()">GARAGE &#9656;</button>`;
+}
 function volBar(n) { let c = ''; for (let i = 0; i < 10; i++) c += `<i class="${i < n ? 'on' : ''}"></i>`; return `<span class="bar vbar">${c}</span>`; }
 function recordsSet() { return TRACKS.filter((t) => localStorage.getItem(`sv-best-${t.id}`)).length; }
 
@@ -315,20 +342,24 @@ function updateMenu() {
   const liveries = team.liveries.slice(); if (liveryCount() > 2) liveries.push(CHAMPION_LIVERY);
   setHTML('menu-livery', liveries.map((lv, i) => `<span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`).join(''));
   setTxt('menu-pilot', team.pilots[selection.pilot] || team.pilots[0]);
-  // Team drivers: you ARE one of the two (YOU-marked). Portrait drops in at
-  // assets/pilots/<slug>.png; a neon initials badge is the fallback. + bio.
-  setHTML('pilot-roster', team.pilots.map((name, i) => {
-    const slug = pilotSlug(name);
-    const init = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2);
-    const acc = '#' + hex(team.liveries[i].accent);
-    const you = i === selection.pilot;
-    return `<div class="pilot-card noimg${you ? ' you' : ''}" style="--pa:${acc}">`
-      + `<div class="pilot-face"><img src="assets/pilots/${slug}.png" alt=""`
-      + ` onload="this.closest('.pilot-card').classList.remove('noimg')" onerror="this.remove()">`
-      + `<span class="pilot-initials">${init}</span></div>`
-      + `<div class="pilot-meta"><div class="pilot-name">${name}${you ? ' <b>&middot; YOU</b>' : ''}</div>`
-      + `<div class="pilot-bio">${PILOT_BIOS[name] || ''}</div></div></div>`;
-  }).join(''));
+  // Driver dossier: a big hero portrait of the driver you ARE, plus a compact
+  // teammate card that switches you to the other seat when clicked (reusing the
+  // PILOT row's arrow so keyboard/gamepad/click all share one code path).
+  const me = selection.pilot, mate = me === 0 ? 1 : 0;
+  const heroName = team.pilots[me], mateName = team.pilots[mate];
+  const heroAcc = `#${hex(team.liveries[me].accent)}`, mateAcc = `#${hex(team.liveries[mate].accent)}`;
+  setHTML('pilot-roster',
+    `<div class="pilot-hero" style="--pa:${heroAcc}">`
+      + `<div class="hero-face">${pilotFaceInner(heroName)}<div class="hero-grad"></div>`
+        + `<div class="hero-name">${heroName} <b>YOU</b></div></div>`
+      + `<div class="pilot-bio">${PILOT_BIOS[heroName] || ''}</div>`
+    + `</div>`
+    + `<button class="pilot-mate" style="--pa:${mateAcc}" title="Switch to ${mateName}"`
+      + ` onclick="document.querySelector('.section.garage [data-row=pilot] .arrow.r').click()">`
+      + `<div class="mate-face">${pilotFaceInner(mateName)}</div>`
+      + `<div class="mate-meta"><span class="mate-tag">TEAMMATE</span><span class="mate-name">${mateName}</span></div>`
+      + `<span class="mate-swap">SWITCH &#9656;</span>`
+    + `</button>`);
 
   setHTML('opt-music', volBar(audio.musicVolume));
   setHTML('opt-sfx', volBar(audio.sfxVolume));
@@ -354,6 +385,8 @@ function updateMenu() {
 
   setTxt('ns-controls', 'REBIND');
   setHTML('cup-ladder', TRACKS.map((t, i) => `<div class="cup-rd${i === 0 ? ' lit' : ''}"><span class="rn">${i + 1}</span>${t.name}</div>`).join(''));
+  const entryHTML = entryCardHTML();
+  for (const id of ['champ-entry', 'single-entry', 'time-entry']) setHTML(id, entryHTML);
   renderRecordsList();
   renderControlsList();
   setTxt('tro-count', `${achievements.count()}/${achievements.total()} UNLOCKED`);
