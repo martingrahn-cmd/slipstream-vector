@@ -942,13 +942,13 @@ body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-capture .pr
 .face-init { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-weight: 800; color: var(--pa, var(--cyan)); text-shadow: 0 0 12px var(--pa, var(--cyan)); }
 .pilot-roster { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; min-height: 0; }
 .pilot-hero { position: relative; display: flex; flex-direction: column; gap: 7px; }
-.hero-face { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: clamp(170px, 30vh, 280px); flex: none; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.07); overflow: hidden; clip-path: polygon(0 0, 100% 0, 100% 90%, 90% 100%, 0 100%); box-shadow: 0 0 24px -6px var(--pa, var(--cyan)); }
-.hero-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+/* Frame matches the art's 2:3 aspect so the WHOLE portrait shows (no chin crop). */
+.hero-face { position: relative; width: auto; height: clamp(190px, 33vh, 300px); aspect-ratio: 2 / 3; margin: 0 auto; flex: none; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.07); overflow: hidden; clip-path: polygon(0 0, 100% 0, 100% 93%, 91% 100%, 0 100%); box-shadow: 0 0 24px -6px var(--pa, var(--cyan)); }
+.hero-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .hero-face .face-init { font-size: 46px; }
-.hero-grad { position: absolute; inset: auto 0 0 0; height: 48%; background: linear-gradient(transparent, rgba(4, 2, 12, 0.92)); pointer-events: none; }
-.hero-name { position: absolute; left: 12px; right: 12px; bottom: 10px; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.03em; color: #fff; text-shadow: 0 2px 8px #000; }
-.hero-name b { display: inline-block; margin-left: 8px; padding: 1px 5px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.18em; color: var(--pa, var(--cyan)); vertical-align: middle; border: 1px solid var(--pa, var(--cyan)); border-radius: 2px; }
-.pilot-bio { font-family: 'Rajdhani', sans-serif; font-size: 12px; line-height: 1.3; color: rgba(223, 230, 255, 0.66); }
+.hero-name { margin-top: 9px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; color: #fff; }
+.hero-name b { display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: var(--pa, var(--cyan)); vertical-align: middle; border: 1px solid var(--pa, var(--cyan)); border-radius: 2px; }
+.pilot-bio { font-family: 'Rajdhani', sans-serif; font-size: 14.5px; line-height: 1.42; color: rgba(228, 234, 255, 0.88); }
 .pilot-mate { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; text-align: left; transition: border-color 140ms, background 140ms; }
 .pilot-mate:hover { border-color: var(--pa, var(--cyan)); background: rgba(255, 255, 255, 0.06); }
 .mate-face { position: relative; width: 46px; height: 46px; flex: none; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.07); overflow: hidden; clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%); }

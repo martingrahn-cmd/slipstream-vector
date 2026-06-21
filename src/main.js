@@ -350,8 +350,8 @@ function updateMenu() {
   const heroAcc = `#${hex(team.liveries[me].accent)}`, mateAcc = `#${hex(team.liveries[mate].accent)}`;
   setHTML('pilot-roster',
     `<div class="pilot-hero" style="--pa:${heroAcc}">`
-      + `<div class="hero-face">${pilotFaceInner(heroName)}<div class="hero-grad"></div>`
-        + `<div class="hero-name">${heroName} <b>YOU</b></div></div>`
+      + `<div class="hero-face">${pilotFaceInner(heroName)}</div>`
+      + `<div class="hero-name">${heroName} <b>YOU</b></div>`
       + `<div class="pilot-bio">${PILOT_BIOS[heroName] || ''}</div>`
     + `</div>`
     + `<button class="pilot-mate" style="--pa:${mateAcc}" title="Switch to ${mateName}"`
