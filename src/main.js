@@ -24,7 +24,7 @@ import { Podium } from './ui/podium.js';
 import { PodiumScene } from './ui/podiumScene.js';
 import { PauseMenu } from './ui/pauseMenu.js';
 import { Achievements, TIERS } from './ui/achievements.js';
-import { TEAMS, CALLSIGNS } from './worlds/teams.js';
+import { TEAMS, CALLSIGNS, PILOT_BIOS, pilotSlug } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
 import { DIFFICULTIES } from './worlds/difficulty.js';
 
@@ -313,6 +313,18 @@ function updateMenu() {
   const liveries = team.liveries.slice(); if (liveryCount() > 2) liveries.push(CHAMPION_LIVERY);
   setHTML('menu-livery', liveries.map((lv, i) => `<span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`).join(''));
   setTxt('menu-pilot', CALLSIGNS[selection.pilot]);
+  // Team drivers: portrait (drop-in assets/pilots/<slug>.png, initials fallback) + bio.
+  setHTML('pilot-roster', team.pilots.map((name) => {
+    const slug = pilotSlug(name);
+    const init = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2);
+    const acc = '#' + hex(team.liveries[0].accent);
+    return `<div class="pilot-card noimg" style="--pa:${acc}">`
+      + `<div class="pilot-face"><img src="assets/pilots/${slug}.png" alt=""`
+      + ` onload="this.closest('.pilot-card').classList.remove('noimg')" onerror="this.remove()">`
+      + `<span class="pilot-initials">${init}</span></div>`
+      + `<div class="pilot-meta"><div class="pilot-name">${name}</div>`
+      + `<div class="pilot-bio">${PILOT_BIOS[name] || ''}</div></div></div>`;
+  }).join(''));
 
   setHTML('opt-music', volBar(audio.musicVolume));
   setHTML('opt-sfx', volBar(audio.sfxVolume));

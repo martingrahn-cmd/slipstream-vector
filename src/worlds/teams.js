@@ -70,6 +70,21 @@ export const TEAMS = [
   },
 ];
 
+// Driver bios — short, characterful, F-Zero roster flavour. Keyed by pilot name.
+export const PILOT_BIOS = {
+  'JUNO VEX': "Vektor's golden rookie. Reads a racing line like sheet music and never blinks first.",
+  'KAIDE SORO': 'Half man, half rebuilt after the Sprawl crash. The calmest hands on the grid.',
+  'MERIDIAN BLUE': 'Pilots by mathematics, not nerve. Has never scrubbed a millimetre off an apex.',
+  'SOL ANARA': 'Three-time champion who came back for the love of it. Grace at 300 km/h.',
+  'VOSS KRAIT': "Doesn't overtake — he hunts. Brake markers are for prey.",
+  'KIRA NOX': 'A racing AI in a chrome shell. Zero fear, zero mercy, zero lap-time wasted.',
+  'LYRA STORM': 'Lives one boost pad ahead of disaster and grins the whole way down.',
+  'ECHO TANE': 'Reads the whole circuit from above before the lights go green. Strikes on the launch.',
+};
+
+// name -> portrait asset slug (drop a PNG at assets/pilots/<slug>.png).
+export function pilotSlug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+
 // Player callsigns to pick from.
 export const CALLSIGNS = [
   'VANTA', 'KESTREL', 'MIRAGE', 'ZERO-G', 'PULSAR',

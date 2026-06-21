@@ -2,8 +2,13 @@
 // ground, far mountain silhouettes, instanced mesas, neon pylons, holo arches,
 // start gantry. No lights anywhere: quantized vertex-color bake.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TUNING } from '../config.js';
 import { makeFrame } from './spline.js';
+import { buildBillboardAtlas } from '../ui/logos.js';
+
+let _adAtlas = null; // built once, shared across tracks
+function adAtlas() { return _adAtlas || (_adAtlas = buildBillboardAtlas()); }
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -963,7 +968,8 @@ function buildBillboards(rng, spline, groundY, every = 220) {
       lastS = s;
     }
   }
-  const opa = [], glo = [];
+  const opa = [], glo = [], faces = [];
+  const atlas = adAtlas();
   const W = 11, H = 5.5;
   const m = new THREE.Matrix4();
   const X = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3();
@@ -988,6 +994,14 @@ function buildBillboards(rng, spline, groundY, every = 220) {
       return geom;
     };
     opa.push(bakeFlatColors(place(new THREE.BoxGeometry(W, H, 0.5), 0, 0, 0), 0x140a2e, { rim: false }));
+    // Textured ad face from the shared atlas — UVs remapped into one cell.
+    const cell = atlas.cells[Math.floor(rng() * atlas.cells.length)];
+    const face = new THREE.PlaneGeometry(W * 0.84, H * 0.66);
+    const uv = face.attributes.uv;
+    for (let k = 0; k < uv.count; k++) {
+      uv.setXY(k, cell.u + uv.getX(k) * cell.w, cell.v + uv.getY(k) * cell.h);
+    }
+    faces.push(place(face, 0, 0, 0.28));
     for (const lx of [-W / 2 + 1, W / 2 - 1]) {
       const legH = py - groundY;
       opa.push(bakeFlatColors(
@@ -1008,6 +1022,12 @@ function buildBillboards(rng, spline, groundY, every = 220) {
   }));
   glowMesh.renderOrder = 1;
   g.add(glowMesh);
+  if (faces.length) {
+    const faceMesh = new THREE.Mesh(mergeGeometries(faces, false),
+      new THREE.MeshBasicMaterial({ map: atlas.texture, fog: true }));
+    faceMesh.renderOrder = 1;
+    g.add(faceMesh);
+  }
   g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
   return g;
 }
