@@ -27,7 +27,7 @@ export class Race {
 
     // Corner-speed confidence ramps with the chosen difficulty AND the speed class.
     const base = 0.82 + aiLevel * 0.045 + (cls ? cls.aiSkill : 0);
-    const seats = solo ? [] : aiRoster(selection.team, Math.min(selection.livery, 1));
+    const seats = solo ? [] : aiRoster(selection.team, selection.pilot);
     this.racers = seats.map((seat, i) => {
       const sk = seat.team.skill;
       const skill = {
@@ -200,7 +200,7 @@ export class Race {
     const sel = this.selection;
     rows.push({
       id: 'you',
-      name: `${sel.teamName} · ${sel.callsign}`,
+      name: `${sel.teamName} · ${sel.pilotName}`,
       accent: sel.accentCss,
       time: playerTime,
       progress: this.progressOf(player),

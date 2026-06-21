@@ -24,7 +24,7 @@ import { Podium } from './ui/podium.js';
 import { PodiumScene } from './ui/podiumScene.js';
 import { PauseMenu } from './ui/pauseMenu.js';
 import { Achievements, TIERS } from './ui/achievements.js';
-import { TEAMS, CALLSIGNS, PILOT_BIOS, pilotSlug } from './worlds/teams.js';
+import { TEAMS, PILOT_BIOS, pilotSlug } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
 import { DIFFICULTIES } from './worlds/difficulty.js';
 
@@ -143,7 +143,7 @@ const selection = {
   difficulty: clampInt(localStorage.getItem('sv-difficulty') ?? '1', DIFFICULTIES.length),
   team: clampInt(localStorage.getItem('sv-team'), TEAMS.length),
   livery: clampInt(localStorage.getItem('sv-livery'), liveryCount()),
-  pilot: clampInt(localStorage.getItem('sv-pilot'), CALLSIGNS.length),
+  pilot: clampInt(localStorage.getItem('sv-pilot'), 2), // which of the team's 2 named drivers you are
 };
 
 // Championship: points across the whole roster, awarded per finish position.
@@ -164,7 +164,7 @@ function selectionInfo() {
   const team = TEAMS[selection.team];
   return {
     ...selection,
-    callsign: CALLSIGNS[selection.pilot],
+    pilotName: team.pilots[selection.pilot] || team.pilots[0],
     teamName: team.name,
     accentCss: `#${liveryOf(team, selection.livery).accent.toString(16).padStart(6, '0')}`,
   };
@@ -312,17 +312,19 @@ function updateMenu() {
   setHTML('menu-stats', ['speed', 'thrust', 'handling'].map((k) => `<div class="stat"><label>${k.toUpperCase()}</label>${bar(team.bars[k])}</div>`).join(''));
   const liveries = team.liveries.slice(); if (liveryCount() > 2) liveries.push(CHAMPION_LIVERY);
   setHTML('menu-livery', liveries.map((lv, i) => `<span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`).join(''));
-  setTxt('menu-pilot', CALLSIGNS[selection.pilot]);
-  // Team drivers: portrait (drop-in assets/pilots/<slug>.png, initials fallback) + bio.
-  setHTML('pilot-roster', team.pilots.map((name) => {
+  setTxt('menu-pilot', team.pilots[selection.pilot] || team.pilots[0]);
+  // Team drivers: you ARE one of the two (YOU-marked). Portrait drops in at
+  // assets/pilots/<slug>.png; a neon initials badge is the fallback. + bio.
+  setHTML('pilot-roster', team.pilots.map((name, i) => {
     const slug = pilotSlug(name);
     const init = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2);
-    const acc = '#' + hex(team.liveries[0].accent);
-    return `<div class="pilot-card noimg" style="--pa:${acc}">`
+    const acc = '#' + hex(team.liveries[i].accent);
+    const you = i === selection.pilot;
+    return `<div class="pilot-card noimg${you ? ' you' : ''}" style="--pa:${acc}">`
       + `<div class="pilot-face"><img src="assets/pilots/${slug}.png" alt=""`
       + ` onload="this.closest('.pilot-card').classList.remove('noimg')" onerror="this.remove()">`
       + `<span class="pilot-initials">${init}</span></div>`
-      + `<div class="pilot-meta"><div class="pilot-name">${name}</div>`
+      + `<div class="pilot-meta"><div class="pilot-name">${name}${you ? ' <b>&middot; YOU</b>' : ''}</div>`
       + `<div class="pilot-bio">${PILOT_BIOS[name] || ''}</div></div></div>`;
   }).join(''));
 
@@ -883,8 +885,9 @@ function editRow(row, dir) {
   } else if (row === 'livery') {
     selection.livery = n(liveryCount(), selection.livery, dir); buildField();
   } else if (row === 'pilot') {
-    selection.pilot = n(CALLSIGNS.length, selection.pilot, dir);
-    localStorage.setItem('sv-pilot', String(selection.pilot));
+    selection.pilot = n(2, selection.pilot, dir);   // which of the team's 2 drivers you are
+    selection.livery = selection.pilot;             // that driver's signature livery follows
+    buildField();                                   // you now occupy that driver's seat
   } else if (row === 'music') {
     audio.setMusicVolume(audio.musicVolume + dir);
   } else if (row === 'sfx') {

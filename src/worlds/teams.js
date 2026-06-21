@@ -85,18 +85,14 @@ export const PILOT_BIOS = {
 // name -> portrait asset slug (drop a PNG at assets/pilots/<slug>.png).
 export function pilotSlug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
 
-// Player callsigns to pick from.
-export const CALLSIGNS = [
-  'VANTA', 'KESTREL', 'MIRAGE', 'ZERO-G', 'PULSAR',
-  'STRIX', 'ONYX', 'COMET', 'RIFT', 'AURELIA',
-];
-
-// The 7 AI seats around the player's chosen seat.
-export function aiRoster(playerTeam, playerLivery) {
+// The 7 AI seats around the player's chosen DRIVER. The player races AS one of
+// their team's two named pilots (playerPilot index), so that seat is skipped;
+// every other named driver fills the grid in their signature livery.
+export function aiRoster(playerTeam, playerPilot) {
   const seats = [];
   for (let t = 0; t < TEAMS.length; t++) {
     for (let l = 0; l < 2; l++) {
-      if (t === playerTeam && l === playerLivery) continue;
+      if (t === playerTeam && l === playerPilot) continue;
       seats.push({ team: TEAMS[t], livery: l, pilot: TEAMS[t].pilots[l] });
     }
   }
