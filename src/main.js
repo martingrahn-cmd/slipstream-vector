@@ -238,7 +238,7 @@ function buildField() {
   const cls = CLASSES[selection.classIdx];
   const variant = { ...team.variant, ...liveryOf(team, selection.livery) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
-  shipVisual = new ShipVisual(spline, scene, variant);
+  shipVisual = new ShipVisual(spline, scene, variant, { reactive: true });
   race = new Race(spline, scene, DIFFICULTIES[selection.difficulty].level,
     TOTAL_LAPS, juice, selectionInfo(),
     selection.mode === 2 /* time trial: empty track */, cls);
@@ -801,7 +801,7 @@ function tick(now) {
   speedLines.update(dt, ship.v, sn, juice.boostFactor, shipVisual.root.position);
   sparks.update(dt);
   trails.update(dt, camera, juice.boostFactor, sn);
-  track.update(now / 1000);
+  track.update(now / 1000, sn);
   scenery.update(now / 1000, camera.position);
 
   // Fog breathes with speed; boost closes the world into a tunnel.

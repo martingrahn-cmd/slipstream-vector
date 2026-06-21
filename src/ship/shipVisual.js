@@ -16,7 +16,7 @@ const DEFAULT_VARIANT = {
 };
 
 export class ShipVisual {
-  constructor(spline, scene, variant = {}) {
+  constructor(spline, scene, variant = {}, opts = {}) {
     this.spline = spline;
     this.frame = makeFrame();
     const V = { ...DEFAULT_VARIANT, ...variant };
@@ -68,6 +68,31 @@ export class ShipVisual {
     );
     scene.add(this.root);
     scene.add(this.shadow);
+
+    // Reactive FX — only the player ship gets these addressable meshes, so the
+    // 8-ship field's draw budget stays flat. Brake glow + boost bloom react to
+    // the brake/boost values already computed every frame in update().
+    this.brakeMesh = null;
+    this.boostMesh = null;
+    if (opts.reactive) {
+      const brakeGeom = ribbon([
+        [[-0.34, 0.30, 2.26], [0.34, 0.30, 2.26]],
+        [[-0.34, 0.30, 2.42], [0.34, 0.30, 2.42]],
+      ]);
+      this.brakeMesh = new THREE.Mesh(brakeGeom, new THREE.MeshBasicMaterial({
+        color: 0xff4a2e, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }));
+      this.lean.add(this.brakeMesh);
+
+      this.boostMesh = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture(), color: C.ENGINE, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      this.boostMesh.position.set(0, 0.12, 2.3);
+      this.boostMesh.scale.setScalar(1.4);
+      this.lean.add(this.boostMesh);
+    }
 
     // Smoothed visual state.
     this.roll = 0;
@@ -130,6 +155,17 @@ export class ShipVisual {
     for (const g of this.glows) {
       g.scale.setScalar((1.1 + throttleAmt * 0.5 + boostFactor * 1.2) * flick);
       g.material.color.copy(this._engineCol);
+    }
+
+    // Reactive FX (player only): brake strip warms on braking, boost bloom
+    // surges cyan->white behind the ship under boost.
+    if (this.brakeMesh) {
+      this.brakeMesh.material.opacity = Math.min(0.85, input.brake * input.brake * 0.9);
+    }
+    if (this.boostMesh) {
+      this.boostMesh.material.opacity = boostFactor * 0.8;
+      this.boostMesh.scale.setScalar(1.2 + boostFactor * 2.4);
+      this.boostMesh.material.color.copy(this._engineCol);
     }
 
     // Blob shadow: on the surface, fading with hover height.
@@ -401,6 +437,37 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
       [[sp.cx - 0.06, y, -2.34], [sp.cx + 0.06, y, -2.34]],
       [[sp.cx - 0.06, y, -2.16], [sp.cx + 0.06, y, -2.16]],
     ]), V.accent);
+  }
+
+  // 19. Intake grille: vertical vanes across each prong's air slot.
+  {
+    const sp = sponAt(-2.0);
+    for (let t = 0; t < 4; t++) {
+      const x = sp.cx - 0.075 + t * 0.05;
+      both(slab([x, sp.yT - 0.01, -2.08], [x, sp.yB + 0.02, -2.08],
+        [x, sp.yB + 0.02, -1.86], [x, sp.yT - 0.01, -1.86], 0.012), C.SHIP_CANOPY);
+    }
+  }
+
+  // 20. Cooling louvres on the centre-pod flanks.
+  for (let i = 0; i < 3; i++) {
+    const z = 0.15 + i * 0.22;
+    both(slab([0.30, 0.18, z], [0.40, 0.10, z], [0.40, 0.10, z + 0.13], [0.30, 0.18, z + 0.13], 0.02), C.SHIP_CANOPY);
+  }
+
+  // 21. Flank livery stripe down each sponson's outer face.
+  both(ribbon([-1.9, -1.0, 0.0, 1.2, 2.0].map((z) => {
+    const sp = sponAt(z);
+    const x = sp.cx + sp.w * 0.92;
+    return [[x, sp.yM + 0.03, z], [x, sp.yM - 0.05, z]];
+  })), V.accent);
+
+  // 22. Extra panel seams across the pod deck.
+  for (const z of [0.0, 0.9]) {
+    both(ribbon([
+      [[0.06, 0.44, z], [0.34, 0.40, z]],
+      [[0.06, 0.44, z + 0.05], [0.34, 0.40, z + 0.05]],
+    ]), 0x4a3f66);
   }
 
   const baked = opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false }));

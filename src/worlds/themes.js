@@ -39,18 +39,18 @@ export const THEMES = {
     trackBase: 0x1b1038,
     trackBand: 0x2a1a55,
     mesaStyle: 'rocks',
-    mesaMax: 150,
+    mesaMax: 190,
     mountainStyle: 'peaks',
-    farCount: 30,
+    farCount: 44,
     groundStyle: 'dunes',
-    scrubCount: 170,      // low desert bushes near the track
+    scrubCount: 210,      // low desert bushes near the track
     flora: 'cacti',
-    floraCount: 80,
-    rockCount: 260,
+    floraCount: 120,
+    rockCount: 340,
     billboardEvery: 220,
     searchlights: false,
     city: true,
-    drones: 40,
+    drones: 50,
     ambient: { color: 0xd8b06a, mode: 'dust' },   // drifting sand motes
   },
 
@@ -86,17 +86,18 @@ export const THEMES = {
     trackBase: 0x12262e,
     trackBand: 0x1d3c48,
     mesaStyle: 'islands',
-    mesaMax: 110,
+    mesaMax: 150,
     mountainStyle: 'peaks',
-    farCount: 9,          // open ocean horizon — just a few distant isles
+    farCount: 26,         // distant isles dotting the horizon
     groundStyle: 'water',
     flora: 'palms',
-    floraCount: 140,
-    rockCount: 70,
+    floraCount: 180,
+    rockCount: 160,
+    scrubCount: 95,       // low coastal scrub on the sandbars
     billboardEvery: 320,
     searchlights: false,
     city: false,
-    drones: 34,
+    drones: 46,
     ambient: { color: 0xeafff6, mode: 'spray' },  // sea spray sparkle
     birds: true,
   },
@@ -131,9 +132,9 @@ export const THEMES = {
     trackBand: 0x1c1c36,
     gridGlow: 0xff2ec8,   // street grid shining through the asphalt
     mesaStyle: 'towers',
-    mesaMax: 70,          // downtown blocks — the canyon rows carry the near field
+    mesaMax: 92,          // downtown blocks — the canyon rows carry the near field
     mountainStyle: 'towers',
-    farCount: 34,
+    farCount: 46,
     groundStyle: 'grid',
     flora: null,
     floraCount: 0,
@@ -145,7 +146,7 @@ export const THEMES = {
     traffic: true,        // light streams flowing along the avenues
     overheads: true,      // sign gantries over the road
     city: true,
-    drones: 52,
+    drones: 64,
     ambient: { color: 0x9fb4ff, mode: 'rain' },   // neon rain streaks
     skyTraffic: true,     // aircars crossing the skyline
     bridges: true,        // elevated highways crossing over the track

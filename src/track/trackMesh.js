@@ -7,7 +7,8 @@ import { makeFrame } from './spline.js';
 
 export function buildTrackMesh(spline, theme) {
   const group = new THREE.Group();
-  group.add(buildSurface(spline, theme));
+  const surface = buildSurface(spline, theme);
+  group.add(surface.mesh);
   group.add(buildWalls(spline));
   if (spline.splits && spline.splits.length) group.add(buildSplitIslands(spline));
   group.add(buildEdgeStrips(spline));
@@ -15,7 +16,8 @@ export function buildTrackMesh(spline, theme) {
   const pads = buildBoostPads(spline);
   group.add(pads.mesh);
   group.matrixAutoUpdate = false;
-  return { group, update: pads.update };
+  // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
+  return { group, update: (t, speed = 0) => { surface.update(t, speed); pads.update(t); } };
 }
 
 function sliceCount(spline) {
@@ -42,6 +44,7 @@ function buildSurface(spline, theme) {
   const lat = new Float32Array((n + 1) * across);   // lateral meters
   const dist = new Float32Array((n + 1) * across);  // s meters
   const wdt = new Float32Array((n + 1) * across);   // half width at slice
+  const kap = new Float32Array((n + 1) * across);   // signed curvature at slice
   const v = new THREE.Vector3();
 
   eachSlice(spline, (i, s, f) => {
@@ -57,6 +60,7 @@ function buildSurface(spline, theme) {
       lat[i * across + j] = xs[j];
       dist[i * across + j] = s;
       wdt[i * across + j] = W;
+      kap[i * across + j] = f.kappa || 0;
     }
   });
 
@@ -74,6 +78,7 @@ function buildSurface(spline, theme) {
   geom.setAttribute('aLat', new THREE.BufferAttribute(lat, 1));
   geom.setAttribute('aDist', new THREE.BufferAttribute(dist, 1));
   geom.setAttribute('aWidth', new THREE.BufferAttribute(wdt, 1));
+  geom.setAttribute('aKappa', new THREE.BufferAttribute(kap, 1));
   geom.setIndex(idx);
 
   const C = TUNING.COL;
@@ -86,18 +91,22 @@ function buildSurface(spline, theme) {
         lineCol: { value: new THREE.Color(C.CENTERLINE) },
         warnCol: { value: new THREE.Color(C.WARNING) },
         trackLen: { value: spline.length },
+        uTime: { value: 0 },
+        uSpeed: { value: 0 },
       },
     ]),
     vertexShader: /* glsl */ `
       attribute float aLat;
       attribute float aDist;
       attribute float aWidth;
+      attribute float aKappa;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
+      varying float vKappa;
       #include <fog_pars_vertex>
       void main() {
-        vLat = aLat; vDist = aDist; vWidth = aWidth;
+        vLat = aLat; vDist = aDist; vWidth = aWidth; vKappa = aKappa;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
@@ -105,16 +114,28 @@ function buildSurface(spline, theme) {
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 baseCol, bandCol, lineCol, warnCol;
-      uniform float trackLen;
+      uniform float trackLen, uTime, uSpeed;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
+      varying float vKappa;
       #include <fog_pars_fragment>
       void main() {
         vec3 col = baseCol;
+        // Sector tint: a very subtle base drift across the three thirds of a lap.
+        float sector = floor(vDist / max(trackLen / 3.0, 1.0));
+        col *= 1.0 + 0.045 * sin(sector * 2.094395 + 1.2);
         // Rhythm bands: 2m band every 8m — the 10Hz strobe at vmax IS the speed.
         float band = step(fract(vDist / 8.0), 0.25);
         col = mix(col, bandCol, band);
+        // Expansion joints: a thin dark transverse seam every 12m.
+        col *= 1.0 - 0.22 * step(fract(vDist / 12.0), 0.035);
+        // Tyre skid: a faint rubbered-in arc on the apex side, only in real corners.
+        float corner = smoothstep(0.005, 0.018, abs(vKappa));
+        float lane = vLat / max(vWidth, 1.0);
+        float skid = corner * smoothstep(0.05, 0.7, lane * -sign(vKappa))
+                   * (0.55 + 0.45 * step(fract(vDist / 0.7), 0.5));
+        col *= 1.0 - 0.16 * skid;
         // Warning stripes 1m inside each edge.
         float aw = abs(vLat);
         float warn = step(vWidth - 1.2, aw) * step(aw, vWidth - 0.8)
@@ -123,6 +144,11 @@ function buildSurface(spline, theme) {
         // Centerline dashes: 3m on / 3m off.
         float dash = step(abs(vLat), 0.16) * step(fract(vDist / 6.0), 0.5);
         col = mix(col, lineCol, dash * 0.85);
+        // Energy spine: a glowing core flowing forward along the centre, brighter
+        // with speed — sells velocity without any screen shake.
+        float core = smoothstep(0.30, 0.0, abs(vLat));
+        float flow = 0.45 + 0.55 * sin(vDist * 0.7 - uTime * (5.0 + uSpeed * 22.0));
+        col += lineCol * core * flow * (0.10 + 0.40 * uSpeed);
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);
@@ -138,7 +164,11 @@ function buildSurface(spline, theme) {
   const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  return mesh;
+  const update = (t, speed) => {
+    mat.uniforms.uTime.value = t;
+    mat.uniforms.uSpeed.value = Math.max(0, Math.min(1, speed || 0));
+  };
+  return { mesh, update };
 }
 
 // ---------------------------------------------------------------- walls
