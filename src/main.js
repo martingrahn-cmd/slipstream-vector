@@ -193,6 +193,8 @@ function buildWorld(idx) {
   theme = THEMES[trackDef.world];
   TOTAL_LAPS = trackDef.laps;
   audio.prewarmMusic(theme.music); // decode this world's track ahead of GO (no-op pre-unlock)
+  _dustA.set(theme.ambient ? theme.ambient.color : 0x9a8a6a); // ground kick-up tint
+  _dustB.copy(_dustA).multiplyScalar(0.32);
 
   spline = new TrackSpline(trackDef);
   track = buildTrackMesh(spline, theme);
@@ -367,7 +369,6 @@ function updateMenu() {
 // ------------------------------------------------------ result/standing views
 function buildResultsView() {
   const rows = race.results(ship, playerFinishTime);
-  const place = rows.findIndex((r) => r.player) + 1;
   if (selection.mode === 2) {
     const you = rows.find((r) => r.player);
     const best = parseFloat(localStorage.getItem(bestKey()) || 'Infinity');
@@ -382,21 +383,26 @@ function buildResultsView() {
       footer: 'ENTER — AGAIN &nbsp;·&nbsp; ESC — MENU',
     };
   }
-  const display = rows.map((r, i) => ({
+  // Real-racing reveal: only show drivers who have ACTUALLY crossed the line
+  // (you + whoever has finished). The rest tick in as they finish — no
+  // projected positions for cars still out on track.
+  const finished = rows.filter((r) => r.time !== null);
+  const total = rows.length;
+  const fPlace = finished.findIndex((r) => r.player) + 1;
+  const display = finished.map((r, i) => ({
     name: r.name, accent: r.accent, player: r.player,
-    live: r.time === null,
-    right1: r.time !== null ? fmt(r.time) : 'RACING…',
+    right1: fmt(r.time),
     ...(champ.active ? { right2: `+${CHAMP_PTS[i] ?? 0}` } : {}),
   }));
+  const allIn = finished.length >= total;
+  const advance = champ.active ? 'ENTER — STANDINGS' : 'ENTER — RACE AGAIN &nbsp;·&nbsp; ESC — MENU';
   return {
     tag: champ.active
       ? `CHAMPIONSHIP · ROUND ${champ.round + 1}/${TRACKS.length} · ${trackDef.name.toUpperCase()}`
       : trackDef.name.toUpperCase(),
-    title: place === 1 ? 'YOU WIN' : `P${place}`,
+    title: fPlace === 1 ? 'YOU WIN' : `P${fPlace}`,
     rows: display,
-    footer: champ.active
-      ? 'ENTER — STANDINGS'
-      : 'ENTER — RACE AGAIN &nbsp;·&nbsp; ESC — MENU',
+    footer: allIn ? advance : `${finished.length}/${total} ACROSS THE LINE &nbsp;·&nbsp; ${advance}`,
   };
 }
 
@@ -516,6 +522,8 @@ const _f = makeFrame();
 const _v = new THREE.Vector3();
 const _vel = new THREE.Vector3();
 const _dots = [];
+const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
+const _dustB = new THREE.Color(0x33271a);
 juice.on('wallHit', ({ side, severity }) => {
   spline.frameAt(ship.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
@@ -809,6 +817,12 @@ function tick(now) {
   race.updateVisuals(dt);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
+  // Ground dust/spray kicked up from the surface behind the ship at speed.
+  if (state === 'race' && sn > 0.28) {
+    _v.copy(shipVisual.shadow.position);          // sits on the track surface
+    _vel.set(0, 0.5 + sn * 0.6, 0);               // a soft upward billow
+    sparks.spawn(_v, _vel, 2.0 + sn * 1.8, 2, _dustA, _dustB);
+  }
   rig.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice,
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();

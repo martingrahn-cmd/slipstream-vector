@@ -220,6 +220,10 @@ function buildSky(S) {
         }
         // Soft glow around the sun.
         col += sunCore * 0.18 * (1.0 - smoothstep(0.0, 0.55, ang));
+        // God-rays: faint shafts fanning out from the sun (sunny worlds only).
+        float rayAz = atan(d.y - sunDir.y, d.x - sunDir.x);
+        float shafts = pow(0.5 + 0.5 * sin(rayAz * 22.0 + time * 0.08), 2.0);
+        col += sunCore * shafts * (1.0 - smoothstep(0.0, 0.5, ang)) * 0.12 * sunStripes;
         // Stars above the horizon band.
         if (y > 0.18) {
           vec2 cell = vec2(atan(d.x, d.z) * 28.0, y * 60.0);
