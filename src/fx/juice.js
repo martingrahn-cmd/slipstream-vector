@@ -16,6 +16,8 @@ export class Juice {
     this.fovSpike = 0;
     this.camPunch = 0;      // lateral camera punch, signed, decays fast
     this.scrapeAccum = 0;
+    this.landImpulse = 0;   // suspension-settle magnitude on the last landing
+    this.landTime = 999;    // seconds since that landing (drives the damped dip)
 
     this.on('boost', () => {
       this.addTrauma(T.TRAUMA_BOOST);
@@ -38,6 +40,9 @@ export class Juice {
     });
     this.on('land', ({ severity }) => {
       this.addTrauma(T.TRAUMA_LAND * severity);
+      // Suspension absorb: a brief vertical camera dip-and-recover (NOT shake).
+      this.landImpulse = Math.min(1, severity);
+      this.landTime = 0;
     });
     // Ship-to-ship shunt: scaled by closing speed, gentler than a wall, and
     // routed through addTrauma so it stays clamped — no raw trauma pokes.
@@ -91,6 +96,16 @@ export class Juice {
 
     this.fovSpike = Math.max(0, this.fovSpike - (T.FOV_BOOST_SPIKE / T.FOV_SPIKE_DECAY) * realDt);
     this.camPunch *= Math.exp(-8 * realDt);
+    this.landTime += realDt;
+  }
+
+  // Vertical-only damped settle the camera adds on touchdown after a jump — a
+  // quick downward compression then a spring back to rest (~0.35s). Keeps the
+  // road on screen (no shake, no lateral move).
+  landDip() {
+    if (this.landTime > 0.5) return 0;
+    const a = this.landTime;
+    return -this.landImpulse * T.CAM_LAND_DIP * Math.exp(-a * 7) * Math.sin(a * 22);
   }
 
   // Effective trauma includes the speed rumble floor — turn it off and the

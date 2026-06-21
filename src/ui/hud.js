@@ -86,9 +86,15 @@ export class Hud {
 
   setPosition(pos, total) {
     if (this._pos !== pos) {
+      const prev = this._pos;
       this._pos = pos;
       this.el.position.innerHTML = `P<b>${pos}</b><span>/${total}</span>`;
-      this.pop(this.el.position, 'pos-pop');
+      this.el.position.classList.toggle('p1', pos === 1); // persistent gold at the front
+      // Directional momentum flash: gained a place (green) vs lost one (red).
+      const cls = prev === undefined ? 'pos-pop' : pos < prev ? 'pos-gain' : pos > prev ? 'pos-lose' : 'pos-pop';
+      this.el.position.classList.remove('pos-pop', 'pos-gain', 'pos-lose');
+      void this.el.position.offsetWidth; // restart the animation
+      this.el.position.classList.add(cls);
     }
   }
 
@@ -120,8 +126,10 @@ export class Hud {
     const kmh = Math.round(ship.v * 3.6);
     this.el.speed.textContent = kmh;
     // Jitter above 90% vmax — the number itself vibrates with the machine.
-    if (ship.speedNorm > 0.9) {
-      const jx = (Math.random() - 0.5) * 2.5, jy = (Math.random() - 0.5) * 2.5;
+    // Ramps in smoothly (no snap at 0.9) and respects reduced-motion.
+    if (ship.speedNorm > 0.9 && !document.body.classList.contains('reduced-motion')) {
+      const amp = 2.5 * Math.min((ship.speedNorm - 0.9) / 0.1, 1);
+      const jx = (Math.random() - 0.5) * amp, jy = (Math.random() - 0.5) * amp;
       this.el.speed.style.translate = `${jx}px ${jy}px`;
     } else {
       this.el.speed.style.translate = '0px 0px';
@@ -140,6 +148,7 @@ export class Hud {
     this.el.boostFill.style.width = `${frac * 100}%`;
     this.el.boostGhost.style.width = `${this.ghost * 100}%`;
     document.getElementById('boost-meter').classList.toggle('active', frac > 0);
+
   }
 
   setStats(text) {

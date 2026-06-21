@@ -8,6 +8,8 @@ const _v = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
+const _forward = new THREE.Vector3(0, 0, 1); // spark box long axis, oriented to velocity
+const _white = new THREE.Color(0xffffff);    // spark birth-flash target
 
 // ------------------------------------------------------------ speed lines
 // ~150 thin instanced boxes in a ring around the camera's forward axis,
@@ -101,7 +103,10 @@ export class Sparks {
     scene.add(this.mesh);
   }
 
-  spawn(pos, vel, spread, count, colA, colB) {
+  // normal (optional): a contact normal; sparks fan AWAY from it (wall hits).
+  // floorY (optional): the true surface height to bounce off; defaults to the
+  // spawn height (correct for ground sources, wrong for elevated emitters).
+  spawn(pos, vel, spread, count, colA, colB, normal, floorY) {
     for (let i = 0; i < count; i++) {
       const p = this.pool[this.cursor];
       this.cursor = (this.cursor + 1) % this.pool.length;
@@ -112,8 +117,11 @@ export class Sparks {
         vel.y + (this.rng() - 0.5) * spread * 0.7 + spread * 0.25,
         vel.z + (this.rng() - 0.5) * spread,
       );
+      if (normal) p.vel.addScaledVector(normal, spread * 0.6);
       p.maxLife = 0.3 + this.rng() * 0.3;
       p.life = p.maxLife;
+      p.floorY = (floorY !== undefined) ? floorY : pos.y; // bounce off the real surface
+      p.bounced = false;
       p.colA = colA || this.colA;
       p.colB = colB || this.colB;
     }
@@ -131,12 +139,25 @@ export class Sparks {
       if (p.life <= 0) { p.alive = false; continue; }
       p.vel.y += T.SPARK_GRAVITY * dt;
       p.pos.addScaledVector(p.vel, dt);
+      // One damped bounce off the spawn surface (banked/climbing tracks).
+      if (!p.bounced && p.vel.y < 0 && p.pos.y < p.floorY) {
+        p.pos.y = p.floorY;
+        p.vel.y *= -0.35;
+        p.vel.x += (this.rng() - 0.5) * 1.2;
+        p.vel.z += (this.rng() - 0.5) * 1.2;
+        p.bounced = true;
+      }
       const t = 1 - p.life / p.maxLife;
+      const speed = p.vel.length();
       const sc = 1 - t * 0.6;
-      _m.makeScale(sc, sc, sc + p.vel.length() * 0.04);
-      _m.setPosition(p.pos.x, p.pos.y, p.pos.z);
+      // Orient the box along travel so the stretch reads as a real streak.
+      if (speed > 0.4) { _v.copy(p.vel).multiplyScalar(1 / speed); _q.setFromUnitVectors(_forward, _v); }
+      else { _q.identity(); }
+      const birth = t < 0.12 ? (1 - t / 0.12) : 0;   // bright flash-frame at birth
+      _s.set(sc, sc, sc + speed * 0.12).multiplyScalar(1 + birth * 0.3);
+      _m.compose(p.pos, _q, _s);
       this.mesh.setMatrixAt(i, _m);
-      this._c.copy(p.colA).lerp(p.colB, t);
+      this._c.copy(p.colA).lerp(p.colB, t).lerp(_white, birth * 0.8);
       this.mesh.setColorAt(i, this._c);
     }
     this.mesh.instanceMatrix.needsUpdate = true;

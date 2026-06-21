@@ -13,6 +13,8 @@ export const THEMES = {
     id: 'desert',
     name: 'SUNSET MESA',
     music: 'sunset',
+    grade: { contrast: 1.08, saturation: 1.18 },   // warm, rich sunset
+    adGlow: 0.32,
     sky: {
       zenith: 0x12052e,
       upper: 0x3d1a78,
@@ -59,6 +61,8 @@ export const THEMES = {
     id: 'tropic',
     name: 'PALM COAST',
     music: 'coast',
+    grade: { contrast: 1.10, saturation: 1.12 },   // bright, crisp daylight
+    adGlow: 0.0,                                    // daytime — signage isn't lit
     sky: {
       zenith: 0x0d3470,
       upper: 0x1565b8,
@@ -108,6 +112,8 @@ export const THEMES = {
     id: 'city',
     name: 'NEON SPRAWL',
     music: 'sprawl',
+    grade: { contrast: 1.12, saturation: 1.10 },   // moody high-contrast night
+    adGlow: 0.55,                                   // signage blazes at night
     sky: {
       zenith: 0x05030f,
       upper: 0x140b2e,

@@ -73,7 +73,9 @@ export const TUNING = {
   CAM_LAMBDA_LOOK: 10.0,
   CAM_LAMBDA_ROLL: 4.0,
   CAM_LAMBDA_FOV: 6.0,
-  CAM_LOOKAHEAD: 12.0,    // meters of s ahead for look-at
+  CAM_LOOKAHEAD: 12.0,    // meters of s ahead for look-at (at rest)
+  CAM_LOOKAHEAD_FAST: 22.0, // ...lerped to this at top speed so the camera looks into the corner when fastest
+  CAM_LAND_DIP: 0.5,      // meters of damped vertical settle on a jump landing
   CAM_LOOK_BLEND: 0.7,    // lookahead point vs ship pos
   CAM_LOOK_LAT: 0.2,      // x lateral velocity added to look point
   CAM_ROLL_BANK: 0.8,     // fraction of track bank
@@ -130,11 +132,11 @@ export const TUNING = {
   // ---- Post ----
   VIGNETTE_BASE: 0.25,
   VIGNETTE_SPEED: 0.15,
-  CHROMA_BASE: 0.003,     // x speedNorm^2 (eased — speed reads through the streaks now)
+  CHROMA_BASE: 0.0045,    // x speedNorm^2 — centre 30% is masked clear now, so edges can push harder
   CHROMA_BOOST_MULT: 1.4,
-  RADIAL_SPEED: 0.020,    // x speedNorm^2 (dialed back so the road/rivals stay sharp)
-  RADIAL_BOOST: 0.032,    // x boostFactor
-  RADIAL_CAP: 0.15,       // hard cap on the smear — keep the picture readable
+  RADIAL_SPEED: 0.026,    // x speedNorm^2 (centre stays sharp; smear ramps in only at the edges)
+  RADIAL_BOOST: 0.040,    // x boostFactor
+  RADIAL_CAP: 0.18,       // hard cap on the smear — picture still readable thanks to the centre mask
   FLASH_BOOST: 0.18,
   FLASH_HIT: 0.1,
   PIXEL_RATIO_CAP: 1.5,

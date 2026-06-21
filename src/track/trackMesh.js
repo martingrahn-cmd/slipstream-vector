@@ -153,7 +153,19 @@ function buildSurface(spline, theme) {
         // with speed — sells velocity without any screen shake.
         float core = smoothstep(0.30, 0.0, abs(vLat));
         float flow = 0.45 + 0.55 * sin(vDist * 0.7 - uTime * (5.0 + uSpeed * 22.0));
-        col += lineCol * core * flow * (0.10 + 0.40 * uSpeed);
+        // Scan-pulse: discrete light packets racing forward down the spine every
+        // ~30m, faster with speed — the velocity read.
+        float pp = fract(vDist / 30.0 - uTime * (0.30 + uSpeed * 1.5));
+        float pulse = smoothstep(0.0, 0.05, pp) * smoothstep(0.16, 0.05, pp);
+        // Fold the steady flow AND the moving pulse into ONE centre-glow term,
+        // HARD-CAPPED so the centreline can never blow out to a solid white bar
+        // at speed (readability beats spectacle — the road must stay legible).
+        float centreGlow = min(0.5, core * (flow * (0.10 + 0.30 * uSpeed) + pulse * (0.10 + 0.28 * uSpeed)));
+        col += lineCol * centreGlow;
+        // Apex shimmer: a faint amber wash on the OUTSIDE shoulder through corners,
+        // hinting the racing line (kept inboard of the edge neon). Reuses corner/lane.
+        float outside = smoothstep(0.30, 0.85, lane * sign(vKappa));
+        col += warnCol * corner * outside * 0.09;
         // Reflected edge neon on the road — wet sheen, cyan left / magenta right,
         // brightest right at the verge and fading inward.
         float edgeProx = smoothstep(vWidth - 4.5, vWidth - 0.4, abs(vLat));

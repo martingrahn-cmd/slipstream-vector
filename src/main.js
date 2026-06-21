@@ -205,6 +205,7 @@ function buildWorld(idx) {
   rig = new CameraRig(spline, camera);
   minimap = new Minimap(spline, document.getElementById('minimap'));
   scene.fog.color.setHex(theme.fog);
+  postfx.applyTheme(theme); // per-world grade + vignette tint
   trails.reset();
 
   // Debug top-down camera fitted to this track's bounds.
@@ -234,13 +235,19 @@ function buildField() {
   if (shipVisual) {
     scene.remove(shipVisual.root, shipVisual.shadow);
     disposeTree(shipVisual.root); disposeTree(shipVisual.shadow);
+    // Dispose only the reflection's OWN materials — its hull/glow geometry is
+    // borrowed from the ship and is freed by disposeTree(shipVisual.root) above.
+    if (shipVisual.reflection) {
+      scene.remove(shipVisual.reflection);
+      shipVisual.reflMat.dispose(); shipVisual.reflGlowMat.dispose();
+    }
   }
   if (race) race.dispose(scene);
   const team = TEAMS[selection.team];
   const cls = CLASSES[selection.classIdx];
   const variant = { ...team.variant, ...liveryOf(team, selection.livery) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
-  shipVisual = new ShipVisual(spline, scene, variant, { reactive: true });
+  shipVisual = new ShipVisual(spline, scene, variant, { reactive: true, groundStyle: theme.groundStyle });
   race = new Race(spline, scene, DIFFICULTIES[selection.difficulty].level,
     TOTAL_LAPS, juice, selectionInfo(),
     selection.mode === 2 /* time trial: empty track */, cls);
@@ -561,7 +568,7 @@ juice.on('wallHit', ({ side, severity }) => {
   spline.frameAt(ship.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
   _vel.copy(_f.T).multiplyScalar(ship.v * 0.5);
-  sparks.spawn(_v, _vel, 14 + severity * 10, T.SPARK_HIT_COUNT);
+  sparks.spawn(_v, _vel, 14 + severity * 10, T.SPARK_HIT_COUNT, undefined, undefined, undefined, _f.pos.y);
   if (state === 'race') { tally.wallHits++; input.rumble(Math.min(1, 0.45 + severity * 0.5), 220); }
 });
 let scrapeAcc = 0;
@@ -570,7 +577,7 @@ const _boostColA = new THREE.Color(T.COL.ENGINE);
 const _boostColB = new THREE.Color(0xffffff);
 juice.on('boost', ({ pad } = {}) => {
   _vel.set(0, 1.5, 0);
-  sparks.spawn(shipVisual.root.position, _vel, 9, 26, _boostColA, _boostColB);
+  sparks.spawn(shipVisual.root.position, _vel, 9, 26, _boostColA, _boostColB, undefined, shipVisual.shadow.position.y);
   if (state === 'race') input.rumble(0.5, 200);
   if (state === 'race' && pad >= 0) {
     achievements.unlock('first_boost');
@@ -584,7 +591,7 @@ const _bumpColA = new THREE.Color(0xdfe8ff);
 const _bumpColB = new THREE.Color(0x8fa0c0);
 juice.on('bump', ({ severity = 0.5 } = {}) => {
   _vel.set(0, 2, 0);
-  sparks.spawn(shipVisual.root.position, _vel, 7, 8 + Math.round(severity * 14), _bumpColA, _bumpColB);
+  sparks.spawn(shipVisual.root.position, _vel, 7, 8 + Math.round(severity * 14), _bumpColA, _bumpColB, undefined, shipVisual.shadow.position.y);
   if (state === 'race') { tally.contacts++; input.rumble(0.3 + severity * 0.3, 140); }
 });
 
@@ -841,7 +848,7 @@ function tick(now) {
     const side = Math.sign(ship.d) || 1;
     _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.55)).addScaledVector(_f.U, 0.35);
     _vel.copy(_f.T).multiplyScalar(ship.v * 0.7);
-    sparks.spawn(_v, _vel, 6, n);
+    sparks.spawn(_v, _vel, 6, n, undefined, undefined, undefined, _f.pos.y);
   }
 
   // Visuals.

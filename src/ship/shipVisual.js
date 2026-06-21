@@ -24,7 +24,9 @@ export class ShipVisual {
     this.root = new THREE.Group();    // placed by physics projection
     this.lean = new THREE.Group();    // visual-only animation
     this.root.add(this.lean);
-    this.lean.add(buildShipMesh(V));
+    const shipGroup = buildShipMesh(V);
+    this.lean.add(shipGroup);
+    this.hullMat = shipGroup.userData.hullMat; // driven by boostFactor (rim-pulse)
 
     // Engine flames: one cone per exhaust bell, additive, scaled by throttle/boost.
     this.flames = [];
@@ -92,6 +94,31 @@ export class ShipVisual {
       this.boostMesh.position.set(0, 0.12, 2.3);
       this.boostMesh.scale.setScalar(1.4);
       this.lean.add(this.boostMesh);
+    }
+
+    // Mirrored ghost reflection on glossy worlds (player only): a faint,
+    // fog-coupled clone of the hull + glow flipped through the ground plane —
+    // reads as a wet reflection with no render target. +2 draws, player-only.
+    this.reflection = null;
+    if (opts.reactive && (opts.groundStyle === 'water' || opts.groundStyle === 'grid')) {
+      const inner = new THREE.Group();
+      inner.scale.set(...shipGroup.userData.shipScale); // match the ship's team scale
+      const hullRef = new THREE.Mesh(shipGroup.userData.hullGeo, new THREE.MeshBasicMaterial({
+        vertexColors: true, color: 0x8aa0c0, transparent: true, opacity: 0.26,
+        depthWrite: false, fog: true, side: THREE.DoubleSide,
+      }));
+      const glowRef = new THREE.Mesh(shipGroup.userData.glowGeo, new THREE.MeshBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.2,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: true, side: THREE.DoubleSide,
+      }));
+      inner.add(hullRef, glowRef);
+      this.reflection = new THREE.Group();
+      this.reflection.matrixAutoUpdate = false;   // matrix set directly each frame
+      this.reflection.add(inner);
+      this.reflMat = hullRef.material;
+      this.reflGlowMat = glowRef.material;
+      this._reflM = new THREE.Matrix4();
+      scene.add(this.reflection);
     }
 
     // Smoothed visual state.
@@ -168,6 +195,9 @@ export class ShipVisual {
       this.boostMesh.material.color.copy(this._engineCol);
     }
 
+    // Boost rim-pulse: the whole hull silhouette ignites on boost.
+    if (this.hullMat) this.hullMat.uniforms.uBoost.value = boostFactor;
+
     // Blob shadow: on the surface, fading with hover height.
     this.shadow.position.copy(f.pos).addScaledVector(f.R, ship.d).addScaledVector(f.U, 0.06);
     this.shadow.quaternion.setFromRotationMatrix(this._m);
@@ -176,6 +206,28 @@ export class ShipVisual {
     this.shadow.material.opacity = THREE.MathUtils.clamp(0.42 - lift * 0.12, 0.08, 0.42);
     const sScale = 1 + lift * 0.15;
     this.shadow.scale.set(sScale, sScale, sScale);
+
+    // Ghost reflection: mirror the ship's animated pose through the ground plane
+    // (y -> 2*groundY - y). Faint, and fades as the ship lifts off the surface.
+    if (this.reflection) {
+      this.lean.updateWorldMatrix(true, false); // current world pose incl. lean/bob
+      const groundY = f.pos.y + 0.02;
+      this._reflM.set(
+        1, 0, 0, 0,
+        0, -1, 0, 2 * groundY,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+      );
+      this.reflection.matrix.multiplyMatrices(this._reflM, this.lean.matrixWorld);
+      // The world-horizontal mirror is only valid on a near-flat surface. Fade it
+      // out as the track tilts (banking) and vanish entirely on loops/corkscrews,
+      // where f.U.y -> 0 or negative, so we never paint a ghost ship in the sky.
+      const flat = THREE.MathUtils.clamp((f.U.y - 0.55) / 0.35, 0, 1);
+      const op = THREE.MathUtils.clamp(0.30 - lift * 0.10, 0.04, 0.30) * flat;
+      this.reflection.visible = op > 0.01;
+      this.reflMat.opacity = op;
+      this.reflGlowMat.opacity = op * 0.7;
+    }
   }
 
   // World position of nozzle i — feeds the exhaust trails.
@@ -532,6 +584,11 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   // Team proportions. Applied on the static mesh group (below the lean node),
   // so roll/pitch animation never shears the scaled geometry.
   group.scale.set(V.scaleX, 1, V.scaleZ);
+  // Exposed so ShipVisual can drive the boost rim-pulse and clone a reflection.
+  group.userData.hullMat = hullMesh.material;
+  group.userData.hullGeo = hullGeo;
+  group.userData.glowGeo = glowMesh.geometry;
+  group.userData.shipScale = [V.scaleX, 1, V.scaleZ];
   return group;
 }
 
@@ -541,7 +598,7 @@ function makeHullMaterial(accentHex) {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
-      { rimCol: { value: new THREE.Color(accentHex) }, rimStrength: { value: 0.5 } },
+      { rimCol: { value: new THREE.Color(accentHex) }, rimStrength: { value: 0.5 }, uBoost: { value: 0 } },
     ]),
     vertexShader: /* glsl */ `
       attribute vec3 color;
@@ -561,13 +618,17 @@ function makeHullMaterial(accentHex) {
     fragmentShader: /* glsl */ `
       uniform vec3 rimCol;
       uniform float rimStrength;
+      uniform float uBoost;
       varying vec3 vColor;
       varying vec3 vN;
       varying vec3 vView;
       #include <fog_pars_fragment>
       void main() {
         float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.6);
-        vec3 col = vColor + rimCol * rim * rimStrength;
+        // On boost the whole silhouette ignites: rim runs hotter and whitens.
+        vec3 rc = mix(rimCol, vec3(1.0), uBoost * 0.7);
+        float rs = rimStrength * mix(1.0, 2.2, uBoost);
+        vec3 col = vColor + rc * rim * rs;
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
       }

@@ -89,10 +89,14 @@ export class CameraRig {
     const f = this.spline.frameAt(camS, this.frame);
     this._pos.copy(f.pos)
       .addScaledVector(f.R, THREE.MathUtils.clamp(this.camD, -(f.width - 0.5), f.width - 0.5))
-      .addScaledVector(f.U, this.camH);
+      .addScaledVector(f.U, this.camH + juice.landDip()); // + transient landing settle
 
-    // --- look-at: through the corner ---
-    const lf = this.spline.frameAt(ship.s + T.CAM_LOOKAHEAD, this.lookFrame);
+    // --- look-at: through the corner. Look-ahead grows with speed (and a touch
+    // on boost) so you see into the corner exactly when you're fastest, instead
+    // of staring at your own nose. CAM_LAMBDA_LOOK smoothing prevents snapping.
+    const lookAhead = THREE.MathUtils.lerp(T.CAM_LOOKAHEAD, T.CAM_LOOKAHEAD_FAST, sn)
+      + juice.boostFactor * 4;
+    const lf = this.spline.frameAt(ship.s + lookAhead, this.lookFrame);
     this._lookT.copy(lf.pos).multiplyScalar(T.CAM_LOOK_BLEND);
     this._lookT.addScaledVector(
       this._fwd.copy(f.pos).addScaledVector(f.R, ship.d).addScaledVector(f.U, ship.h),

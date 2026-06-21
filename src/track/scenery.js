@@ -105,7 +105,7 @@ export function buildScenery(spline, scene, theme) {
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme));
-  group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220));
+  group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
   if (canyon) group.add(canyon.group);
   if (theme.sprawl) group.add(buildSprawl(rng, spline, groundY, theme));
@@ -142,7 +142,10 @@ export function buildScenery(spline, scene, theme) {
       }
       rings.update(t);
       if (arches) arches.update(t);
-      if (ground.mat) ground.mat.uniforms.time.value = t;
+      if (ground.mat) {
+        ground.mat.uniforms.time.value = t;
+        if (ground.mat.uniforms.uCam) ground.mat.uniforms.uCam.value.copy(cameraPos);
+      }
       if (lights) lights.update(t);
       if (canyon) canyon.update(t);
       if (traffic) traffic.update(t);
@@ -325,6 +328,8 @@ function buildGround(groundY, cx, cz, theme) {
           time: { value: 0 },
           colA: { value: new THREE.Color(theme.ground) },
           colB: { value: new THREE.Color(water ? theme.waterB : theme.gridGlow) },
+          uCam: { value: new THREE.Vector3() },
+          uSunAz: { value: new THREE.Vector2(-0.35, -0.94).normalize() }, // matches the sky sun
         },
       ]),
       vertexShader: /* glsl */ `
@@ -341,6 +346,8 @@ function buildGround(groundY, cx, cz, theme) {
       fragmentShader: water ? /* glsl */ `
         uniform float time;
         uniform vec3 colA, colB;
+        uniform vec3 uCam;
+        uniform vec2 uSunAz;
         varying vec2 vXZ;
         #include <fog_pars_fragment>
         void main() {
@@ -349,9 +356,18 @@ function buildGround(groundY, cx, cz, theme) {
           float w2 = sin(vXZ.y * 0.055 - time * 0.45 + sin(vXZ.x * 0.02) * 1.5);
           float band = step(0.45, fract((w1 + w2) * 0.22 + time * 0.04));
           vec3 col = mix(colA, colB, band * 0.55);
-          // Sun glints.
+          // Sun-road: a shimmering specular band from the camera toward the
+          // horizon sun, so sea and sky belong to the same world.
+          vec2 toP = vXZ - uCam.xz;
+          float along = dot(toP, uSunAz);                          // + = toward the sun
+          float perp = abs(toP.x * uSunAz.y - toP.y * uSunAz.x);   // distance from the sun line
+          float roadW = 4.0 + max(along, 0.0) * 0.06;              // widens toward the horizon
+          float road = smoothstep(roadW, 0.0, perp) * smoothstep(0.0, 50.0, along);
+          float shimmer = 0.55 + 0.45 * sin(along * 0.5 - time * 3.0) * sin(perp * 0.8 + time * 2.0);
+          col += vec3(1.0, 0.95, 0.78) * road * shimmer * 0.6;
+          // Faint scattered glitter elsewhere.
           float g = sin(vXZ.x * 0.9 + time * 1.9) * sin(vXZ.y * 1.1 - time * 1.4);
-          col += vec3(1.0, 0.96, 0.8) * smoothstep(0.965, 1.0, g) * 0.4;
+          col += vec3(1.0, 0.96, 0.8) * smoothstep(0.985, 1.0, g) * 0.18;
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -422,6 +438,27 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     g.rotateY(rng() * Math.PI); // rotate around its own axis BEFORE placing
     g.translate(px, groundY + h / 2 - 2, pz);
     geoms.push(bakeFlatColors(g, theme.mountainFar, { rim: false }));
+  }
+  // A second, paler ridge ring further out: atmospheric perspective (colour
+  // lerped toward the sky horizon) gives the horizon two depth-separated
+  // silhouettes instead of one cardboard wall. Merged into the SAME mesh.
+  const farCol = new THREE.Color(theme.mountainFar)
+    .lerp(new THREE.Color(theme.sky.horizon), 0.55).getHex();
+  const ringN = Math.round(count * 0.7);
+  for (let i = 0; i < ringN; i++) {
+    const ang = (i / ringN) * Math.PI * 2 + rng() * 0.3 + 0.2; // offset so it peeks between the near ridge
+    if (cityAng !== null
+      && Math.abs(Math.atan2(Math.sin(ang - cityAng), Math.cos(ang - cityAng))) < 0.5) continue;
+    const r = 920 + rng() * 170;
+    const h = (towers ? 80 + rng() * 140 : lowWide ? 30 + rng() * 50 : 60 + rng() * 110) * 0.7;
+    const w = (towers ? 40 + rng() * 60 : lowWide ? 100 + rng() * 140 : 70 + rng() * 100) * 1.1;
+    const px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
+    const g = towers
+      ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
+      : new THREE.ConeGeometry(w, h, 4 + Math.floor(rng() * 3), 1);
+    g.rotateY(rng() * Math.PI);
+    g.translate(px, groundY + h / 2 - 2, pz);
+    geoms.push(bakeFlatColors(g, farCol, { rim: false }));
   }
   const merged = mergeGeoms(geoms);
   const mesh = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
@@ -961,7 +998,7 @@ function buildFlora(rng, spline, groundY, theme) {
 
 // -------------------------------------------------------------- billboards
 // Neon-framed hoardings on the outside of corners, facing the approach.
-function buildBillboards(rng, spline, groundY, every = 220) {
+function buildBillboards(rng, spline, groundY, every = 220, adGlow = 0) {
   const f = makeFrame();
   const spots = [];
   let lastS = -every;
@@ -1027,10 +1064,22 @@ function buildBillboards(rng, spline, groundY, every = 220) {
   glowMesh.renderOrder = 1;
   g.add(glowMesh);
   if (faces.length) {
-    const faceMesh = new THREE.Mesh(mergeGeometries(faces, false),
+    const faceGeo = mergeGeometries(faces, false);
+    const faceMesh = new THREE.Mesh(faceGeo,
       new THREE.MeshBasicMaterial({ map: atlas.texture, fog: true }));
     faceMesh.renderOrder = 1;
     g.add(faceMesh);
+    // Night self-illumination: a second additive pass over the SAME geometry so
+    // the neon-on-dark ad art actually lights up (dark pixels add ~nothing).
+    // Theme-gated (adGlow 0 in daylight) — one extra shared-geometry draw.
+    if (adGlow > 0) {
+      const litMesh = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({
+        map: atlas.texture, transparent: true, opacity: adGlow,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      litMesh.renderOrder = 2;
+      g.add(litMesh);
+    }
   }
   g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
   return g;
