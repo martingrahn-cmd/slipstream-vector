@@ -49,17 +49,13 @@ export class CameraRig {
     this.introT = 0; // any pending sweep is cancelled by a reset
   }
 
-  // Kick off a ~1s sweep that eases from a high vantage behind the ship down
-  // into the normal chase pose. update() blends it in while introT > 0.
-  playIntro(ship, dur = 1.1) {
+  // Cinematic intro: the camera starts AHEAD of the grid facing the ship, swings
+  // out to one side and settles into the chase pose behind it. The arc itself is
+  // traced per-frame in update(); dur 0 skips it (reduced-motion).
+  playIntro(ship, dur = 2.8) {
     this.introDur = dur;
     this.introT = dur;
-    const f = this.spline.frameAt(ship.s, this.frame);
-    this.introPos.copy(f.pos).addScaledVector(f.R, ship.d).addScaledVector(f.T, -6);
-    this.introPos.y += 9;                                   // high above the ship
-    this.introLook.copy(f.pos).addScaledVector(f.R, ship.d);
-    this.introLook.y += 0.5;                                // looking down at it
-    this.introFov = 54;
+    this.introFov = 60;
   }
 
   update(dt, ship, input, juice, drifting) {
@@ -140,8 +136,21 @@ export class CameraRig {
     if (this.introT > 0) {
       this.introT = Math.max(0, this.introT - dt);
       const a = this.introDur > 0 ? 1 - this.introT / this.introDur : 1;
-      const e = a * a * (3 - 2 * a); // smoothstep
+      const e = a * a * (3 - 2 * a); // smoothstep 0..1
       const inv = 1 - e;
+      // Trace an arc in the ship's frame: start AHEAD of the ship (+T) facing
+      // back at it, swing out to one side, and settle behind it (-T, chase pose).
+      const cf = this.spline.frameAt(ship.s, this.lookFrame);
+      this._fwd.copy(cf.pos).addScaledVector(cf.R, ship.d).addScaledVector(cf.U, ship.h); // the ship point
+      const theta = e * Math.PI;                          // 0 (front) .. PI (behind)
+      const radius = THREE.MathUtils.lerp(9.0, this.gap, e);
+      this.introPos.copy(this._fwd)
+        .addScaledVector(cf.T, Math.cos(theta) * radius)  // +ahead .. -behind
+        .addScaledVector(cf.R, Math.sin(theta) * 6.5)     // swing out to the side, 0 at both ends
+        .addScaledVector(cf.U, THREE.MathUtils.lerp(2.6, this.camH, e) - ship.h);
+      this.introLook.copy(this._fwd);                     // keep the ship in frame
+      this.introUp.set(0, 1, 0);
+      // inv -> 0 at the end, so we land EXACTLY on the real chase pose (no snap).
       this._appPos.lerp(this.introPos, inv);
       this._appLook.lerp(this.introLook, inv);
       this._appUp.lerp(this.introUp, inv).normalize();

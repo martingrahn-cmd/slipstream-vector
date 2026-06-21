@@ -641,12 +641,15 @@ function startCountdown() {
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
   ship.lap = 1;
   rig.reset(ship);
-  rig.playIntro(ship, 1.1); // cinematic sweep down to the ship before the lights
+  // Cinematic arc: front approach -> orbit around -> settle behind the ship.
+  // Reduced-motion skips the sweep and starts at the chase pose.
+  const introDur = document.body.classList.contains('reduced-motion') ? 0 : 2.8;
+  rig.playIntro(ship, introDur);
   race.grid();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
   countdownT = 3.2;
-  countdownIntro = 1.1;     // hold the 3-2-1 (and the launch window) until the sweep lands
+  countdownIntro = introDur ? introDur + 0.2 : 0.4; // hold the 3-2-1 until the sweep lands
   raceTime = 0;
   playerFinishTime = null;
   finishedView = 'race';
