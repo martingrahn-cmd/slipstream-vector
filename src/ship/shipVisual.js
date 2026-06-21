@@ -471,9 +471,9 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   }
 
   const baked = opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false }));
-  const hullMesh = new THREE.Mesh(mergeGeoms(baked), new THREE.MeshBasicMaterial({
-    vertexColors: true, fog: true, side: THREE.DoubleSide,
-  }));
+  const hullGeo = mergeGeoms(baked);
+  hullGeo.computeVertexNormals(); // flat per-face normals (non-indexed) for the rim
+  const hullMesh = new THREE.Mesh(hullGeo, makeHullMaterial(V.accent));
   group.add(hullMesh);
 
   // ---- glow set: slot rails, leading-edge strips, fin edge, nozzle discs ----
@@ -533,6 +533,48 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   // so roll/pitch animation never shears the scaled geometry.
   group.scale.set(V.scaleX, 1, V.scaleZ);
   return group;
+}
+
+// Hull material: baked vertex colours + a view-angle fresnel rim in the team
+// accent, so the silhouette catches a light against the busier backgrounds.
+function makeHullMaterial(accentHex) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      { rimCol: { value: new THREE.Color(accentHex) }, rimStrength: { value: 0.5 } },
+    ]),
+    vertexShader: /* glsl */ `
+      attribute vec3 color;
+      varying vec3 vColor;
+      varying vec3 vN;
+      varying vec3 vView;
+      #include <fog_pars_vertex>
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vView = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 rimCol;
+      uniform float rimStrength;
+      varying vec3 vColor;
+      varying vec3 vN;
+      varying vec3 vView;
+      #include <fog_pars_fragment>
+      void main() {
+        float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.6);
+        vec3 col = vColor + rimCol * rim * rimStrength;
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }
+    `,
+    fog: true,
+    side: THREE.DoubleSide,
+  });
 }
 
 function makeGlowTexture() {

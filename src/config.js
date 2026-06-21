@@ -130,24 +130,24 @@ export const TUNING = {
   // ---- Post ----
   VIGNETTE_BASE: 0.25,
   VIGNETTE_SPEED: 0.15,
-  CHROMA_BASE: 0.005,     // x speedNorm^2
-  CHROMA_BOOST_MULT: 1.5,
-  RADIAL_SPEED: 0.045,    // x speedNorm^2
-  RADIAL_BOOST: 0.06,     // x boostFactor
-  RADIAL_CAP: 0.35,
+  CHROMA_BASE: 0.003,     // x speedNorm^2 (eased — speed reads through the streaks now)
+  CHROMA_BOOST_MULT: 1.4,
+  RADIAL_SPEED: 0.020,    // x speedNorm^2 (dialed back so the road/rivals stay sharp)
+  RADIAL_BOOST: 0.032,    // x boostFactor
+  RADIAL_CAP: 0.15,       // hard cap on the smear — keep the picture readable
   FLASH_BOOST: 0.18,
   FLASH_HIT: 0.1,
   PIXEL_RATIO_CAP: 1.5,
 
-  // ---- Speed lines ----
-  SPEEDLINE_COUNT: 120,
-  SPEEDLINE_R_MIN: 4.5,
-  SPEEDLINE_R_MAX: 9,
+  // ---- Speed lines (the dominant speed cue — hyperspace streaks) ----
+  SPEEDLINE_COUNT: 230,
+  SPEEDLINE_R_MIN: 4.5,      // inner radius kept clear so the road stays visible
+  SPEEDLINE_R_MAX: 12,
   SPEEDLINE_LEN_BASE: 2,
-  SPEEDLINE_LEN_SPEED: 9, // x speedNorm^2
-  SPEEDLINE_ALPHA: 0.3,
-  SPEEDLINE_THRESHOLD: 0.55, // speedNorm where they fade in
-  SPEEDLINE_BOOST_MULT: 1.6,
+  SPEEDLINE_LEN_SPEED: 17,   // x speedNorm^2 — long streaks at speed
+  SPEEDLINE_ALPHA: 0.52,
+  SPEEDLINE_THRESHOLD: 0.40, // fade in earlier so speed reads sooner
+  SPEEDLINE_BOOST_MULT: 2.2,
 
   // ---- Sparks ----
   SPARK_POOL: 256,

@@ -82,6 +82,8 @@ function buildSurface(spline, theme) {
   geom.setIndex(idx);
 
   const C = TUNING.COL;
+  // Wet sheen: glossier on water/grid worlds so the neon reflects harder.
+  const gloss = (theme.groundStyle === 'water' || theme.groundStyle === 'grid') ? 0.55 : 0.30;
   const mat = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
@@ -90,6 +92,9 @@ function buildSurface(spline, theme) {
         bandCol: { value: new THREE.Color(theme.trackBand) },
         lineCol: { value: new THREE.Color(C.CENTERLINE) },
         warnCol: { value: new THREE.Color(C.WARNING) },
+        edgeL: { value: new THREE.Color(C.EDGE_L) },
+        edgeR: { value: new THREE.Color(C.EDGE_R) },
+        gloss: { value: gloss },
         trackLen: { value: spline.length },
         uTime: { value: 0 },
         uSpeed: { value: 0 },
@@ -113,8 +118,8 @@ function buildSurface(spline, theme) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform vec3 baseCol, bandCol, lineCol, warnCol;
-      uniform float trackLen, uTime, uSpeed;
+      uniform vec3 baseCol, bandCol, lineCol, warnCol, edgeL, edgeR;
+      uniform float trackLen, uTime, uSpeed, gloss;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
@@ -149,6 +154,12 @@ function buildSurface(spline, theme) {
         float core = smoothstep(0.30, 0.0, abs(vLat));
         float flow = 0.45 + 0.55 * sin(vDist * 0.7 - uTime * (5.0 + uSpeed * 22.0));
         col += lineCol * core * flow * (0.10 + 0.40 * uSpeed);
+        // Reflected edge neon on the road — wet sheen, cyan left / magenta right,
+        // brightest right at the verge and fading inward.
+        float edgeProx = smoothstep(vWidth - 4.5, vWidth - 0.4, abs(vLat));
+        vec3 reflCol = vLat < 0.0 ? edgeL : edgeR;
+        float shimmer = 0.72 + 0.28 * sin(vDist * 0.5 + uTime * 1.5);
+        col += reflCol * edgeProx * edgeProx * gloss * shimmer * 0.5;
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);

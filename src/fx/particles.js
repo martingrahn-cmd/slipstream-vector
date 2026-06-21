@@ -17,10 +17,10 @@ export class SpeedLines {
     const rng = mulberry32(42);
     const n = T.SPEEDLINE_COUNT;
     this.mat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, transparent: true, opacity: 0,
+      color: 0xe6f7ff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false,
     });
-    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.04, 0.04, 1), this.mat, n);
+    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.06, 1), this.mat, n);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
     this.lines = [];

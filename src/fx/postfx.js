@@ -46,6 +46,11 @@ const JuiceShader = {
       col /= 4.0;
       col *= 1.0 - vignette * smoothstep(0.35, 1.45, length(dir) * 2.0);
       col = mix(col, vec3(1.0), flash);
+      // Subtle filmic grade: gentle contrast + saturation lift (production value
+      // without muddying the neon). HDR-safe — no hard clamp before tonemap.
+      col = (col - 0.5) * 1.07 + 0.5;
+      float gl = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(gl), col, 1.13);
       gl_FragColor = vec4(col, 1.0);
     }
   `,
