@@ -94,6 +94,8 @@ export function buildScenery(spline, scene, theme) {
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
   group.add(rings.mesh);
+  const arches = buildArches(spline, theme);
+  if (arches) group.add(arches.group);
   group.add(buildGantry(spline, groundY));
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
@@ -119,13 +121,22 @@ export function buildScenery(spline, scene, theme) {
   const birds = theme.birds ? buildBirds(rng, spline, groundY) : null;
   if (birds) group.add(birds.mesh);
 
+  let flash = 0;
+  const stormy = theme.ambient && theme.ambient.mode === 'rain';
   return {
     group,
     sky: sky.mesh,
-    update(t, cameraPos) {
+    update(t, cameraPos, raceProgress = 0) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
+      sky.mat.uniforms.progress.value = raceProgress;
+      if (stormy) {
+        flash *= 0.86;                                 // decay the last strike
+        if (Math.random() < 0.004) flash = 1;          // ~occasional lightning
+        sky.mat.uniforms.flash.value = flash;
+      }
       rings.update(t);
+      if (arches) arches.update(t);
       if (ground.mat) ground.mat.uniforms.time.value = t;
       if (lights) lights.update(t);
       if (canyon) canyon.update(t);
@@ -158,6 +169,8 @@ function buildSky(S) {
       starLevel: { value: S.starLevel },
       cloudAmp: { value: S.cloudAmp },
       cloudPuff: { value: S.cloudPuff ?? 1.0 },
+      progress: { value: 0 },   // 0..1 race progress — mood drifts over the laps
+      flash: { value: 0 },      // lightning flash (city storms)
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -168,7 +181,7 @@ function buildSky(S) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff;
+      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
@@ -186,8 +199,9 @@ function buildSky(S) {
         col = mix(col, zenith, smoothstep(0.35, 0.7, y));
         // Below the horizon: fade down to deep ground haze.
         col = mix(col, zenith * 0.7 + horizon * 0.15, smoothstep(-0.02, -0.25, y));
-        // The sun/moon disc, sitting just above the horizon.
-        vec3 sunDir = normalize(vec3(sunAzimuth.x, 0.07, sunAzimuth.z));
+        // The sun/moon disc — sinks toward the horizon as the race goes on.
+        float sunY = mix(0.07, -0.03, progress);
+        vec3 sunDir = normalize(vec3(sunAzimuth.x, sunY, sunAzimuth.z));
         float ang = acos(clamp(dot(d, sunDir), -1.0, 1.0));
         float disc = 1.0 - smoothstep(sunSize - 0.015, sunSize, ang);
         if (disc > 0.0) {
@@ -220,6 +234,10 @@ function buildSky(S) {
         float c2 = exp(-pow((y - 0.16) * 40.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 5.0 / cloudPuff - time * 0.04 + 2.0));
         float c3 = exp(-pow((y - 0.30) * 30.0 / cloudPuff, 2.0)) * (0.3 + 0.7 * sin(az * 7.0 / cloudPuff + time * 0.07 + 4.0));
         col = mix(col, cloud, clamp(c1 + c2 + c3 * step(0.4, cloudAmp), 0.0, 1.0) * cloudAmp);
+        // Time-of-day mood drift: the world deepens as the race progresses.
+        col *= mix(1.0, 0.78, progress);
+        // Lightning flash (city storms): a brief cool brightening of the sky.
+        col += vec3(0.55, 0.62, 0.85) * flash * smoothstep(-0.15, 0.5, y);
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -605,6 +623,62 @@ function buildHoloRings(spline) {
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
   return { mesh, update: (t) => { mat.opacity = 0.4 + 0.12 * Math.sin(t * 3); } };
+}
+
+// Ribbed arches over LONG flat straights — vertical enclosure plus a light/dark
+// strobe as you pass under. Matte ribs (baked) + a neon lip, both instanced
+// (+2 draws). Gated on theme.archMax; placed only on sustained straights.
+function buildArches(spline, theme) {
+  if (!theme.archMax) return null;
+  const f = makeFrame();
+  const MIN_RUN = 46, SPACING = 5.5, EDGE = 8;
+  const runs = [];
+  let start = null;
+  for (let s = 0; s <= spline.length; s += 4) {
+    spline.frameAt(s, f);
+    const ok = Math.abs(f.kappa) < 0.004 && Math.abs(spline.verticalCurvAt(s)) < 0.0010;
+    if (ok && start === null) start = s;
+    else if (!ok && start !== null) { if (s - start >= MIN_RUN) runs.push([start, s]); start = null; }
+  }
+  if (start !== null && spline.length - start >= MIN_RUN) runs.push([start, spline.length]);
+  const positions = [];
+  for (const [a, b] of runs) {
+    for (let s = a + EDGE; s <= b - EDGE && positions.length < theme.archMax; s += SPACING) positions.push(s);
+    if (positions.length >= theme.archMax) break;
+  }
+  if (!positions.length) return null;
+
+  const LIFT = 0.5, cut = Math.asin(LIFT);
+  const ribGeo = new THREE.TorusGeometry(1, 0.14, 6, 26, Math.PI + 2 * cut);
+  ribGeo.rotateZ(-cut);
+  const ribMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide });
+  const ribMesh = new THREE.InstancedMesh(bakeFlatColors(ribGeo, theme.mesaShadow ?? 0x201838, { rim: false }), ribMat, positions.length);
+  const lipGeo = new THREE.TorusGeometry(1.045, 0.035, 5, 28, Math.PI + 2 * cut);
+  lipGeo.rotateZ(-cut);
+  const lipMat = new THREE.MeshBasicMaterial({
+    color: theme.mesaRim ?? TUNING.COL.EDGE_L, transparent: true, opacity: 0.62,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+  });
+  const lipMesh = new THREE.InstancedMesh(lipGeo, lipMat, positions.length);
+
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  positions.forEach((s, i) => {
+    spline.frameAt(s, f);
+    const r = f.width + 2.2;
+    v.copy(f.pos).addScaledVector(f.U, LIFT * r);
+    m.makeBasis(f.R, f.U, f.T.clone().negate());
+    q.setFromRotationMatrix(m);
+    sc.setScalar(r);
+    m.compose(v, q, sc);
+    ribMesh.setMatrixAt(i, m); lipMesh.setMatrixAt(i, m);
+  });
+  ribMesh.instanceMatrix.needsUpdate = true; lipMesh.instanceMatrix.needsUpdate = true;
+  ribMesh.frustumCulled = false; lipMesh.frustumCulled = false;
+  ribMesh.matrixAutoUpdate = false; lipMesh.matrixAutoUpdate = false;
+  const group = new THREE.Group();
+  group.add(ribMesh, lipMesh);
+  group.matrixAutoUpdate = false;
+  return { group, update: (t) => { lipMat.opacity = 0.5 + 0.18 * Math.sin(t * 2.2); } };
 }
 
 // ----------------------------------------------------------- start gantry

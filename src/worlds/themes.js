@@ -40,6 +40,7 @@ export const THEMES = {
     trackBand: 0x2a1a55,
     mesaStyle: 'rocks',
     mesaMax: 190,
+    archMax: 22,          // ribbed arches over the long desert straights
     mountainStyle: 'peaks',
     farCount: 44,
     groundStyle: 'dunes',
@@ -87,6 +88,7 @@ export const THEMES = {
     trackBand: 0x1d3c48,
     mesaStyle: 'islands',
     mesaMax: 150,
+    archMax: 14,          // a few light coastal arches
     mountainStyle: 'peaks',
     farCount: 26,         // distant isles dotting the horizon
     groundStyle: 'water',
@@ -133,6 +135,7 @@ export const THEMES = {
     gridGlow: 0xff2ec8,   // street grid shining through the asphalt
     mesaStyle: 'towers',
     mesaMax: 92,          // downtown blocks — the canyon rows carry the near field
+    archMax: 40,          // dense industrial tunnel ribs over the straights
     mountainStyle: 'towers',
     farCount: 46,
     groundStyle: 'grid',

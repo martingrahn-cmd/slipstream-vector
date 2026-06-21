@@ -802,7 +802,10 @@ function tick(now) {
   sparks.update(dt);
   trails.update(dt, camera, juice.boostFactor, sn);
   track.update(now / 1000, sn);
-  scenery.update(now / 1000, camera.position);
+  const raceProgress = state === 'race'
+    ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
+    : 0;
+  scenery.update(now / 1000, camera.position, raceProgress);
 
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {
@@ -828,7 +831,7 @@ function tick(now) {
   }
   if (state === 'race' && selection.mode !== 2) hud.setPosition(race.positionOf(ship), 8);
   minimap.update(shipVisual.root.position, ship.boosting, now / 1000, race.minimapDots(_dots));
-  postfx.update(sn, juice);
+  postfx.update(sn, juice, theme && theme.id === 'desert' ? 0.85 : 0, now / 1000);
   postfx.render();
 
   // Stats readout, 2x/s. autoReset is off so the composer's passes accumulate.

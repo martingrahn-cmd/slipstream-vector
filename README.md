@@ -13,8 +13,19 @@ six tracks, built for graphics and game feel first.
 
 Each theme controls composition, not just palette: ground style
 (flat/water/grid shaders), prop archetypes (rock spires / islands / tower
-blocks), far-horizon density, flora, billboard frequency and one-off set
-pieces (city searchlights). See `src/worlds/themes.js`.
+blocks), far-horizon density, flora, billboard frequency, ribbed tunnel arches
+over the long straights (`archMax`) and one-off set pieces (city searchlights).
+See `src/worlds/themes.js`.
+
+**Detail & dynamism.** The road surface shader carries expansion joints, corner
+skid marks, a per-sector tint and a centre **energy spine** that flows forward
+faster the quicker you go (speed sold by the world, never by shake) — all free,
+no extra geometry. Worlds run dense instanced scatter. Over a race the sky
+**drifts**: the sun sinks, the mood deepens and stars come out; desert air
+shimmers with heat-haze and the neon city gets the odd lightning flash. The
+player's ship reacts too — a boost bloom surges behind it and a brake strip
+lights under braking. Everything stays inside the draw budget (instanced/merged,
+~115 draws worst case).
 
 Vertical loops are 40m-radius circles in the spline (7 control points,
 corkscrewed ~30m sideways so the exit clears the entry). They work because track
