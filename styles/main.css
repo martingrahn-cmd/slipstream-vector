@@ -123,29 +123,29 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
   font-size: 11px; font-weight: 700; letter-spacing: 0.34em;
   color: rgba(255, 255, 255, 0.6); text-align: center; margin-bottom: 4px;
 }
-#trophies .trophy-tier-head {
+#tro-gallery .trophy-tier-head {
   font-family: 'Orbitron', monospace; font-weight: 700;
   font-size: 12px; letter-spacing: 0.24em;
   margin: 14px 0 8px; padding-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
-#trophies .trophy-grid {
+#tro-gallery .trophy-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
 }
-#trophies .trophy-card {
+#tro-gallery .trophy-card {
   display: flex; flex-direction: column; gap: 3px;
   padding: 10px; min-height: 78px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   opacity: 0.45;
 }
-#trophies .trophy-card.on { opacity: 1; border-color: rgba(0, 240, 255, 0.3); }
-#trophies .tc-icon { font-size: 22px; line-height: 1; }
-#trophies .tc-name {
+#tro-gallery .trophy-card.on { opacity: 1; border-color: rgba(0, 240, 255, 0.3); }
+#tro-gallery .tc-icon { font-size: 22px; line-height: 1; }
+#tro-gallery .tc-name {
   font-family: 'Orbitron', monospace; font-weight: 600;
   font-size: 11px; color: #fff; letter-spacing: 0.03em;
 }
-#trophies .tc-desc { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
+#tro-gallery .tc-desc { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
 #trophies .press {
   margin-top: 16px; text-align: center;
   font-family: 'Orbitron', monospace; font-size: 14px; letter-spacing: 0.25em;
@@ -882,6 +882,15 @@ body.reduced-motion .go-btn.focus { animation: none; }
 /* trophies + legend */
 .tro-count { font-family: 'Orbitron'; font-weight: 600; font-size: 14px; color: var(--hot); margin-top: 8px; }
 .tro-gallery { max-height: 64vh; overflow: auto; padding-right: 6px; }
+
+/* Records detail: best LAP / TOTAL per game mode for the selected track. */
+#rec-detail { text-align: left; }
+#rec-detail .rm-head { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; color: #fff; margin-bottom: 9px; }
+#rec-detail .rm-row { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px; align-items: baseline; padding: 3px 0; }
+#rec-detail .rm-cols { color: rgba(255, 255, 255, 0.4); font-size: 10px; letter-spacing: 0.16em; border-bottom: 1px solid rgba(255, 255, 255, 0.12); margin-bottom: 3px; }
+#rec-detail .rm-mode { font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 0.12em; font-size: 11px; color: var(--cyan); }
+#rec-detail .rm-v { font-family: 'Orbitron', monospace; font-size: 12px; color: rgba(223, 230, 255, 0.85); text-align: right; }
+#rec-detail .rm-cols .rm-v { color: rgba(255, 255, 255, 0.4); }
 .legend { display: flex; flex-direction: column; gap: 6px; }
 .lg-row { display: flex; justify-content: space-between; font-family: 'Rajdhani'; font-size: 13px; }
 .lg-row span { color: rgba(255, 255, 255, 0.5); letter-spacing: 0.14em; }

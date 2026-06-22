@@ -300,19 +300,49 @@ function entryCardHTML() {
     + `<button class="entry-edit" onclick="document.querySelector('#nav-list .navitem[data-sec=garage]').click()">GARAGE &#9656;</button>`;
 }
 function volBar(n) { let c = ''; for (let i = 0; i < 10; i++) c += `<i class="${i < n ? 'on' : ''}"></i>`; return `<span class="bar vbar">${c}</span>`; }
-function recordsSet() { return TRACKS.filter((t) => localStorage.getItem(`sv-best-${t.id}`)).length; }
+// Records are kept per (track, mode, kind): best LAP and best TOTAL time for each
+// game mode (championship / single / time trial). The legacy single-value keys
+// (sv-best / sv-racebest) are still read as an "overall best" fallback so older
+// records survive, and stay updated as the headline figure.
+const MODE_KEY = ['champ', 'single', 'tt']; // index by selection.mode
+function recKey(trackId, mode, kind) { return `sv-rec-${trackId}-${MODE_KEY[mode]}-${kind}`; }
+function getRec(trackId, mode, kind) { return parseFloat(localStorage.getItem(recKey(trackId, mode, kind)) || 'NaN'); }
+function saveRec(trackId, mode, kind, t) {
+  const k = recKey(trackId, mode, kind);
+  const prev = parseFloat(localStorage.getItem(k) || 'Infinity');
+  if (t < prev) { localStorage.setItem(k, t.toFixed(3)); return true; }
+  return false;
+}
+// Best across all modes (+ the legacy single-value key) — for headline displays.
+function bestOf(trackId, kind, legacyKey) {
+  const vals = [0, 1, 2].map((m) => getRec(trackId, m, kind));
+  vals.push(parseFloat(localStorage.getItem(legacyKey) || 'NaN'));
+  const fin = vals.filter(Number.isFinite);
+  return fin.length ? Math.min(...fin) : NaN;
+}
+function bestLap(trackId) { return bestOf(trackId, 'lap', `sv-best-${trackId}`); }
+function bestTotal(trackId) { return bestOf(trackId, 'total', `sv-racebest-${trackId}`); }
+
+function recordsSet() { return TRACKS.filter((t) => Number.isFinite(bestLap(t.id))).length; }
 
 function renderRecordsList() {
   const list = document.getElementById('rec-list'); if (!list) return;
   list.innerHTML = TRACKS.map((t, i) => {
-    const lap = parseFloat(localStorage.getItem(`sv-best-${t.id}`) || 'NaN');
+    const lap = bestLap(t.id);
     return `<div class="rec-row" data-i="${i}"><span class="rt">${t.name}</span><span class="rv">${Number.isFinite(lap) ? fmt(lap) : '—'}</span></div>`;
   }).join('');
   menu.recCount = TRACKS.length;
   const sel = TRACKS[Math.min(menu.recSel, TRACKS.length - 1)];
-  const lap = parseFloat(localStorage.getItem(`sv-best-${sel.id}`) || 'NaN');
-  const race = parseFloat(localStorage.getItem(`sv-racebest-${sel.id}`) || 'NaN');
-  setTxt('rec-detail', `${sel.name.toUpperCase()} — LAP ${Number.isFinite(lap) ? fmt(lap) : '—'} · RACE ${Number.isFinite(race) ? fmt(race) : '—'}`);
+  // Detail: best LAP and best TOTAL per game mode for the selected track.
+  const cell = (v) => Number.isFinite(v) ? fmt(v) : '—';
+  const modeRows = ['CHAMP', 'SINGLE', 'TIME'].map((label, m) =>
+    `<div class="rm-row"><span class="rm-mode">${label}</span>`
+    + `<span class="rm-v">${cell(getRec(sel.id, m, 'lap'))}</span>`
+    + `<span class="rm-v">${cell(getRec(sel.id, m, 'total'))}</span></div>`).join('');
+  setHTML('rec-detail',
+    `<div class="rm-head">${sel.name.toUpperCase()}</div>`
+    + `<div class="rm-row rm-cols"><span class="rm-mode"></span><span class="rm-v">LAP</span><span class="rm-v">TOTAL</span></div>`
+    + modeRows);
   menu._applyRecSel();
 }
 
@@ -386,9 +416,11 @@ function updateMenu() {
   setTxt('ns-trophies', `${achievements.count()}/${achievements.total()}`);
   setHTML('status-tele', `CLASS &#9656; <b>${cls.name}</b> &middot; RIVALS &#9656; <b>${diff.name}</b> &middot; &#9672; ${achievements.count()}/${achievements.total()}`);
 
-  const best = parseFloat(localStorage.getItem(bestKey()) || 'NaN');
+  const best = bestLap(trackDef.id);
   setTxt('menu-best', Number.isFinite(best) ? `RECORD ${fmt(best)}` : 'NO RECORD SET');
-  setTxt('tt-best', Number.isFinite(best) ? `BEST LAP ${fmt(best)}` : 'NO RECORD — SET ONE');
+  const ttLap = getRec(trackDef.id, 2, 'lap'); // the time-trial screen shows its own record (falls back to overall)
+  const ttShow = Number.isFinite(ttLap) ? ttLap : best;
+  setTxt('tt-best', Number.isFinite(ttShow) ? `BEST LAP ${fmt(ttShow)}` : 'NO RECORD — SET ONE');
 
   setTxt('ns-controls', 'REBIND');
   setHTML('cup-ladder', TRACKS.map((t, i) => `<div class="cup-rd${i === 0 ? ' lit' : ''}"><span class="rn">${i + 1}</span>${t.name}</div>`).join(''));
@@ -411,7 +443,7 @@ function buildResultsView() {
   const rows = race.results(ship, playerFinishTime);
   if (selection.mode === 2) {
     const you = rows.find((r) => r.player);
-    const best = parseFloat(localStorage.getItem(bestKey()) || 'Infinity');
+    const best = Number.isFinite(bestLap(trackDef.id)) ? bestLap(trackDef.id) : Infinity;
     return {
       tag: trackDef.name.toUpperCase(),
       title: 'TIME TRIAL',
@@ -678,13 +710,13 @@ let lastCountN = -1;
 juice.on('lap', ({ lap, time }) => {
   // Sanity floor so debug teleports/glitches can never write a record.
   const prev = parseFloat(localStorage.getItem(bestKey()) || 'Infinity');
+  if (time > 20) saveRec(trackDef.id, selection.mode, 'lap', time); // per-mode lap record
   if (time > 20 && time < prev) {
-    localStorage.setItem(bestKey(), time.toFixed(3));
+    localStorage.setItem(bestKey(), time.toFixed(3)); // overall headline (legacy key)
     if (lap > 1) { // not the rolling-start opening lap
       achievements.banner('NEW LAP RECORD', `${trackDef.name} · ${fmt(time)}`, '#7df9ff', '⏱️');
       achievements.unlock('record');
-      const heldRecords = TRACKS.filter(
-        (t) => Number.isFinite(parseFloat(localStorage.getItem(`sv-best-${t.id}`)))).length;
+      const heldRecords = TRACKS.filter((t) => Number.isFinite(bestLap(t.id))).length;
       if (heldRecords >= 3) achievements.unlock('record_3');
       if (heldRecords >= TRACKS.length) achievements.unlock('all_records');
     }
@@ -700,13 +732,17 @@ juice.on('lap', ({ lap, time }) => {
     state = 'finished';
     playerFinishTime = race.clock;
     finishedView = 'race';
-    // Best full-race time (vs the field — not time trial), sanity-floored.
-    if (selection.mode !== 2 && playerFinishTime > 60) {
-      const rk = `sv-racebest-${trackDef.id}`;
-      const rPrev = parseFloat(localStorage.getItem(rk) || 'Infinity');
-      if (playerFinishTime < rPrev) {
-        localStorage.setItem(rk, playerFinishTime.toFixed(3));
-        achievements.banner('NEW RACE RECORD', `${trackDef.name} · ${fmt(playerFinishTime)}`, '#ff2ec8', '🏁');
+    // Best full-race/total time, sanity-floored. Recorded per mode (incl. TT now);
+    // the overall race-record banner still fires for the competitive modes only.
+    if (playerFinishTime > 60) {
+      saveRec(trackDef.id, selection.mode, 'total', playerFinishTime);
+      if (selection.mode !== 2) {
+        const rk = `sv-racebest-${trackDef.id}`;
+        const rPrev = parseFloat(localStorage.getItem(rk) || 'Infinity');
+        if (playerFinishTime < rPrev) {
+          localStorage.setItem(rk, playerFinishTime.toFixed(3));
+          achievements.banner('NEW RACE RECORD', `${trackDef.name} · ${fmt(playerFinishTime)}`, '#ff2ec8', '🏁');
+        }
       }
     }
     evaluateFinishTrophies();
@@ -1181,8 +1217,8 @@ function toggleTrophies() {
 
 function showRecordsBoard() {
   const rows = TRACKS.map((t) => {
-    const lap = parseFloat(localStorage.getItem(`sv-best-${t.id}`) || 'NaN');
-    const raceT = parseFloat(localStorage.getItem(`sv-racebest-${t.id}`) || 'NaN');
+    const lap = bestLap(t.id);
+    const raceT = bestTotal(t.id);
     const horizon = THEMES[t.world].fog;
     return {
       name: t.name,
