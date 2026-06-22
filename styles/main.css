@@ -838,8 +838,10 @@ body.reduced-motion .rail-caret, body.reduced-motion .navitem { transition: none
 .ctl-row.big .value { font-size: 22px; }
 .ctl-row .value small { font-family: 'Rajdhani'; font-weight: 600; font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-left: 6px; letter-spacing: 0.1em; }
 .ctl-row .arrow { color: var(--cyan); font-size: 12px; opacity: 0.4; cursor: pointer; transition: opacity 140ms; }
-.ctl-row.focus { opacity: 1; }
-.ctl-row.focus::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 70%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.ctl-row.focus { opacity: 1; background: linear-gradient(90deg, rgba(0, 240, 255, 0.16), rgba(0, 240, 255, 0.03) 65%, transparent); }
+.ctl-row.focus::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 82%; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+.ctl-row.focus label { color: var(--cyan); }
+.ctl-row.focus .value { text-shadow: 0 0 12px rgba(0, 240, 255, 0.55); }
 .ctl-row.focus .arrow { opacity: 1; }
 .ctl-row .arrow:hover { opacity: 1; }
 .lock-note { font-family: 'Rajdhani'; font-size: 10px; letter-spacing: 0.14em; color: var(--hot); grid-column: 1 / -1; }
@@ -1000,5 +1002,7 @@ body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-capture .pr
 .entry-ship { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.4); }
 .entry-edit { flex: none; padding: 0 13px; font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 0.12em; color: var(--cyan); background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.3); cursor: pointer; transition: background 140ms; }
 .entry-edit:hover { background: rgba(0, 240, 255, 0.16); }
+/* Keyboard/gamepad focus on the garage-jump row. */
+.entry-edit.focus { background: rgba(0, 240, 255, 0.22); border-color: var(--cyan); box-shadow: 0 0 16px rgba(0, 240, 255, 0.5); color: #fff; }
 
 .hidden { display: none !important; }

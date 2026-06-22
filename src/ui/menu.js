@@ -6,9 +6,9 @@
 const NAV = ['championship', 'single', 'time', 'garage', 'options', 'controls', 'records', 'trophies'];
 // Ordered focusable rows per section (data-row values). 'go' = the action button.
 const STAGE = {
-  championship: ['class', 'difficulty', 'go'],
-  single: ['track', 'class', 'difficulty', 'go'],
-  time: ['track', 'class', 'go'],
+  championship: ['class', 'difficulty', 'tweak', 'go'],
+  single: ['track', 'class', 'difficulty', 'tweak', 'go'],
+  time: ['track', 'class', 'tweak', 'go'],
   garage: ['team', 'livery', 'pilot'],
   options: ['music', 'sfx', 'deadzone', 'rumble', 'fullscreen', 'motion'],
   controls: ['ctllist'],

@@ -297,7 +297,7 @@ function entryCardHTML() {
       + `<div class="entry-tags"><span class="entry-livery"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`
         + `<span class="entry-ship">${team.name} SHIP</span></div>`
     + `</div>`
-    + `<button class="entry-edit" onclick="document.querySelector('#nav-list .navitem[data-sec=garage]').click()">GARAGE &#9656;</button>`;
+    + `<button class="entry-edit" data-row="tweak" onclick="document.querySelector('#nav-list .navitem[data-sec=garage]').click()">GARAGE &#9656;</button>`;
 }
 function volBar(n) { let c = ''; for (let i = 0; i < 10; i++) c += `<i class="${i < n ? 'on' : ''}"></i>`; return `<span class="bar vbar">${c}</span>`; }
 // Records are kept per (track, mode, kind): best LAP and best TOTAL time for each
@@ -964,6 +964,7 @@ function applyReducedMotion(toggle) {
 
 // Change a menu row's value by dir (±1) — shared by keyboard, gamepad, clicks.
 function editRow(row, dir) {
+  if (row === 'tweak') return; // the garage-jump row has no value to edit
   const n = (mod, cur, d) => ((cur + d) % mod + mod) % mod;
   if (row === 'track') {
     if (selection.mode !== 0) { trackIndex = n(TRACKS.length, trackIndex, dir); buildWorld(trackIndex); }
@@ -1074,6 +1075,7 @@ function activateRow(row) {
   }
   if (row === 'reclist') return;  // the detail already reflects the selection
   if (row === 'ctllist') { beginRebind(menu.ctlSel); return; }
+  if (row === 'tweak') { menu.enterSection('garage'); onSectionEnter('garage'); return; } // jump to the garage
   editRow(row, 1);                // toggles (rumble/fullscreen/motion) flip on ENTER too
 }
 
