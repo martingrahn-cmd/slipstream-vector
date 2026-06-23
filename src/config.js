@@ -81,8 +81,8 @@ export const TUNING = {
   CAM_ROLL_BANK: 0.8,     // fraction of track bank
   CAM_ROLL_STEER: deg(6),
   CAM_DRIFT_SWING: 1.5,   // camera lateral offset per rad of drift angle (outside the slide)
-  FOV_BASE: 70,
-  FOV_SPEED: 30,          // + this * speedNorm^1.5
+  FOV_BASE: 66,           // tighter at rest so the speed-up swing reads bigger
+  FOV_SPEED: 38,          // + this * speedNorm^1.5 — FOV is the main speed cue now (streaks removed)
   FOV_BOOST_SPIKE: 9,     // instant degrees on boost, decays over FOV_SPIKE_DECAY
   FOV_SPIKE_DECAY: 0.4,
   FOV_MAX: 108,
@@ -141,15 +141,8 @@ export const TUNING = {
   FLASH_HIT: 0.1,
   PIXEL_RATIO_CAP: 1.5,
 
-  // ---- Speed lines (the dominant speed cue — hyperspace streaks) ----
-  SPEEDLINE_COUNT: 230,
-  SPEEDLINE_R_MIN: 4.5,      // inner radius kept clear so the road stays visible
-  SPEEDLINE_R_MAX: 12,
-  SPEEDLINE_LEN_BASE: 2,
-  SPEEDLINE_LEN_SPEED: 17,   // x speedNorm^2 — long streaks at speed
-  SPEEDLINE_ALPHA: 0.52,
-  SPEEDLINE_THRESHOLD: 0.40, // fade in earlier so speed reads sooner
-  SPEEDLINE_BOOST_MULT: 2.2,
+  // (Hyperspace speed-lines removed — player feedback: distracting + motion
+  //  sickness. Speed now reads via FOV, ground-rush, camera lunge and edge blur.)
 
   // ---- Sparks ----
   SPARK_POOL: 256,

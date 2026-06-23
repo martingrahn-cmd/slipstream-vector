@@ -12,7 +12,7 @@ import { ShipPhysics } from './ship/shipPhysics.js';
 import { ShipVisual } from './ship/shipVisual.js';
 import { CameraRig } from './fx/cameraRig.js';
 import { Juice } from './fx/juice.js';
-import { SpeedLines, Sparks, ExhaustTrails } from './fx/particles.js';
+import { Sparks, ExhaustTrails } from './fx/particles.js';
 import { PostFX } from './fx/postfx.js';
 import { Hud, fmt } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
@@ -60,7 +60,6 @@ scene.add(camera); // speed lines live in camera space
 // ------------------------------------------------- persistent subsystems
 const juice = new Juice();
 const audio = new AudioEngine(juice);
-const speedLines = new SpeedLines(camera);
 const sparks = new Sparks(scene);
 const trails = new ExhaustTrails(scene);
 const input = new Input();
@@ -905,7 +904,6 @@ function tick(now) {
   rig.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice,
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();
-  speedLines.update(dt, ship.v, sn, juice.boostFactor, shipVisual.root.position);
   sparks.update(dt);
   trails.update(dt, camera, juice.boostFactor, sn);
   track.update(now / 1000, sn);
