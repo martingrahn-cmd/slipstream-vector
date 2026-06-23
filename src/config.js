@@ -19,9 +19,9 @@ export const TUNING = {
   // ---- Lateral physics ----
   STEER_VD_BASE: 14.0,    // target lateral m/s at v=0
   STEER_VD_SPEED: 10.0,   // + this * speedNorm
-  STEER_LAMBDA: 6.0,      // vd relaxation rate (lower = more weight/inertia in the turn-in, "flying" not "adjusting")
-  STEER_GRIP_MULT: 1.9,   // extra lambda when centering/counter-steering (keeps it planted despite the lower lambda)
-  CENTRIFUGAL: 0.58,      // fraction of kappa*v^2 pushing outward (higher = corners need active steering, less on-rails)
+  STEER_LAMBDA: 4.5,      // vd relaxation rate (pass 2: lower still = more weight/momentum committing a turn)
+  STEER_GRIP_MULT: 2.1,   // extra lambda when centering/counter-steering — heavy to commit, still crisp to straighten
+  CENTRIFUGAL: 0.70,      // fraction of kappa*v^2 pushing outward (pass 2: more — corners push you wide, must steer)
   GRAVITY: 9.81,
   DRIFT_STEER_MULT: 1.8,  // airbrake steering multiplier
   DRIFT_LAMBDA: 2.5,      // vd relaxation while drifting (tail slides)
@@ -57,7 +57,7 @@ export const TUNING = {
   DRAFT_ATTACK: 5.0,      // how fast the draft factor eases in/out per second
 
   // ---- Input ramps ----
-  STEER_RISE: 7.0,        // per second — slower ramp-in so a light tap = a small move (less twitchy)
+  STEER_RISE: 6.0,        // per second — pass 2: slower still for more weight on turn-in
   STEER_RELEASE: 14.0,
   THROTTLE_RISE: 8.0,
   THROTTLE_RELEASE: 10.0,
@@ -115,6 +115,7 @@ export const TUNING = {
   SHIP_ROLL_DRIFT: deg(45),
   SHIP_ROLL_LAMBDA: 10,
   SHIP_YAW_LEAD: deg(12),  // nose leads into the turn more
+  SHIP_LEAN_LIFT: 1.1,     // raise the hull by this * |sin(roll)| so a banked wingtip doesn't clip the road
   SHIP_PITCH_THROTTLE: deg(4),
   SHIP_PITCH_BRAKE: deg(3),
   SHIP_PITCH_LAMBDA: 8,

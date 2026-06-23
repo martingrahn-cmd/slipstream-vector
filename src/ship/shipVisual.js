@@ -167,7 +167,9 @@ export class ShipVisual {
     const bob = (T.BOB_A1 * Math.sin(T.BOB_F1 * this.time * Math.PI * 2 * 0.3)
       + T.BOB_A2 * Math.sin(T.BOB_F2 * this.time * Math.PI * 2 * 0.3)) * bobAmp;
 
-    this.lean.position.y = bob;
+    // Bank-lift: raise the hull as it rolls so the low wingtip pivots just above
+    // the road instead of clipping through the asphalt in hard corners.
+    this.lean.position.y = bob + Math.abs(Math.sin(this.roll)) * T.SHIP_LEAN_LIFT;
     this.lean.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ');
 
     // Engine: cyan -> white while boosting, flicker at ~30Hz.
