@@ -39,7 +39,7 @@ export class ShipVisual {
     flameGeom.translate(0, 0, 0.5);
     for (const n of this.nozzles) {
       const flame = new THREE.Mesh(flameGeom, new THREE.MeshBasicMaterial({
-        color: C.ENGINE, transparent: true, opacity: 0.9,
+        color: C.ENGINE, transparent: true, opacity: 0.55, // softer, less harsh cone
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       }));
       flame.position.copy(n);
@@ -199,7 +199,7 @@ export class ShipVisual {
     // White-hot core: shorter, thinner, brighter — the inner tongue of the jet.
     for (const c of this.cores) {
       c.scale.set(1 + boostFactor * 0.5, 1 + boostFactor * 0.5, flameLen * 0.62);
-      c.material.opacity = Math.min(1, (0.45 + 0.5 * throttleAmt + 0.45 * boostFactor) * flick);
+      c.material.opacity = Math.min(0.85, (0.28 + 0.34 * throttleAmt + 0.4 * boostFactor) * flick);
     }
     for (const g of this.glows) {
       g.scale.setScalar((1.1 + throttleAmt * 0.5 + boostFactor * 1.2) * flick);

@@ -107,6 +107,7 @@ function buildSurface(spline, theme) {
         uShipDist: { value: 0 },   // ship arc-length — engine light-pool centre
         uShipLat: { value: 0 },    // ship lateral offset
         uShipGlow: { value: 0 },   // pool intensity (throttle + boost)
+        uNozzleOff: { value: 0.95 }, // lateral offset of each nozzle — two streaks, not one blob
         engCol: { value: new THREE.Color(C.ENGINE) }, // engine colour (cyan -> white on boost)
       },
     ]),
@@ -129,7 +130,7 @@ function buildSurface(spline, theme) {
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 baseCol, bandCol, lineCol, warnCol, edgeL, edgeR, engCol;
-      uniform float trackLen, uTime, uSpeed, gloss, uShipDist, uShipLat, uShipGlow;
+      uniform float trackLen, uTime, uSpeed, gloss, uShipDist, uShipLat, uShipGlow, uNozzleOff;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
@@ -188,9 +189,13 @@ function buildSurface(spline, theme) {
         float ds = uShipDist - vDist;
         ds -= trackLen * floor(ds / trackLen + 0.5);                  // wrap to [-len/2, len/2]
         float poolAlong = smoothstep(16.0, 0.5, ds) * smoothstep(-3.0, 1.0, ds); // mostly behind the ship
-        float poolLat = smoothstep(3.6, 0.0, abs(vLat - uShipLat));
-        float pool = poolAlong * poolLat * poolLat * uShipGlow;
-        col += engCol * pool * (0.7 + 0.6 * gloss);
+        // Two narrow streaks — one trailing each nozzle — with a dark gap between
+        // (not one turquoise blob across the whole tail).
+        float lobeL = smoothstep(0.8, 0.0, abs(vLat - (uShipLat - uNozzleOff)));
+        float lobeR = smoothstep(0.8, 0.0, abs(vLat - (uShipLat + uNozzleOff)));
+        float poolLat = max(lobeL, lobeR);
+        float pool = poolAlong * poolLat * uShipGlow;
+        col += engCol * pool * (0.55 + 0.5 * gloss);
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);

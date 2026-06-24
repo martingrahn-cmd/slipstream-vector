@@ -898,12 +898,7 @@ function tick(now) {
   race.updateVisuals(dt);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
-  // Ground dust/spray kicked up from the surface behind the ship at speed.
-  if (state === 'race' && sn > 0.28) {
-    _v.copy(shipVisual.shadow.position);          // sits on the track surface
-    _vel.set(0, 0.5 + sn * 0.6, 0);               // a soft upward billow
-    sparks.spawn(_v, _vel, 2.0 + sn * 1.8, 2, _dustA, _dustB);
-  }
+  // (Ground dust removed — it read as ugly golden cube/squares behind the ship.)
   rig.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice,
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();
