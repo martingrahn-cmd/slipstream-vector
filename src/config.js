@@ -19,7 +19,7 @@ export const TUNING = {
   // ---- Lateral physics ----
   STEER_VD_BASE: 14.0,    // target lateral m/s at v=0
   STEER_VD_SPEED: 10.0,   // + this * speedNorm
-  STEER_LAMBDA: 4.5,      // vd relaxation rate (pass 2: lower still = more weight/momentum committing a turn)
+  STEER_LAMBDA: 3.5,      // vd relaxation rate (pass 3: heavier still — the ship resists changing lateral direction)
   STEER_GRIP_MULT: 2.1,   // extra lambda when centering/counter-steering — heavy to commit, still crisp to straighten
   CENTRIFUGAL: 0.70,      // fraction of kappa*v^2 pushing outward (pass 2: more — corners push you wide, must steer)
   GRAVITY: 9.81,
@@ -57,7 +57,7 @@ export const TUNING = {
   DRAFT_ATTACK: 5.0,      // how fast the draft factor eases in/out per second
 
   // ---- Input ramps ----
-  STEER_RISE: 6.0,        // per second — pass 2: slower still for more weight on turn-in
+  STEER_RISE: 5.0,        // per second — pass 3: slower input ramp for more turn-in weight
   STEER_RELEASE: 14.0,
   THROTTLE_RISE: 8.0,
   THROTTLE_RELEASE: 10.0,
