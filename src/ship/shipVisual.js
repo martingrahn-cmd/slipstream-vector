@@ -166,11 +166,16 @@ export class ShipVisual {
     // Negative roll.z = right wing down (clockwise from behind) = lean right.
     // Cornering g AMPLIFIES the lean into the turn (latG is negative in a
     // right turn), hence the minus inside the parens.
-    let rollT = -(input.steer * T.SHIP_ROLL_STEER - ship.latG * T.SHIP_ROLL_LATG);
+    // In corkscrews/loops the surface rolls past vertical; the g-driven roll and
+    // slip-yaw would then skew the hull OFF the road plane ("crosswise"). Fade
+    // those cosmetic terms as the surface leaves horizontal (f.U.y -> 0), keeping
+    // the player's own steer lean. Normal banked corners (U.y ~0.85) are untouched.
+    const upright = THREE.MathUtils.clamp((f.U.y - 0.1) / 0.5, 0, 1);
+    let rollT = -(input.steer * T.SHIP_ROLL_STEER - ship.latG * T.SHIP_ROLL_LATG * upright);
     if (drifting) rollT = THREE.MathUtils.clamp(rollT * 1.7, -T.SHIP_ROLL_DRIFT, T.SHIP_ROLL_DRIFT);
-    let yawT = -input.steer * T.SHIP_YAW_LEAD - (drifting ? beta : beta * 0.35);
-    let pitchT = -input.throttle * T.SHIP_PITCH_THROTTLE + input.brake * T.SHIP_PITCH_BRAKE
-      - boostFactor * deg(2.5);
+    let yawT = -input.steer * T.SHIP_YAW_LEAD - (drifting ? beta : beta * 0.35) * upright;
+    let pitchT = (-input.throttle * T.SHIP_PITCH_THROTTLE + input.brake * T.SHIP_PITCH_BRAKE
+      - boostFactor * deg(2.5)) * upright; // fade the cosmetic accel-pitch in corkscrews/loops too
     const kR = 1 - Math.exp(-T.SHIP_ROLL_LAMBDA * dt);
     const kP = 1 - Math.exp(-T.SHIP_PITCH_LAMBDA * dt);
     this.roll += (rollT - this.roll) * kR;
