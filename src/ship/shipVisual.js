@@ -34,7 +34,7 @@ export class ShipVisual {
       new THREE.Vector3(-1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
       new THREE.Vector3(1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
     ];
-    const flameGeom = new THREE.ConeGeometry(0.18, 1, 6);
+    const flameGeom = new THREE.ConeGeometry(0.18, 1, 16); // round, not hexagonal — no hard cyan edges
     flameGeom.rotateX(-Math.PI / 2); // point +Z (backward)
     flameGeom.translate(0, 0, 0.5);
     for (const n of this.nozzles) {
@@ -49,7 +49,7 @@ export class ShipVisual {
     // Hot white-cone core inside each flame: white-hot at the throat with the
     // cyan envelope outside — the layered, AAA-looking afterburner.
     this.cores = [];
-    const coreGeom = new THREE.ConeGeometry(0.085, 1, 6);
+    const coreGeom = new THREE.ConeGeometry(0.085, 1, 16); // round core too
     coreGeom.rotateX(-Math.PI / 2);
     coreGeom.translate(0, 0, 0.5);
     for (const n of this.nozzles) {
@@ -648,8 +648,8 @@ function makeHullMaterial(accentHex) {
       void main() {
         float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.6);
         // On boost the whole silhouette ignites: rim runs hotter and whitens.
-        vec3 rc = mix(rimCol, vec3(1.0), uBoost * 0.7);
-        float rs = rimStrength * mix(1.0, 2.2, uBoost);
+        vec3 rc = mix(rimCol, vec3(1.0), uBoost * 0.4);
+        float rs = rimStrength * mix(1.0, 1.5, uBoost);
         vec3 col = vColor + rc * rim * rs;
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
