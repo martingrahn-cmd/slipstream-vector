@@ -907,7 +907,7 @@ function tick(now) {
   // Engine light-pool on the road behind the ship (throttle + boost, cyan->white).
   const poolGlow = (state === 'race' || state === 'countdown')
     ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
-  _engPool.copy(_ENGINE_C).lerp(_WHITE_C, juice.boostFactor);
+  _engPool.copy(_ENGINE_C).lerp(_WHITE_C, juice.boostFactor * 0.15); // keep the cyan look on boost (just a hint hotter)
   track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))

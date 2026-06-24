@@ -54,7 +54,7 @@ export class ShipVisual {
     coreGeom.translate(0, 0, 0.5);
     for (const n of this.nozzles) {
       const core = new THREE.Mesh(coreGeom, new THREE.MeshBasicMaterial({
-        color: 0xfff2dc, transparent: true, opacity: 0.95,
+        color: 0xcdf6ff, transparent: true, opacity: 0.95, // cyan-white core (stays in the cyan family on boost)
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       }));
       core.position.copy(n);
@@ -191,7 +191,7 @@ export class ShipVisual {
     const throttleAmt = input.throttle;
     const flick = 1 + 0.15 * Math.sin(this.time * 30 * Math.PI * 2 + Math.sin(this.time * 17) * 3);
     const flameLen = (0.5 + 1.8 * throttleAmt + 1.5 * boostFactor) * flick;
-    this._engineCol.setHex(C.ENGINE).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor);
+    this._engineCol.setHex(C.ENGINE).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor * 0.3); // keep the cyan look on boost
     for (const fl of this.flames) {
       fl.scale.set(1 + boostFactor * 0.6, 1 + boostFactor * 0.6, flameLen);
       fl.material.color.copy(this._engineCol);

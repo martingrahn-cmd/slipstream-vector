@@ -191,7 +191,7 @@ function buildSurface(spline, theme) {
         float dN = ds - 2.5;                             // measured from the nozzles (~2.5m behind the origin)
         float wakeLen = 3.0 + uSpeed * 13.0;             // the trail grows with speed (built by motion)
         float poolAlong = smoothstep(wakeLen, 0.3, dN) * smoothstep(-1.4, 0.6, dN);
-        float poolFlow = 0.6 + 0.4 * sin(dN * 0.9 - uTime * (5.0 + uSpeed * 20.0)); // streams backward
+        float poolFlow = 0.78 + 0.22 * sin(dN * 0.9 - uTime * (5.0 + uSpeed * 20.0)); // streams backward, no full gaps
         // One streak per nozzle, dark gap between (not one blob across the tail).
         float lobeL = smoothstep(0.7, 0.0, abs(vLat - (uShipLat - uNozzleOff)));
         float lobeR = smoothstep(0.7, 0.0, abs(vLat - (uShipLat + uNozzleOff)));
