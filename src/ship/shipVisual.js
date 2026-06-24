@@ -46,6 +46,21 @@ export class ShipVisual {
       this.lean.add(flame);
       this.flames.push(flame);
     }
+    // Hot white-cone core inside each flame: white-hot at the throat with the
+    // cyan envelope outside — the layered, AAA-looking afterburner.
+    this.cores = [];
+    const coreGeom = new THREE.ConeGeometry(0.085, 1, 6);
+    coreGeom.rotateX(-Math.PI / 2);
+    coreGeom.translate(0, 0, 0.5);
+    for (const n of this.nozzles) {
+      const core = new THREE.Mesh(coreGeom, new THREE.MeshBasicMaterial({
+        color: 0xfff2dc, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      core.position.copy(n);
+      this.lean.add(core);
+      this.cores.push(core);
+    }
     // Engine glow sprites.
     this.glows = [];
     const glowTex = makeGlowTexture();
@@ -181,6 +196,11 @@ export class ShipVisual {
       fl.scale.set(1 + boostFactor * 0.6, 1 + boostFactor * 0.6, flameLen);
       fl.material.color.copy(this._engineCol);
     }
+    // White-hot core: shorter, thinner, brighter — the inner tongue of the jet.
+    for (const c of this.cores) {
+      c.scale.set(1 + boostFactor * 0.5, 1 + boostFactor * 0.5, flameLen * 0.62);
+      c.material.opacity = Math.min(1, (0.45 + 0.5 * throttleAmt + 0.45 * boostFactor) * flick);
+    }
     for (const g of this.glows) {
       g.scale.setScalar((1.1 + throttleAmt * 0.5 + boostFactor * 1.2) * flick);
       g.material.color.copy(this._engineCol);
@@ -192,8 +212,8 @@ export class ShipVisual {
       this.brakeMesh.material.opacity = Math.min(0.85, input.brake * input.brake * 0.9);
     }
     if (this.boostMesh) {
-      this.boostMesh.material.opacity = boostFactor * 0.8;
-      this.boostMesh.scale.setScalar(1.2 + boostFactor * 2.4);
+      this.boostMesh.material.opacity = boostFactor * 0.9;
+      this.boostMesh.scale.setScalar(1.4 + boostFactor * 3.3); // bigger, softer boost flare
       this.boostMesh.material.color.copy(this._engineCol);
     }
 

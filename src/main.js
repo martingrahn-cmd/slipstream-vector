@@ -595,6 +595,9 @@ const _vel = new THREE.Vector3();
 const _dots = [];
 const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
 const _dustB = new THREE.Color(0x33271a);
+const _engPool = new THREE.Color();          // engine light-pool colour, cyan -> white on boost
+const _ENGINE_C = new THREE.Color(T.COL.ENGINE);
+const _WHITE_C = new THREE.Color(0xffffff);
 juice.on('wallHit', ({ side, severity }) => {
   spline.frameAt(ship.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
@@ -906,7 +909,11 @@ function tick(now) {
   if (debugCam) applyDebugCam();
   sparks.update(dt);
   trails.update(dt, camera, juice.boostFactor, sn);
-  track.update(now / 1000, sn);
+  // Engine light-pool on the road behind the ship (throttle + boost, cyan->white).
+  const poolGlow = (state === 'race' || state === 'countdown')
+    ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
+  _engPool.copy(_ENGINE_C).lerp(_WHITE_C, juice.boostFactor);
+  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;

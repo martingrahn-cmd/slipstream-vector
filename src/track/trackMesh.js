@@ -17,7 +17,13 @@ export function buildTrackMesh(spline, theme) {
   group.add(pads.mesh);
   group.matrixAutoUpdate = false;
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
-  return { group, update: (t, speed = 0) => { surface.update(t, speed); pads.update(t); } };
+  return {
+    group,
+    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null) => {
+      surface.update(t, speed, shipDist, shipLat, glow, engColor);
+      pads.update(t);
+    },
+  };
 }
 
 function sliceCount(spline) {
@@ -98,6 +104,10 @@ function buildSurface(spline, theme) {
         trackLen: { value: spline.length },
         uTime: { value: 0 },
         uSpeed: { value: 0 },
+        uShipDist: { value: 0 },   // ship arc-length — engine light-pool centre
+        uShipLat: { value: 0 },    // ship lateral offset
+        uShipGlow: { value: 0 },   // pool intensity (throttle + boost)
+        engCol: { value: new THREE.Color(C.ENGINE) }, // engine colour (cyan -> white on boost)
       },
     ]),
     vertexShader: /* glsl */ `
@@ -118,8 +128,8 @@ function buildSurface(spline, theme) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform vec3 baseCol, bandCol, lineCol, warnCol, edgeL, edgeR;
-      uniform float trackLen, uTime, uSpeed, gloss;
+      uniform vec3 baseCol, bandCol, lineCol, warnCol, edgeL, edgeR, engCol;
+      uniform float trackLen, uTime, uSpeed, gloss, uShipDist, uShipLat, uShipGlow;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
@@ -172,6 +182,15 @@ function buildSurface(spline, theme) {
         vec3 reflCol = vLat < 0.0 ? edgeL : edgeR;
         float shimmer = 0.72 + 0.28 * sin(vDist * 0.5 + uTime * 1.5);
         col += reflCol * edgeProx * edgeProx * gloss * shimmer * 0.5;
+        // Engine light-pool: the exhaust glow spilling onto the road behind the
+        // ship — brightest just behind the nozzles, fading ~16m back, tracking the
+        // ship's line. Hotter on glossy/wet worlds. AAA ground glow, no real lights.
+        float ds = uShipDist - vDist;
+        ds -= trackLen * floor(ds / trackLen + 0.5);                  // wrap to [-len/2, len/2]
+        float poolAlong = smoothstep(16.0, 0.5, ds) * smoothstep(-3.0, 1.0, ds); // mostly behind the ship
+        float poolLat = smoothstep(3.6, 0.0, abs(vLat - uShipLat));
+        float pool = poolAlong * poolLat * poolLat * uShipGlow;
+        col += engCol * pool * (0.7 + 0.6 * gloss);
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);
@@ -187,9 +206,13 @@ function buildSurface(spline, theme) {
   const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  const update = (t, speed) => {
+  const update = (t, speed, shipDist = 0, shipLat = 0, glow = 0, engColor = null) => {
     mat.uniforms.uTime.value = t;
     mat.uniforms.uSpeed.value = Math.max(0, Math.min(1, speed || 0));
+    mat.uniforms.uShipDist.value = shipDist;
+    mat.uniforms.uShipLat.value = shipLat;
+    mat.uniforms.uShipGlow.value = glow;
+    if (engColor) mat.uniforms.engCol.value.copy(engColor);
   };
   return { mesh, update };
 }
