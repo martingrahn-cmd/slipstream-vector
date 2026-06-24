@@ -107,7 +107,7 @@ function buildSurface(spline, theme) {
         uShipDist: { value: 0 },   // ship arc-length — engine light-pool centre
         uShipLat: { value: 0 },    // ship lateral offset
         uShipGlow: { value: 0 },   // pool intensity (throttle + boost)
-        uNozzleOff: { value: 0.95 }, // lateral offset of each nozzle — two streaks, not one blob
+        uNozzleOff: { value: 1.05 }, // lateral offset of each nozzle (matches the hull nozzle x) — two streaks
         engCol: { value: new THREE.Color(C.ENGINE) }, // engine colour (cyan -> white on boost)
       },
     ]),
@@ -183,19 +183,20 @@ function buildSurface(spline, theme) {
         vec3 reflCol = vLat < 0.0 ? edgeL : edgeR;
         float shimmer = 0.72 + 0.28 * sin(vDist * 0.5 + uTime * 1.5);
         col += reflCol * edgeProx * edgeProx * gloss * shimmer * 0.5;
-        // Engine light-pool: the exhaust glow spilling onto the road behind the
-        // ship — brightest just behind the nozzles, fading ~16m back, tracking the
-        // ship's line. Hotter on glossy/wet worlds. AAA ground glow, no real lights.
+        // Engine wake: two streaks trailing the NOZZLES, laid down by the ship's
+        // motion — the trail lengthens with speed and a pattern streams backward,
+        // so it reads as a wake rather than a glow that toggles on with throttle.
         float ds = uShipDist - vDist;
-        ds -= trackLen * floor(ds / trackLen + 0.5);                  // wrap to [-len/2, len/2]
-        float poolAlong = smoothstep(16.0, 0.5, ds) * smoothstep(-3.0, 1.0, ds); // mostly behind the ship
-        // Two narrow streaks — one trailing each nozzle — with a dark gap between
-        // (not one turquoise blob across the whole tail).
-        float lobeL = smoothstep(0.8, 0.0, abs(vLat - (uShipLat - uNozzleOff)));
-        float lobeR = smoothstep(0.8, 0.0, abs(vLat - (uShipLat + uNozzleOff)));
-        float poolLat = max(lobeL, lobeR);
-        float pool = poolAlong * poolLat * uShipGlow;
-        col += engCol * pool * (0.55 + 0.5 * gloss);
+        ds -= trackLen * floor(ds / trackLen + 0.5);     // wrap to [-len/2, len/2]
+        float dN = ds - 2.5;                             // measured from the nozzles (~2.5m behind the origin)
+        float wakeLen = 3.0 + uSpeed * 13.0;             // the trail grows with speed (built by motion)
+        float poolAlong = smoothstep(wakeLen, 0.3, dN) * smoothstep(-1.4, 0.6, dN);
+        float poolFlow = 0.6 + 0.4 * sin(dN * 0.9 - uTime * (5.0 + uSpeed * 20.0)); // streams backward
+        // One streak per nozzle, dark gap between (not one blob across the tail).
+        float lobeL = smoothstep(0.7, 0.0, abs(vLat - (uShipLat - uNozzleOff)));
+        float lobeR = smoothstep(0.7, 0.0, abs(vLat - (uShipLat + uNozzleOff)));
+        float pool = poolAlong * poolFlow * max(lobeL, lobeR) * uShipGlow;
+        col += engCol * pool * (0.6 + 0.5 * gloss);
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);
