@@ -27,6 +27,7 @@ export class ShipVisual {
     const shipGroup = buildShipMesh(V);
     this.lean.add(shipGroup);
     this.hullMat = shipGroup.userData.hullMat; // driven by boostFactor (rim-pulse)
+    this.hullGeo = shipGroup.userData.hullGeo; // shared with the ghost ship + reflection
 
     // Engine flames: one cone per exhaust bell, additive, scaled by throttle/boost.
     this.flames = [];

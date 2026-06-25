@@ -13,6 +13,7 @@ import { ShipVisual } from './ship/shipVisual.js';
 import { CameraRig } from './fx/cameraRig.js';
 import { Juice } from './fx/juice.js';
 import { Sparks, ExhaustTrails } from './fx/particles.js';
+import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
 import { Hud, fmt } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
@@ -130,7 +131,7 @@ let trackIndex = parseInt(localStorage.getItem('sv-track') || '0', 10) || 0;
 const TROPHY_FILTERS = ['all', 'bronze', 'silver', 'gold', 'platinum'];
 let trophyTier = 'all';
 trackIndex = ((trackIndex % TRACKS.length) + TRACKS.length) % TRACKS.length;
-let trackDef, theme, spline, track, scenery, ship, shipVisual, rig, minimap, race;
+let trackDef, theme, spline, track, scenery, ship, shipVisual, rig, minimap, race, ghost;
 let TOTAL_LAPS = 3;
 
 // The player's seat: mode, team, livery and callsign. Persisted.
@@ -227,6 +228,7 @@ function buildWorld(idx) {
 }
 
 function bestKey() { return `sv-best-${trackDef.id}`; }
+function ghostKey() { return `sv-ghostpath-${trackDef.id}-${selection.classIdx}`; }
 
 // Player ship + AI field — rebuilt on team/livery change without touching
 // the world geometry.
@@ -241,12 +243,19 @@ function buildField() {
       shipVisual.reflMat.dispose(); shipVisual.reflGlowMat.dispose();
     }
   }
+  if (ghost) { ghost.dispose(scene); ghost = null; }
   if (race) race.dispose(scene);
   const team = TEAMS[selection.team];
   const cls = CLASSES[selection.classIdx];
   const variant = { ...team.variant, ...liveryOf(team, selection.livery) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
   shipVisual = new ShipVisual(spline, scene, variant, { reactive: true, groundStyle: theme.groundStyle });
+  // Time-trial ghost: a translucent clone of the player's hull that replays the
+  // best lap. Built every field rebuild; the saved path loads only in TT.
+  ghost = new GhostShip(spline, scene, shipVisual.hullGeo, variant.scaleX ?? 1, variant.scaleZ ?? 1);
+  if (selection.mode === 2) {
+    try { ghost.loadPath(JSON.parse(localStorage.getItem(ghostKey()) || 'null')); } catch (e) { /* ignore */ }
+  }
   race = new Race(spline, scene, DIFFICULTIES[selection.difficulty].level,
     TOTAL_LAPS, juice, selectionInfo(),
     selection.mode === 2 /* time trial: empty track */, cls);
@@ -713,6 +722,18 @@ juice.on('lap', ({ lap, time }) => {
   // Sanity floor so debug teleports/glitches can never write a record.
   const prev = parseFloat(localStorage.getItem(bestKey()) || 'Infinity');
   if (time > 20) saveRec(trackDef.id, selection.mode, 'lap', time); // per-mode lap record
+  // Time-trial ghost: snapshot a FULL lap (lap>=3; lap 2 is the short rolling
+  // opener) when it's the fastest yet, then start recording the next lap.
+  if (ghost && selection.mode === 2) {
+    if (lap >= 3) {
+      const path = ghost.takeLap();
+      if (path && (!ghost.path || path.dur < ghost.path.dur)) {
+        try { localStorage.setItem(ghostKey(), JSON.stringify(path)); } catch (e) { /* quota — skip */ }
+        ghost.loadPath(path);
+      }
+    }
+    ghost.startLap();
+  }
   if (time > 20 && time < prev) {
     localStorage.setItem(bestKey(), time.toFixed(3)); // overall headline (legacy key)
     if (lap > 1) { // not the rolling-start opening lap
@@ -895,6 +916,11 @@ function tick(now) {
   // Visuals.
   const sn = ship.speedNorm;
   shipVisual.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice.boostFactor);
+  if (ghost) {
+    const ghosting = state === 'race' && selection.mode === 2;
+    if (ghosting) ghost.sample(ship.lapTime, ship.s, ship.d, ship.h); // record this lap
+    ghost.update(ship.lapTime, ghosting);                              // replay the best behind/ahead
+  }
   race.updateVisuals(dt);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
@@ -1438,6 +1464,7 @@ window.__game = {
   get spline() { return spline; },
   get trackDef() { return trackDef; },
   get race() { return race; },
+  get ghost() { return ghost; },
   get podiumScene() { return podiumScene; },
   get menuPodium() { return podium; },
   get pauseMenu() { return pauseMenu; },
