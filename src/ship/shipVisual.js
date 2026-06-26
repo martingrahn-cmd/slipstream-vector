@@ -31,36 +31,43 @@ export class ShipVisual {
 
     // Engine flames: one cone per exhaust bell, additive, scaled by throttle/boost.
     this.flames = [];
+    this.cores = [];
     this.nozzles = [
       new THREE.Vector3(-1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
       new THREE.Vector3(1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
     ];
-    const flameGeom = new THREE.ConeGeometry(0.18, 1, 16); // round, not hexagonal — no hard cyan edges
-    flameGeom.rotateX(-Math.PI / 2); // point +Z (backward)
-    flameGeom.translate(0, 0, 0.5);
-    for (const n of this.nozzles) {
-      const flame = new THREE.Mesh(flameGeom, new THREE.MeshBasicMaterial({
-        color: C.ENGINE, transparent: true, opacity: 0.55, // softer, less harsh cone
-        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      }));
-      flame.position.copy(n);
-      this.lean.add(flame);
-      this.flames.push(flame);
-    }
-    // Hot white-cone core inside each flame: white-hot at the throat with the
-    // cyan envelope outside — the layered, AAA-looking afterburner.
-    this.cores = [];
-    const coreGeom = new THREE.ConeGeometry(0.085, 1, 16); // round core too
-    coreGeom.rotateX(-Math.PI / 2);
-    coreGeom.translate(0, 0, 0.5);
-    for (const n of this.nozzles) {
-      const core = new THREE.Mesh(coreGeom, new THREE.MeshBasicMaterial({
-        color: 0xcdf6ff, transparent: true, opacity: 0.95, // cyan-white core (stays in the cyan family on boost)
-        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      }));
-      core.position.copy(n);
-      this.lean.add(core);
-      this.cores.push(core);
+    // AI ships share ONE instanced flame/core batch (7 ships × 2 cones × 2 layers:
+    // 28 draws -> 2). They skip the per-ship cone meshes and write their slots in
+    // update() with identical transforms/colours. The player stays unbatched.
+    this.fxBatch = opts.fxBatch || null;
+    this.fxBase = this.fxBatch ? this.fxBatch.claim(this.nozzles.length) : -1;
+    if (!this.fxBatch) {
+      const flameGeom = new THREE.ConeGeometry(0.18, 1, 16); // round, not hexagonal — no hard cyan edges
+      flameGeom.rotateX(-Math.PI / 2); // point +Z (backward)
+      flameGeom.translate(0, 0, 0.5);
+      for (const n of this.nozzles) {
+        const flame = new THREE.Mesh(flameGeom, new THREE.MeshBasicMaterial({
+          color: C.ENGINE, transparent: true, opacity: 0.55, // softer, less harsh cone
+          blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+        }));
+        flame.position.copy(n);
+        this.lean.add(flame);
+        this.flames.push(flame);
+      }
+      // Hot white-cone core inside each flame: white-hot at the throat with the
+      // cyan envelope outside — the layered, AAA-looking afterburner.
+      const coreGeom = new THREE.ConeGeometry(0.085, 1, 16); // round core too
+      coreGeom.rotateX(-Math.PI / 2);
+      coreGeom.translate(0, 0, 0.5);
+      for (const n of this.nozzles) {
+        const core = new THREE.Mesh(coreGeom, new THREE.MeshBasicMaterial({
+          color: 0xcdf6ff, transparent: true, opacity: 0.95, // cyan-white core (stays in the cyan family on boost)
+          blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+        }));
+        core.position.copy(n);
+        this.lean.add(core);
+        this.cores.push(core);
+      }
     }
     // Engine glow sprites.
     this.glows = [];
@@ -216,6 +223,18 @@ export class ShipVisual {
       g.scale.setScalar((1.1 + throttleAmt * 0.5 + boostFactor * 1.2) * flick);
       g.material.color.copy(this._engineCol);
     }
+    // Batched AI ship: write its flame + core instances — same transform, scale and
+    // additive colour the per-ship meshes above would have (core opacity folded into
+    // the instance colour, since additive). lean.matrixWorld must be current here.
+    if (this.fxBatch) {
+      this.lean.updateWorldMatrix(true, false);
+      const coreOp = Math.min(0.85, (0.28 + 0.34 * throttleAmt + 0.4 * boostFactor) * flick);
+      for (let i = 0; i < this.nozzles.length; i++) {
+        this.fxBatch.write(this.fxBase + i, this.lean.matrixWorld, this.nozzles[i],
+          1 + boostFactor * 0.6, flameLen, this._engineCol,
+          1 + boostFactor * 0.5, flameLen * 0.62, coreOp);
+      }
+    }
 
     // Reactive FX (player only): brake strip warms on braking, boost bloom
     // surges cyan->white behind the ship under boost.
@@ -278,6 +297,62 @@ export class ShipVisual {
   // World position of nozzle i — feeds the exhaust trails.
   getNozzleWorld(i, out) {
     return this.lean.localToWorld(out.copy(this.nozzles[i]));
+  }
+}
+
+// Batches the AI field's engine flames + cores into two InstancedMeshes instead
+// of 4 cone meshes per ship (7 ships -> 28 draws -> 2). Each batched ShipVisual
+// claims a slot range and writes its per-nozzle world transform + colour every
+// frame, so the result is identical to the per-ship meshes: same cone geometry,
+// same additive blend; flame colour via instanceColor, core opacity folded into
+// the instance colour (additive: colour·opacity == per-ship opacity). Glows stay
+// per-ship sprites; the player ship is never batched.
+const _IDQ = new THREE.Quaternion();
+const _CORE_BASE = new THREE.Color(0xcdf6ff);
+export class EngineFXBatch {
+  constructor(scene, capacity) {
+    this.used = 0;
+    const mkCone = (r) => {
+      const g = new THREE.ConeGeometry(r, 1, 16);
+      g.rotateX(-Math.PI / 2); g.translate(0, 0, 0.5);
+      return g;
+    };
+    const mkMat = (opacity) => new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    });
+    this.flames = new THREE.InstancedMesh(mkCone(0.18), mkMat(0.55), capacity);
+    this.cores = new THREE.InstancedMesh(mkCone(0.085), mkMat(1.0), capacity);
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0); // unwritten slots are invisible
+    for (const im of [this.flames, this.cores]) {
+      im.frustumCulled = false;                          // the field spans the track; no shared bound
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.renderOrder = 1;                                // match the per-ship glow mesh order
+      for (let i = 0; i < capacity; i++) im.setMatrixAt(i, zero);
+      im.count = 0;                                      // grows as ships claim slots
+      scene.add(im);
+    }
+    this._m = new THREE.Matrix4();
+    this._s = new THREE.Vector3();
+    this._c = new THREE.Color();
+  }
+  claim(n) { const base = this.used; this.used += n; this.flames.count = this.used; this.cores.count = this.used; return base; }
+  // Write one nozzle slot. leanWorld: the ship's lean matrixWorld this frame.
+  write(slot, leanWorld, nozzle, flameXY, flameLen, flameCol, coreXY, coreLen, coreOpacity) {
+    this._m.compose(nozzle, _IDQ, this._s.set(flameXY, flameXY, flameLen)).premultiply(leanWorld);
+    this.flames.setMatrixAt(slot, this._m);
+    this.flames.setColorAt(slot, flameCol);
+    this._m.compose(nozzle, _IDQ, this._s.set(coreXY, coreXY, coreLen)).premultiply(leanWorld);
+    this.cores.setMatrixAt(slot, this._m);
+    this.cores.setColorAt(slot, this._c.copy(_CORE_BASE).multiplyScalar(coreOpacity));
+  }
+  flush() {
+    this.flames.instanceMatrix.needsUpdate = true; this.cores.instanceMatrix.needsUpdate = true;
+    if (this.flames.instanceColor) this.flames.instanceColor.needsUpdate = true;
+    if (this.cores.instanceColor) this.cores.instanceColor.needsUpdate = true;
+  }
+  dispose(scene) {
+    for (const im of [this.flames, this.cores]) { scene.remove(im); im.geometry.dispose(); im.material.dispose(); im.dispose(); }
   }
 }
 

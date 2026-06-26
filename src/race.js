@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { TUNING as T } from './config.js';
 import { ShipPhysics } from './ship/shipPhysics.js';
-import { ShipVisual } from './ship/shipVisual.js';
+import { ShipVisual, EngineFXBatch } from './ship/shipVisual.js';
 import { AiDriver } from './ship/aiDriver.js';
 import { aiRoster } from './worlds/teams.js';
 
@@ -28,6 +28,8 @@ export class Race {
     // Corner-speed confidence ramps with the chosen difficulty AND the speed class.
     const base = 0.82 + aiLevel * 0.045 + (cls ? cls.aiSkill : 0);
     const seats = solo ? [] : aiRoster(selection.team, selection.pilot);
+    // One shared instanced batch for the whole AI field's flames + cores.
+    this.fxBatch = seats.length ? new EngineFXBatch(scene, seats.length * 2) : null;
     this.racers = seats.map((seat, i) => {
       const sk = seat.team.skill;
       const skill = {
@@ -39,7 +41,7 @@ export class Race {
       const vis = new ShipVisual(spline, scene, {
         ...seat.team.variant,
         ...seat.team.liveries[seat.livery],
-      });
+      }, { fxBatch: this.fxBatch });
       return {
         seat, phys, vis,
         driver: new AiDriver(spline, skill, Math.floor(1000 + aiLevel * 97 + i * 31)),
@@ -172,6 +174,7 @@ export class Race {
       r.boostEnv += (boosting - r.boostEnv) * Math.min(1, 8 * dt);
       r.vis.update(dt, r.phys, r.driver.input, r.boostEnv);
     }
+    if (this.fxBatch) this.fxBatch.flush(); // push the frame's instance writes once
   }
 
   // 1-based position of the player and the full standings.
@@ -245,5 +248,6 @@ export class Race {
       r.vis.shadow.geometry.dispose();
       r.vis.shadow.material.dispose();
     }
+    if (this.fxBatch) this.fxBatch.dispose(scene);
   }
 }
