@@ -860,6 +860,9 @@ body.reduced-motion .rail-caret, body.reduced-motion .navitem { transition: none
 }
 .go-btn.focus { box-shadow: 0 0 26px rgba(0, 240, 255, 0.6); animation: pulse 1.4s ease-in-out infinite; }
 body.reduced-motion .go-btn.focus { animation: none; }
+/* Secondary action (NEW CUP): outlined, quieter than the filled primary GO. */
+.go-btn.alt { background: transparent; color: var(--cyan); font-size: 13px; letter-spacing: 0.16em; padding: 9px; margin-top: 6px; box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.5); }
+.go-btn.alt.focus { box-shadow: inset 0 0 0 1px var(--cyan), 0 0 18px rgba(0, 240, 255, 0.4); }
 
 /* viewports */
 .vp-frame { position: relative; border: 1px solid rgba(0, 240, 255, 0.3); padding: 8px; background: rgba(8, 5, 24, 0.5); }
@@ -876,6 +879,10 @@ body.reduced-motion .go-btn.focus { animation: none; }
 .cup-rd .rn { font-family: 'Orbitron'; font-size: 11px; color: rgba(255, 210, 63, 0.6); }
 .cup-rd.lit { color: #fff; border-left-color: var(--hot); }
 .cup-rd.lit .rn { color: var(--hot); }
+/* A completed round in a resumable cup: dim green with a tick. */
+.cup-rd.done { color: rgba(120, 230, 170, 0.85); border-left-color: rgba(81, 255, 174, 0.5); }
+.cup-rd.done .rn { color: rgba(81, 255, 174, 0.7); }
+.cup-rd.done::after { content: '\2713'; margin-left: auto; color: #51ffae; font-size: 12px; }
 
 /* records list */
 .rec-list { display: flex; flex-direction: column; gap: 3px; }

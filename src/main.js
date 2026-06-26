@@ -151,10 +151,55 @@ const CHAMP_PTS = [10, 8, 6, 5, 4, 3, 2, 1];
 const champ = {
   active: false,
   round: 0,
+  done: 0,           // rounds whose points are in — the round to RESUME at
   classIndex: 0,     // the speed class this cup is being run at
+  entry: null,       // {team, pilot} the cup is run as (locks the grid ids)
   unlockMsg: null,   // set when winning a cup unlocks something
-  points: new Map(), // id -> {name, accent, player, pts}
+  points: new Map(), // id -> {name, accent, player, pts, wins}
 };
+
+// Persist the in-progress cup so a reload (or quitting to the menu) resumes it.
+// Saved after each round completes; cleared when the cup finishes or a new one
+// starts. `done` is the next round to race, with points = all prior rounds, so a
+// reload always resumes cleanly. Only unlock flags persisted before this.
+const CHAMP_KEY = 'sv-champ-progress';
+function saveChamp() {
+  if (!champ.active) { try { localStorage.removeItem(CHAMP_KEY); } catch (e) { /* ignore */ } return; }
+  try {
+    localStorage.setItem(CHAMP_KEY, JSON.stringify({
+      v: 1, done: champ.done, classIndex: champ.classIndex,
+      entry: champ.entry, unlockMsg: champ.unlockMsg,
+      points: [...champ.points.entries()].map(([id, e]) => ({ id, ...e })),
+    }));
+  } catch (e) { /* quota — skip */ }
+}
+function clearChamp() {
+  champ.active = false;
+  try { localStorage.removeItem(CHAMP_KEY); } catch (e) { /* ignore */ }
+}
+// Side-effect-free read of the saved cup (the menu's source of truth for "is
+// there a cup to resume?"). Returns the validated record, or null. A cup is
+// resumable once at least one round is in the bag and it isn't already finished.
+function readSavedChamp() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(CHAMP_KEY) || 'null'); } catch (e) { return null; }
+  if (!s || !Array.isArray(s.points) || !(s.done > 0) || s.done >= TRACKS.length) return null;
+  return s;
+}
+// Load the saved cup into the working `champ` so RESUME can continue it.
+function loadChamp() {
+  const s = readSavedChamp();
+  if (!s) return false;
+  champ.active = true;
+  champ.done = s.done;
+  champ.round = s.done;               // about to race this round
+  champ.classIndex = clampInt(String(s.classIndex), CLASSES.length);
+  champ.entry = s.entry && typeof s.entry.team === 'number' ? s.entry : null;
+  champ.unlockMsg = s.unlockMsg ?? null;
+  champ.points.clear();
+  for (const e of s.points) { const { id, ...data } = e; if (id) champ.points.set(id, data); }
+  return true;
+}
 let finishedView = 'race'; // race | standings (championship intermission)
 function clampInt(v, mod) {
   const n = parseInt(v || '0', 10) || 0;
@@ -432,7 +477,20 @@ function updateMenu() {
   setTxt('tt-best', Number.isFinite(ttShow) ? `BEST LAP ${fmt(ttShow)}` : 'NO RECORD — SET ONE');
 
   setTxt('ns-controls', 'REBIND');
-  setHTML('cup-ladder', TRACKS.map((t, i) => `<div class="cup-rd${i === 0 ? ' lit' : ''}"><span class="rn">${i + 1}</span>${t.name}</div>`).join(''));
+  // Championship: a saved cup (≥1 round done) turns START CUP into RESUME and
+  // reveals NEW CUP; the ladder lights completed rounds + the one you're on.
+  const saved = readSavedChamp();
+  const champRound = saved ? saved.done : 0; // 0-indexed round to resume / start at
+  setHTML('cup-ladder', TRACKS.map((t, i) => {
+    const cls = i < champRound ? ' done' : i === champRound ? ' lit' : '';
+    return `<div class="cup-rd${cls}"><span class="rn">${i + 1}</span>${t.name}</div>`;
+  }).join(''));
+  const goBtn = document.getElementById('champ-go');
+  if (goBtn) goBtn.textContent = saved ? `RESUME · ROUND ${champRound + 1}/${TRACKS.length}` : 'START CUP';
+  const newCupBtn = document.getElementById('champ-newcup');
+  if (newCupBtn) newCupBtn.classList.toggle('hidden', !saved);
+  setTxt('ns-championship', saved ? `RESUME R${champRound + 1}/${TRACKS.length}` : `${TRACKS.length} ROUNDS`);
+  menu.setChampResume(!!saved);
   const entryHTML = entryCardHTML();
   for (const id of ['champ-entry', 'single-entry', 'time-entry']) setHTML(id, entryHTML);
   renderRecordsList();
@@ -496,7 +554,9 @@ function awardChampPoints() {
     if (i === 0) e.wins += 1;
     champ.points.set(r.id, e);
   });
-}
+  champ.done = champ.round + 1;        // this round's points are now in the bag
+  if (champ.done < TRACKS.length) saveChamp(); // resume point: next session continues here
+}                                      // final round: leave it to the complete branch to clear
 
 function buildStandingsView() {
   const entries = [...champ.points.values()].sort((a, b) => b.pts - a.pts);
@@ -1034,13 +1094,27 @@ function editRow(row, dir) {
 // Start the race for the current selection (mode set on section entry).
 function startRace() {
   if (selection.mode === 0) {
-    champ.active = true; champ.round = 0; champ.classIndex = selection.classIdx;
+    champ.active = true; champ.round = 0; champ.done = 0; champ.classIndex = selection.classIdx;
+    champ.entry = { team: selection.team, pilot: selection.pilot };
     champ.unlockMsg = null; champ.points.clear();
+    saveChamp();                       // overwrite any stale cup so a reload can't load the old one
     achievements.unlock('champ_play');
     if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
   } else {
     champ.active = false;
   }
+  hud.setCenter(null);
+  startCountdown();
+}
+
+// Continue a saved cup at its current round, keeping standings. Snaps the entry/
+// class back to what the cup was started with so the grid ids match the points.
+function resumeChamp() {
+  selection.classIdx = champ.classIndex;
+  if (champ.entry) { selection.team = clampInt(String(champ.entry.team), TEAMS.length); selection.pilot = champ.entry.pilot & 1; }
+  champ.round = champ.done;
+  trackIndex = champ.round;
+  buildWorld(trackIndex);
   hud.setCenter(null);
   startCountdown();
 }
@@ -1079,7 +1153,16 @@ function onSectionEnter(sec) {
   closeRebind();
   if (sec === 'championship') {
     selection.mode = 0;
-    if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); } else buildField();
+    const saved = readSavedChamp();    // make the shown entry/class/track match what RESUME will run
+    if (saved) {
+      selection.classIdx = clampInt(String(saved.classIndex), CLASSES.length);
+      if (saved.entry && typeof saved.entry.team === 'number') {
+        selection.team = clampInt(String(saved.entry.team), TEAMS.length);
+        selection.pilot = saved.entry.pilot & 1;
+      }
+    }
+    const previewIdx = saved ? saved.done : 0;
+    if (trackIndex !== previewIdx) { trackIndex = previewIdx; buildWorld(previewIdx); } else buildField();
   } else if (sec === 'single') {
     selection.mode = 1; buildField();
   } else if (sec === 'time') {
@@ -1100,6 +1183,12 @@ function activateRow(row) {
     const sec = menu.sec;
     selection.mode = sec === 'championship' ? 0 : sec === 'single' ? 1 : 2;
     localStorage.setItem('sv-mode', String(selection.mode));
+    if (sec === 'championship' && readSavedChamp()) { loadChamp(); resumeChamp(); return; } // continue the cup
+    startRace();
+    return;
+  }
+  if (row === 'newcup') { // discard the saved cup and start a fresh one
+    selection.mode = 0; localStorage.setItem('sv-mode', '0');
     startRace();
     return;
   }
@@ -1307,7 +1396,7 @@ function onEnter() {
       hud.setCenter(null);
       startCountdown();
     } else if (champ.active) {
-      champ.active = false; // championship complete — back to the menu
+      clearChamp(); // championship complete — wipe the saved cup, back to the menu
       backToMenu();
     } else {
       hud.setCenter(null);
@@ -1404,7 +1493,7 @@ function wireClicks() {
     const rEl = rowEl.querySelector('.arrow.r');
     if (lEl) lEl.addEventListener('click', (e) => { e.stopPropagation(); focus(); editRow(row, -1); audio.uiMove(); });
     if (rEl) rEl.addEventListener('click', (e) => { e.stopPropagation(); focus(); editRow(row, 1); audio.uiMove(); });
-    if (rowEl.classList.contains('go-btn')) rowEl.addEventListener('click', () => { focus(); activateRow('go'); });
+    if (rowEl.classList.contains('go-btn')) rowEl.addEventListener('click', () => { focus(); activateRow(row); });
     else rowEl.addEventListener('click', focus);
   });
   // Records list rows (delegated — the list is rebuilt on update).

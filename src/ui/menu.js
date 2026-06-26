@@ -21,6 +21,7 @@ export class Menu {
     this.view = 'nav';          // 'nav' | 'section'
     this.navFocus = 3;          // default land on GARAGE
     this.rowFocus = 0;
+    this._champResume = false;  // true when a saved cup adds the NEW CUP row
     this.recSel = 0;            // selected track row in RECORDS
     this.recCount = 6;
     this.ctlSel = 0;            // selected action row in CONTROLS
@@ -38,8 +39,21 @@ export class Menu {
   }
 
   get sec() { return NAV[this.navFocus]; }
-  stageRows() { return STAGE[this.sec] || []; }
+  // Championship grows a NEW CUP row once a cup is resumable (main toggles it).
+  rowsFor(sec) {
+    if (sec === 'championship' && this._champResume) return ['class', 'difficulty', 'tweak', 'go', 'newcup'];
+    return STAGE[sec] || [];
+  }
+  stageRows() { return this.rowsFor(this.sec); }
   currentRow() { return this.stageRows()[this.rowFocus]; }
+  setChampResume(b) {
+    if (this._champResume === b) return;
+    this._champResume = b;
+    if (this.sec === 'championship') {
+      this.rowFocus = Math.min(this.rowFocus, this.rowsFor('championship').length - 1);
+      this._applyRows();
+    }
+  }
 
   // Returns an intent for main: {type, ...}. Null if the key isn't ours.
   handleKey(code) {
@@ -83,7 +97,7 @@ export class Menu {
   }
   focusRow(sec, row) { // mouse: focus a specific row in a section
     this.enterSection(sec);
-    const i = (STAGE[sec] || []).indexOf(row);
+    const i = this.rowsFor(sec).indexOf(row);
     if (i >= 0) { this.rowFocus = i; this._applyRows(); }
   }
   toNav() { this.view = 'nav'; this._applyNav(); this._applyRows(); }
