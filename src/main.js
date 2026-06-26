@@ -686,6 +686,12 @@ juice.on('boost', ({ pad } = {}) => {
   if (state === 'race' && pad >= 0) {
     achievements.unlock('first_boost');
     if (++tally.pads >= 3) achievements.unlock('pad_chain');
+    // First-race tip: name the boost pad the moment the player first hits one.
+    if (onbThisRace && !onbBoostShown) {
+      onbBoostShown = true;
+      onbAirbrakeT = -1; // a pad came first — drop the queued airbrake tip so they don't collide
+      hud.flashCenter('BOOST PAD — HOLD THROUGH IT', 1500);
+    }
   }
 });
 juice.on('miniboost', () => {
@@ -740,6 +746,14 @@ let resultsRefreshT = 0;
 let lastFinCount = -1;
 let debugCam = false;
 let paused = false;
+
+// New-player onboarding: one-time prompts on the very first race teaching the
+// two mechanics players missed at launch (airbrake + boost pads). Gated by
+// sv-onboarded; reuses hud.flashCenter, so it respects reduced-motion already.
+let onboarding = localStorage.getItem('sv-onboarded') !== '1';
+let onbThisRace = false;   // true only during the genuine first race
+let onbAirbrakeT = -1;     // delay before the airbrake tip fires after GO
+let onbBoostShown = false; // the boost-pad tip fires once, on the first pad
 
 function startCountdown() {
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
@@ -912,6 +926,13 @@ function tick(now) {
           launchMsg = 'BOOST START'; launchMsgT = 0.8;
         } // held the whole countdown = flooded engines: nothing.
         race.launchBoosts();
+        // Arm the first-race tips (this race only); never onboard again after.
+        onbThisRace = onboarding;
+        if (onboarding) {
+          onboarding = false;
+          try { localStorage.setItem('sv-onboarded', '1'); } catch (e) { /* ignore */ }
+          onbAirbrakeT = 2.4; onbBoostShown = false; // fire after the launch banner clears
+        }
       } else if (n !== lastCountN) {
         lastCountN = n;
         hud.countdown(n);
@@ -935,6 +956,14 @@ function tick(now) {
     if (launchMsg) {
       launchMsgT -= realDt;
       if (launchMsgT <= 0) { hud.flashCenter(launchMsg, 1100); launchMsg = null; }
+    }
+    // First-race tip: teach the airbrake once the launch banner has cleared.
+    if (onbThisRace && onbAirbrakeT > 0) {
+      onbAirbrakeT -= realDt;
+      if (onbAirbrakeT <= 0) {
+        const ak = input.bindingCodes('airbrake').map(keyLabel)[0] || 'SHIFT';
+        hud.flashCenter(`HOLD ${ak} — AIRBRAKE TO DRIFT TIGHT CORNERS`, 2000);
+      }
     }
   } else if (state === 'finished') {
     simInput = NULL_INPUT; // coast over the line
