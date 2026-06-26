@@ -113,15 +113,18 @@ export class ShipVisual {
     }
 
     // Mirrored ghost reflection on glossy worlds (player only): a faint,
-    // fog-coupled clone of the hull + glow flipped through the ground plane —
-    // reads as a wet reflection with no render target. +2 draws, player-only.
+    // fog-coupled clone of the hull + glow flipped through the road surface plane
+    // — reads as a wet reflection with no render target. +2 draws, player-only.
     this.reflection = null;
     if (opts.reactive && (opts.groundStyle === 'water' || opts.groundStyle === 'grid')) {
       const inner = new THREE.Group();
       inner.scale.set(...shipGroup.userData.shipScale); // match the ship's team scale
+      // BackSide: a planar reflection flips winding (det -1), so the camera-facing
+      // facets are the hull undersides — what a real floor reflection shows. Also
+      // halves overdraw and avoids the unsorted-alpha X-ray of a DoubleSide ghost.
       const hullRef = new THREE.Mesh(shipGroup.userData.hullGeo, new THREE.MeshBasicMaterial({
         vertexColors: true, color: 0x8aa0c0, transparent: true, opacity: 0.26,
-        depthWrite: false, fog: true, side: THREE.DoubleSide,
+        depthWrite: false, fog: true, side: THREE.BackSide,
       }));
       const glowRef = new THREE.Mesh(shipGroup.userData.glowGeo, new THREE.MeshBasicMaterial({
         vertexColors: true, transparent: true, opacity: 0.2,
@@ -130,10 +133,12 @@ export class ShipVisual {
       inner.add(hullRef, glowRef);
       this.reflection = new THREE.Group();
       this.reflection.matrixAutoUpdate = false;   // matrix set directly each frame
+      this.reflection.renderOrder = 0.5;          // deterministic: below edge-glow ribbons (2)
       this.reflection.add(inner);
       this.reflMat = hullRef.material;
       this.reflGlowMat = glowRef.material;
       this._reflM = new THREE.Matrix4();
+      this._reflP = new THREE.Vector3();          // scratch: surface point under the ship
       scene.add(this.reflection);
     }
 
@@ -239,20 +244,32 @@ export class ShipVisual {
     // (y -> 2*groundY - y). Faint, and fades as the ship lifts off the surface.
     if (this.reflection) {
       this.lean.updateWorldMatrix(true, false); // current world pose incl. lean/bob
-      const groundY = f.pos.y + 0.02;
+      // Mirror through the actual road tangent plane, not a world-horizontal one:
+      // plane point P is the surface directly under the ship (centerline + lateral
+      // offset + a small lift along the normal), plane normal n = f.U. The
+      // Householder reflection M = [ I - 2 n nᵀ | 2(n·P) n ] makes the ghost roll
+      // and pitch WITH the banked/hilly road and lands its contact line on P. f.U
+      // is unit (frameAt normalizes it), so M is a true reflection (det -1). On a
+      // flat level straight (n=(0,1,0), f.R.y=0) this reduces bit-for-bit to the
+      // old diag(1,-1,1)/2*groundY mirror, so straights don't regress.
+      const P = this._reflP.copy(f.pos).addScaledVector(f.R, ship.d).addScaledVector(f.U, 0.02);
+      const a = f.U.x, b = f.U.y, c = f.U.z;
+      const dp = a * P.x + b * P.y + c * P.z;
       this._reflM.set(
-        1, 0, 0, 0,
-        0, -1, 0, 2 * groundY,
-        0, 0, 1, 0,
+        1 - 2 * a * a, -2 * a * b, -2 * a * c, 2 * dp * a,
+        -2 * a * b, 1 - 2 * b * b, -2 * b * c, 2 * dp * b,
+        -2 * a * c, -2 * b * c, 1 - 2 * c * c, 2 * dp * c,
         0, 0, 0, 1,
       );
       this.reflection.matrix.multiplyMatrices(this._reflM, this.lean.matrixWorld);
-      // The world-horizontal mirror is only valid on a near-flat surface. Fade it
-      // out as the track tilts (banking) and vanish entirely on loops/corkscrews,
-      // where f.U.y -> 0 or negative, so we never paint a ghost ship in the sky.
-      const flat = THREE.MathUtils.clamp((f.U.y - 0.55) / 0.35, 0, 1);
-      const op = THREE.MathUtils.clamp(0.30 - lift * 0.10, 0.04, 0.30) * flat;
-      this.reflection.visible = op > 0.01;
+      // With the plane now correct on banks, the fade only suppresses the
+      // near-vertical case and never paints a ghost above the horizon: full
+      // strength through the whole banking range (BANK_MAX 32° -> f.U.y >= 0.85),
+      // ramping to zero as the surface nears vertical and off entirely on
+      // loops/corkscrews (f.U.y -> 0 or negative).
+      const flat = THREE.MathUtils.smoothstep(f.U.y, 0.30, 0.55);
+      const op = THREE.MathUtils.clamp(0.30 - lift * 0.10, 0, 0.30) * flat;
+      this.reflection.visible = flat > 0 && op > 0.001;
       this.reflMat.opacity = op;
       this.reflGlowMat.opacity = op * 0.7;
     }

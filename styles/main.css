@@ -234,6 +234,10 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
 #lap-time { font-size: 36px; font-weight: 700; letter-spacing: 0.08em; }
 #last-lap, #best-lap { font-size: 17px; font-weight: 500; letter-spacing: 0.22em; opacity: 0.85; }
 #best-lap { color: var(--magenta); text-shadow: 0 0 10px rgba(255, 46, 200, 0.7); }
+/* Time-trial ghost delta: green when ahead of your best lap, red when behind. */
+#ghost-delta { font-family: 'Orbitron', monospace; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; margin-top: 4px; }
+#ghost-delta.ahead { color: #51ffae; text-shadow: 0 0 10px rgba(81, 255, 174, 0.6); }
+#ghost-delta.behind { color: #ff5a4a; text-shadow: 0 0 10px rgba(255, 90, 74, 0.6); }
 
 /* Boost meter, bottom center */
 #boost-meter {

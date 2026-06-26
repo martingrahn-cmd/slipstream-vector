@@ -234,14 +234,15 @@ function ghostKey() { return `sv-ghostpath-${trackDef.id}-${selection.classIdx}`
 // the world geometry.
 function buildField() {
   if (shipVisual) {
-    scene.remove(shipVisual.root, shipVisual.shadow);
-    disposeTree(shipVisual.root); disposeTree(shipVisual.shadow);
-    // Dispose only the reflection's OWN materials — its hull/glow geometry is
-    // borrowed from the ship and is freed by disposeTree(shipVisual.root) above.
+    // Pull the reflection out of the scene FIRST: its hull/glow geometry is
+    // borrowed from the ship, so it must not sit in the scene once disposeTree
+    // frees that geometry below. Only its OWN materials are disposed here.
     if (shipVisual.reflection) {
       scene.remove(shipVisual.reflection);
       shipVisual.reflMat.dispose(); shipVisual.reflGlowMat.dispose();
     }
+    scene.remove(shipVisual.root, shipVisual.shadow);
+    disposeTree(shipVisual.root); disposeTree(shipVisual.shadow);
   }
   if (ghost) { ghost.dispose(scene); ghost = null; }
   if (race) race.dispose(scene);
@@ -749,7 +750,9 @@ juice.on('lap', ({ lap, time }) => {
     achievements.unlock('loop');
     if (achievements.addToSet('loopsCleared', trackDef.id) >= 2) achievements.unlock('loop_master');
   }
-  if (lap === TOTAL_LAPS) {
+  if (selection.mode === 2) {
+    // Time Trial never ends — keep lapping the ghost until the player quits.
+  } else if (lap === TOTAL_LAPS) {
     hud.flashCenter('FINAL LAP', 1300);
   } else if (lap > TOTAL_LAPS) {
     state = 'finished';
@@ -920,6 +923,7 @@ function tick(now) {
     const ghosting = state === 'race' && selection.mode === 2;
     if (ghosting) ghost.sample(ship.lapTime, ship.s, ship.d, ship.h); // record this lap
     ghost.update(ship.lapTime, ghosting);                              // replay the best behind/ahead
+    hud.setGhostDelta(ghosting ? ghost.deltaAt(ship.s, ship.lapTime) : null);
   }
   race.updateVisuals(dt);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
@@ -950,7 +954,7 @@ function tick(now) {
   pauseBtn.classList.toggle('hidden', !(state === 'race' && !paused));
   // Slipstream cue fades in with the draft (readable feedback for the tow).
   slipEl.style.opacity = state === 'race' ? Math.max(0, Math.min(1, (ship.draft - 0.25) / 0.4)) : 0;
-  hud.update(realDt, ship, TOTAL_LAPS);
+  hud.update(realDt, ship, selection.mode === 2 ? 0 : TOTAL_LAPS); // TT: open-ended laps
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
   audio.updateOpponentEngines(realDt,
@@ -1460,6 +1464,7 @@ requestAnimationFrame((t) => { last = t; tick(t); });
 // relying on rAF, which browsers throttle in background tabs.
 window.__game = {
   get ship() { return ship; },
+  get shipVisual() { return shipVisual; },
   get rig() { return rig; },
   get spline() { return spline; },
   get trackDef() { return trackDef; },

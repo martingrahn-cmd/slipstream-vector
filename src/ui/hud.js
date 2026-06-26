@@ -13,6 +13,7 @@ export class Hud {
       lapTime: document.getElementById('lap-time'),
       lastLap: document.getElementById('last-lap'),
       bestLap: document.getElementById('best-lap'),
+      ghostDelta: document.getElementById('ghost-delta'),
       boostFill: document.getElementById('boost-fill'),
       boostGhost: document.getElementById('boost-ghost'),
       center: document.getElementById('center-msg'),
@@ -153,6 +154,17 @@ export class Hud {
 
   setStats(text) {
     this.el.stats.textContent = text;
+  }
+
+  // Time-trial ghost delta. d < 0 = ahead of the best lap (green), > 0 = behind
+  // (red). null hides it.
+  setGhostDelta(d) {
+    const el = this.el.ghostDelta;
+    if (!el) return;
+    if (d === null || d === undefined) { el.textContent = ''; el.className = ''; return; }
+    const ahead = d <= 0;
+    el.textContent = `${ahead ? '−' : '+'}${Math.abs(d).toFixed(2)} vs GHOST`;
+    el.className = ahead ? 'ahead' : 'behind';
   }
 }
 

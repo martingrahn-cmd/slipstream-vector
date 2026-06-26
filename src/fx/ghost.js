@@ -69,6 +69,22 @@ export class GhostShip {
     this.mat.opacity = 0.34;
   }
 
+  // Time delta vs the ghost at the player's current track position (s):
+  // + = behind (slower than the best lap was here), - = ahead. null if no ghost
+  // or outside the recorded range. s is monotonic 0..len within a lap.
+  deltaAt(s, lapT) {
+    if (!this.path) return null;
+    const p = this.path.p, n = p.length / 4;
+    if (n < 2 || s <= p[1] || s >= p[(n - 1) * 4 + 1]) return null;
+    let lo = 0, hi = n - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (p[mid * 4 + 1] <= s) lo = mid; else hi = mid - 1; }
+    const i = lo * 4, j = Math.min(lo + 1, n - 1) * 4;
+    const s0 = p[i + 1], s1 = p[j + 1];
+    const f = s1 > s0 ? (s - s0) / (s1 - s0) : 0;
+    const tg = p[i] + (p[j] - p[i]) * f; // ghost's time when it was at this s
+    return lapT - tg;
+  }
+
   dispose(scene) {
     scene.remove(this.root);
     this.mat.dispose(); // the hull geometry is shared with the player ship — leave it
