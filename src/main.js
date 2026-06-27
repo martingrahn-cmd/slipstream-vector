@@ -744,6 +744,7 @@ const trophiesEl = document.getElementById('trophies');
 let playerFinishTime = null; // frozen at the line; the live results reuse it
 let resultsRefreshT = 0;
 let lastFinCount = -1;
+let showcaseFocus = null; // the ship the post-race broadcast cam is following (hysteresis)
 let debugCam = false;
 let paused = false;
 
@@ -799,6 +800,9 @@ function startCountdown() {
 let lastCountN = -1;
 
 juice.on('lap', ({ lap, time }) => {
+  // Once the race is over, the ship keeps lapping for the post-race showcase —
+  // those laps must NOT touch records/ghosts or re-stamp the finish time.
+  if (state === 'finished' || state === 'podium') return;
   // Sanity floor so debug teleports/glitches can never write a record.
   const prev = parseFloat(localStorage.getItem(bestKey()) || 'Infinity');
   if (time > 20) saveRec(trackDef.id, selection.mode, 'lap', time); // per-mode lap record
@@ -963,7 +967,7 @@ function tick(now) {
       if (launchMsgT <= 0) { hud.flashCenter(launchMsg, 1100); launchMsg = null; }
     }
   } else if (state === 'finished') {
-    simInput = NULL_INPUT; // coast over the line
+    simInput = NULL_INPUT; // the player coasts to a stop; the AI field races on
     // The rest of the field is still racing — refresh the board the moment
     // anyone crosses (and on a slow heartbeat for the progress ordering).
     resultsRefreshT += realDt;
@@ -1015,6 +1019,24 @@ function tick(now) {
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
   // (Ground dust removed — it read as ugly golden cube/squares behind the ship.)
+  // Trackside broadcast cam during the live results reveal: follow the next car
+  // still racing to the line; once the whole field is in, settle on the player.
+  // (Not behind the championship standings board — finishedView gates it.)
+  if (state === 'finished' && finishedView === 'race') {
+    rig.startShowcase();
+    let best = null, bestProg = -Infinity;
+    for (const r of race.racers) {
+      if (r.finishTime !== null) continue;
+      const p = race.progressOf(r.phys);
+      if (p > bestProg) { bestProg = p; best = r.phys; }
+    }
+    // Hysteresis: keep the current subject unless another is clearly ahead, so a
+    // wheel-to-wheel pack doesn't flip the camera (and hard-cut) every frame.
+    const fr = race.racers.find((r) => r.phys === showcaseFocus);
+    const focusGone = !fr || fr.finishTime !== null;
+    if (focusGone || (best && bestProg > race.progressOf(showcaseFocus) + 8)) showcaseFocus = best;
+    rig.showcaseTarget = showcaseFocus || ship;
+  } else { rig.stopShowcase(); showcaseFocus = null; }
   rig.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice,
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();

@@ -5,6 +5,18 @@ import * as THREE from 'three';
 import { TUNING as T } from '../config.js';
 import { makeFrame } from '../track/spline.js';
 
+// Post-race "broadcast": fixed trackside cameras spaced around the lap. The
+// active one is the camera whose segment the focus ship (the next car to finish)
+// is in; the camera stays planted at the trackside while its LOOK pans to follow
+// the ship racing past, then it cuts to the next camera as the ship crosses into
+// the next segment — like a race-finish TV feed.
+const SC_SPACING = 270;     // ~metres between trackside cameras → ~3s shots, a full approach→whoosh→recede
+const SC_SIDE = 7.0;        // metres outside the road edge
+const SC_HEIGHT = 4.0;      // camera height above the road
+const SC_FOV = 34;          // a telephoto lens — keeps the distant ship framed (broadcast look)
+const SC_LOOK_LAMBDA = 7.0; // how fast the look pans to keep the ship framed
+const SC_FRAME_BIAS = 0.26; // push the ship just left of the centred results board
+
 export class CameraRig {
   constructor(spline, camera) {
     this.spline = spline;
@@ -37,7 +49,20 @@ export class CameraRig {
     this._appPos = new THREE.Vector3();
     this._appLook = new THREE.Vector3();
     this._appUp = new THREE.Vector3();
+
+    // Post-race trackside-broadcast cam.
+    this.showcase = false;
+    this.showcaseTarget = null; // the ship to follow (set per-frame by main); null → the player
+    this.scIdx = -1;            // active trackside-camera segment (forces a cut on entry)
+    this.scInit = false;        // first frame snaps the pan (no swing-in)
+    this.scLook = new THREE.Vector3();
+    this._scTmp = new THREE.Vector3();
+    this._scR = new THREE.Vector3();
   }
+
+  // Begin/stop the trackside broadcast cam (driven by the 'finished' state).
+  startShowcase() { if (this.showcase) return; this.showcase = true; this.scIdx = -1; this.scInit = false; }
+  stopShowcase() { this.showcase = false; this.showcaseTarget = null; }
 
   reset(ship) {
     this.gap = T.CAM_BACK_REST;
@@ -47,6 +72,7 @@ export class CameraRig {
     this.look.copy(f.pos);
     this.fov = T.FOV_BASE;
     this.introT = 0; // any pending sweep is cancelled by a reset
+    this.showcase = false; // and so is any post-race showcase
   }
 
   // Cinematic intro: the camera starts AHEAD of the grid facing the ship, swings
@@ -156,6 +182,39 @@ export class CameraRig {
       this._appUp.lerp(this.introUp, inv).normalize();
       fov = fovNow + (this.introFov - fovNow) * inv;
       roll *= e; // roll + shake ease in as the sweep settles
+    }
+    // Post-race broadcast: a fixed trackside camera watches the focus ship race
+    // past, then cuts to the next camera when the ship crosses into its segment.
+    if (this.showcase) {
+      const tgt = this.showcaseTarget || ship;
+      const len = this.spline.length;
+      const nCams = Math.max(4, Math.round(len / SC_SPACING));
+      const spacing = len / nCams;
+      // Active camera = the one NEAREST the focus ship, so it's always well framed.
+      const seg = ((Math.round(this.spline.wrap(tgt.s) / spacing) % nCams) + nCams) % nCams;
+      if (seg !== this.scIdx) { this.scIdx = seg; this.scInit = false; } // cut to the nearest camera
+      // Plant the camera just off the road edge, alternating sides. A horizontal
+      // offset + world-up height keep it grounded even where the road banks.
+      const cf = this.spline.frameAt(this.scIdx * spacing, this.frame);
+      this._scR.set(cf.R.x, 0, cf.R.z);
+      if (this._scR.lengthSq() < 1e-3) this._scR.set(-cf.T.z, 0, cf.T.x); // near-vertical loop fallback
+      this._scR.normalize();
+      const side = (this.scIdx % 2 === 0) ? 1 : -1;
+      this._appPos.copy(cf.pos).addScaledVector(this._scR, side * (cf.width + SC_SIDE));
+      this._appPos.y += SC_HEIGHT;
+      // Look at the focus ship — the pan that follows it racing past.
+      const tf = this.spline.frameAt(tgt.s, this.lookFrame);
+      const tgtPt = this._fwd.copy(tf.pos).addScaledVector(tf.R, tgt.d).addScaledVector(tf.U, tgt.h);
+      if (!this.scInit) { this.scLook.copy(tgtPt); this.scInit = true; }
+      else this.scLook.lerp(tgtPt, k(SC_LOOK_LAMBDA));
+      this._appUp.set(0, 1, 0); // a trackside camera keeps a level horizon
+      // Frame the ship LEFT of the centred results board (nudge look to cam-right).
+      const viewDir = this._scTmp.subVectors(this.scLook, this._appPos);
+      const dist = viewDir.length() || 1;
+      this._scR.crossVectors(viewDir, this._appUp).normalize();
+      this._appLook.copy(this.scLook).addScaledVector(this._scR, dist * SC_FRAME_BIAS);
+      fov = SC_FOV;
+      roll = 0;
     }
     if (Math.abs(this.camera.fov - fov) > 0.01) {
       this.camera.fov = fov;
