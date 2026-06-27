@@ -15,7 +15,7 @@ const SC_SIDE = 7.0;        // metres outside the road edge
 const SC_HEIGHT = 4.0;      // camera height above the road
 const SC_FOV = 34;          // a telephoto lens — keeps the distant ship framed (broadcast look)
 const SC_LOOK_LAMBDA = 7.0; // how fast the look pans to keep the ship framed
-const SC_FRAME_BIAS = 0.26; // push the ship just left of the centred results board
+const SC_FRAME_BIAS = 0.13; // raise the ship into the upper-centre, above the bottom board
 
 export class CameraRig {
   constructor(spline, camera) {
@@ -208,11 +208,11 @@ export class CameraRig {
       if (!this.scInit) { this.scLook.copy(tgtPt); this.scInit = true; }
       else this.scLook.lerp(tgtPt, k(SC_LOOK_LAMBDA));
       this._appUp.set(0, 1, 0); // a trackside camera keeps a level horizon
-      // Frame the ship LEFT of the centred results board (nudge look to cam-right).
-      const viewDir = this._scTmp.subVectors(this.scLook, this._appPos);
-      const dist = viewDir.length() || 1;
-      this._scR.crossVectors(viewDir, this._appUp).normalize();
-      this._appLook.copy(this.scLook).addScaledVector(this._scR, dist * SC_FRAME_BIAS);
+      // Frame the ship in the UPPER area, above the bottom results board: drop the
+      // look point so the camera tilts down and the ship rises on screen.
+      const dist = this._scTmp.subVectors(this.scLook, this._appPos).length() || 1;
+      this._appLook.copy(this.scLook);
+      this._appLook.y -= dist * SC_FRAME_BIAS;
       fov = SC_FOV;
       roll = 0;
     }

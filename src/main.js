@@ -1059,6 +1059,9 @@ function tick(now) {
 
   // Keep the gameplay HUD off the title/menu screens (console front-end feel).
   document.body.classList.toggle('in-menu', state === 'intro' || state === 'attract');
+  // Post-race: drop the driving instruments (speed + boost) so the trackside
+  // broadcast reads clean behind the bottom results board.
+  document.body.classList.toggle('spectating', state === 'finished');
   pauseBtn.classList.toggle('hidden', !(state === 'race' && !paused));
   // Slipstream cue fades in with the draft (readable feedback for the tow).
   slipEl.style.opacity = state === 'race' ? Math.max(0, Math.min(1, (ship.draft - 0.25) / 0.4)) : 0;

@@ -154,11 +154,11 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
 
 /* Race results */
 #results {
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
+  left: 50%; top: auto; bottom: 26px;
+  transform: translateX(-50%); /* lower-third: the race plays above the board */
   z-index: 20; /* above the menu overlay (records board opens in attract) */
   min-width: 520px;
-  padding: 26px 34px;
+  padding: 22px 34px;
   background: rgba(10, 4, 28, 0.88);
   border: 1px solid rgba(0, 240, 255, 0.35);
   box-shadow: 0 0 50px rgba(0, 240, 255, 0.15);
@@ -654,6 +654,8 @@ body.in-menu #lap-block,
 body.in-menu #speed-block,
 body.in-menu #boost-meter,
 body.in-menu #minimap { display: none !important; }
+/* Spectating the finish: hide the driving instruments, keep lap + minimap. */
+body.spectating #speed-block, body.spectating #boost-meter { display: none !important; }
 
 /* Championship podium ceremony — full-screen 3D stage + title overlay. */
 #podium-scene {
