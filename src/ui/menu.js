@@ -69,7 +69,7 @@ export class Menu {
     }
 
     // DEPTH 1 — inside a section.
-    if (code === 'Backspace' || code === 'Escape') { this.toNav(); return { type: 'back' }; }
+    if (code === 'Backspace') { this.toNav(); return { type: 'back' }; } // not Escape — it exits fullscreen
 
     if (this.sec === 'records') { // a 1D list, no go button
       if (up || down) { this.recSel = Math.max(0, Math.min(this.recCount - 1, this.recSel + (up ? -1 : 1))); return { type: 'recmove' }; }

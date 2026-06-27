@@ -322,7 +322,7 @@ const CONTROLS_LEGEND = '<div class="lg-row"><span>STEER</span><b>&larr; &rarr; 
   + '<div class="lg-row"><span>BRAKE</span><b>&darr; / S / LT</b></div>'
   + '<div class="lg-row"><span>AIRBRAKE</span><b>SHIFT / LB RB</b></div>'
   + '<div class="lg-row"><span>RESPAWN</span><b>R / X</b></div>'
-  + '<div class="lg-row"><span>PAUSE</span><b>P / ESC / START</b></div>';
+  + '<div class="lg-row"><span>PAUSE</span><b>P / START</b></div>';
 
 function setTxt(id, t) { const e = document.getElementById(id); if (e) e.textContent = t; }
 function setHTML(id, h) { const e = document.getElementById(id); if (e) e.innerHTML = h; }
@@ -520,7 +520,7 @@ function buildResultsView() {
         right1: fmt(playerFinishTime),
         right2: ship.bestLap && ship.bestLap <= best ? 'NEW RECORD' : `BEST LAP ${fmt(ship.bestLap)}`,
       }],
-      footer: 'ENTER — AGAIN &nbsp;·&nbsp; ESC — MENU',
+      footer: 'ENTER — AGAIN &nbsp;·&nbsp; &#9003; — MENU',
     };
   }
   // Real-racing reveal: only show drivers who have ACTUALLY crossed the line
@@ -535,7 +535,7 @@ function buildResultsView() {
     ...(champ.active ? { right2: `+${CHAMP_PTS[i] ?? 0}` } : {}),
   }));
   const allIn = finished.length >= total;
-  const advance = champ.active ? 'ENTER — STANDINGS' : 'ENTER — RACE AGAIN &nbsp;·&nbsp; ESC — MENU';
+  const advance = champ.active ? 'ENTER — STANDINGS' : 'ENTER — RACE AGAIN &nbsp;·&nbsp; &#9003; — MENU';
   return {
     tag: champ.active
       ? `CHAMPIONSHIP · ROUND ${champ.round + 1}/${TRACKS.length} · ${trackDef.name.toUpperCase()}`
@@ -1196,7 +1196,7 @@ function beginRebind(idx) {
   rows.forEach((r, i) => r.classList.toggle('binding', i === idx));
   input.beginCapture((code) => {
     closeRebind();
-    if (code === 'Escape') { audio.uiMove(); return; }       // silent cancel
+    if (code === 'Backspace') { audio.uiMove(); return; }     // silent cancel (NOT Escape — it exits fullscreen)
     if (input.isReserved(code)) { audio.uiMove(); renderControlsList(); return; }
     input.setBinding(action.id, code);                       // clears it elsewhere
     audio.uiSelect();
@@ -1330,8 +1330,8 @@ function applyPauseKeys() {
   if (input.consumeAction('pause')) resumeRace();  // the pause key toggles off
   else if (input.consume('Enter')) confirmPause();
   // Backspace is the reliable "back" — Escape is hijacked by the browser to
-  // leave fullscreen, so it can't be depended on (gamepad B emits Backspace too).
-  else if (input.consume('Backspace') || input.consume('Escape')) backPause();
+  // leave fullscreen, so we never use it (gamepad B emits Backspace too).
+  else if (input.consume('Backspace')) backPause();
   if (paused) pauseMenu.render(audio.sfxVolume, !!document.fullscreenElement);
 }
 
@@ -1349,24 +1349,25 @@ function handleKeys() {
     return;
   }
 
-  // The pause menu owns all input while open; otherwise Esc or P opens it mid-race.
+  // The pause menu owns all input while open; otherwise P (or gamepad Start) opens
+  // it mid-race. NOT Escape — the browser steals it to leave fullscreen.
   if (paused) { applyPauseKeys(); return; }
-  if (state === 'race' && (input.consume('Escape') || input.consumeAction('pause'))) {
+  if (state === 'race' && input.consumeAction('pause')) {
     openPause();
     return;
   }
 
   if (state === 'attract') {
     // The console menu owns all attract input (nav up/down, enter, edit, back).
-    for (const code of ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS', 'ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD', 'Enter', 'Backspace', 'Escape']) {
+    for (const code of ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS', 'ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD', 'Enter', 'Backspace']) {
       if (input.consume(code)) applyMenuKey(code);
     }
     return;
   }
   if (input.consume('Enter')) onEnter();
-  // Back out to the menu from results/finished — Esc (keyboard) or Backspace
-  // (gamepad B). NOT in race (there you pause with Start), NOT attract (menu owns it).
-  if ((input.consume('Escape') || input.consume('Backspace')) && state !== 'attract' && state !== 'race') onEscape();
+  // Back out to the menu from results/finished — Backspace (keyboard) or gamepad B
+  // (also Backspace). NOT in race (there you pause with Start), NOT attract (menu owns it).
+  if (input.consume('Backspace') && state !== 'attract' && state !== 'race') onEscape();
   if (input.consumeAction('respawn') && state === 'race') {
     ship.d = 0; ship.vd = 0; ship.v = Math.min(ship.v, 15);
     ship.boostTimer = 0;
