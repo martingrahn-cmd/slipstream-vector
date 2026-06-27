@@ -233,9 +233,10 @@ function ramp(value, target, dt, rise, release) {
 const NAV_DELAY = 0.40;   // s a direction is held before it starts repeating
 const NAV_REPEAT = 0.12;  // s between repeats
 // Standard-mapping button index -> the keyboard code it stands in for.
-// 0=A 9=Start -> confirm, 1=B -> back, 2=X -> respawn, 8=Select -> pause.
+// 0=A -> confirm, 9=Start/8=Select -> PAUSE, 1=B -> back (Backspace, NOT a
+// pause-in-race), 2=X -> respawn. Console convention: Start pauses, B cancels.
 // Respawn/pause emit Pad: tokens (not key codes) so they survive key rebinding.
-const GP_ACTIONS = [[0, 'Enter'], [9, 'Enter'], [1, 'Escape'], [2, 'Pad:respawn'], [8, 'Pad:pause']];
+const GP_ACTIONS = [[0, 'Enter'], [9, 'Pad:pause'], [1, 'Backspace'], [2, 'Pad:respawn'], [8, 'Pad:pause']];
 
 function deadzone(v, z) {
   const a = Math.abs(v);

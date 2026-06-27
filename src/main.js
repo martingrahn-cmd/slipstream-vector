@@ -424,7 +424,8 @@ function updateMenu() {
   for (const id of ['menu-difficulty', 's-diff']) setHTML(id, diffHTML);
   for (const id of ['menu-track', 't-track']) setTxt(id, trackDef.name);
   const lockEl = document.getElementById('menu-class-lock');
-  const lockHint = selection.classIdx >= unlocked && unlocked < CLASSES.length - 1 ? `WIN ${CLASSES[unlocked].name} CUP` : '';
+  // The lock hint only applies to Championship now (Single/TT pick any class).
+  const lockHint = selection.mode === 0 && selection.classIdx >= unlocked && unlocked < CLASSES.length - 1 ? `WIN ${CLASSES[unlocked].name} CUP` : '';
   if (lockEl) { lockEl.textContent = lockHint; lockEl.classList.toggle('hidden', !lockHint); }
 
   setTxt('menu-team', team.fullName.toUpperCase());
@@ -689,7 +690,6 @@ juice.on('boost', ({ pad } = {}) => {
     // First-race tip: name the boost pad the moment the player first hits one.
     if (onbThisRace && !onbBoostShown) {
       onbBoostShown = true;
-      onbAirbrakeT = -1; // a pad came first — drop the queued airbrake tip so they don't collide
       hud.flashCenter('BOOST PAD — HOLD THROUGH IT', 1500);
     }
   }
@@ -752,7 +752,6 @@ let paused = false;
 // sv-onboarded; reuses hud.flashCenter, so it respects reduced-motion already.
 let onboarding = localStorage.getItem('sv-onboarded') !== '1';
 let onbThisRace = false;   // true only during the genuine first race
-let onbAirbrakeT = -1;     // delay before the airbrake tip fires after GO
 let onbBoostShown = false; // the boost-pad tip fires once, on the first pad
 
 function startCountdown() {
@@ -790,6 +789,12 @@ function startCountdown() {
     : selection.mode === 2
       ? `TIME TRIAL · ${clsName} · ${trackDef.name.toUpperCase()}`
       : `${clsName} · ${trackDef.name.toUpperCase()}`);
+  // First race: teach the airbrake during the calm countdown (ship held at the
+  // line), not as a flash mid-corner where a new player can't read it.
+  if (onboarding) {
+    const ak = input.bindingCodes('airbrake').map(keyLabel)[0] || 'SHIFT';
+    hud.setSub(`NEW PILOT? HOLD ${ak} TO AIRBRAKE — DRIFT THE TIGHT CORNERS`);
+  }
 }
 let lastCountN = -1;
 
@@ -931,7 +936,7 @@ function tick(now) {
         if (onboarding) {
           onboarding = false;
           try { localStorage.setItem('sv-onboarded', '1'); } catch (e) { /* ignore */ }
-          onbAirbrakeT = 2.4; onbBoostShown = false; // fire after the launch banner clears
+          onbBoostShown = false; // the boost-pad tip can still fire once on this first race
         }
       } else if (n !== lastCountN) {
         lastCountN = n;
@@ -956,14 +961,6 @@ function tick(now) {
     if (launchMsg) {
       launchMsgT -= realDt;
       if (launchMsgT <= 0) { hud.flashCenter(launchMsg, 1100); launchMsg = null; }
-    }
-    // First-race tip: teach the airbrake once the launch banner has cleared.
-    if (onbThisRace && onbAirbrakeT > 0) {
-      onbAirbrakeT -= realDt;
-      if (onbAirbrakeT <= 0) {
-        const ak = input.bindingCodes('airbrake').map(keyLabel)[0] || 'SHIFT';
-        hud.flashCenter(`HOLD ${ak} — AIRBRAKE TO DRIFT TIGHT CORNERS`, 2000);
-      }
     }
   } else if (state === 'finished') {
     simInput = NULL_INPUT; // coast over the line
@@ -1088,7 +1085,11 @@ function editRow(row, dir) {
   if (row === 'track') {
     if (selection.mode !== 0) { trackIndex = n(TRACKS.length, trackIndex, dir); buildWorld(trackIndex); }
   } else if (row === 'class') {
-    selection.classIdx = Math.max(0, Math.min(unlockedClasses(), selection.classIdx + dir));
+    // Championship gates class to what you've unlocked (progression); Single/TT
+    // let you pick any class — free play. The unlock ladder still only advances
+    // by winning cups, so Championship keeps its purpose.
+    const maxCls = selection.mode === 0 ? unlockedClasses() : CLASSES.length - 1;
+    selection.classIdx = Math.max(0, Math.min(maxCls, selection.classIdx + dir));
     buildField();
   } else if (row === 'difficulty') {
     selection.difficulty = n(DIFFICULTIES.length, selection.difficulty, dir);
@@ -1123,7 +1124,11 @@ function editRow(row, dir) {
 // Start the race for the current selection (mode set on section entry).
 function startRace() {
   if (selection.mode === 0) {
-    champ.active = true; champ.round = 0; champ.done = 0; champ.classIndex = selection.classIdx;
+    champ.active = true; champ.round = 0; champ.done = 0;
+    // Championship is gated by the unlock ladder — clamp here so a class picked
+    // freely in Single/TT (shared selection.classIdx) can't leak into a cup.
+    selection.classIdx = Math.min(selection.classIdx, unlockedClasses());
+    champ.classIndex = selection.classIdx;
     champ.entry = { team: selection.team, pilot: selection.pilot };
     champ.unlockMsg = null; champ.points.clear();
     saveChamp();                       // overwrite any stale cup so a reload can't load the old one
@@ -1189,6 +1194,10 @@ function onSectionEnter(sec) {
         selection.team = clampInt(String(saved.entry.team), TEAMS.length);
         selection.pilot = saved.entry.pilot & 1;
       }
+    } else {
+      // No cup in progress: gate the class to the unlock ladder, so a class
+      // picked freely in Single/TT doesn't carry into a fresh championship.
+      selection.classIdx = Math.min(selection.classIdx, unlockedClasses());
     }
     const previewIdx = saved ? saved.done : 0;
     if (trackIndex !== previewIdx) { trackIndex = previewIdx; buildWorld(previewIdx); } else buildField();
@@ -1299,7 +1308,7 @@ function applyPauseKeys() {
   if (input.consumeAction('pause')) resumeRace();  // the pause key toggles off
   else if (input.consume('Enter')) confirmPause();
   // Backspace is the reliable "back" — Escape is hijacked by the browser to
-  // leave fullscreen, so it can't be depended on (gamepad B maps to Escape too).
+  // leave fullscreen, so it can't be depended on (gamepad B emits Backspace too).
   else if (input.consume('Backspace') || input.consume('Escape')) backPause();
   if (paused) pauseMenu.render(audio.sfxVolume, !!document.fullscreenElement);
 }
@@ -1333,7 +1342,9 @@ function handleKeys() {
     return;
   }
   if (input.consume('Enter')) onEnter();
-  if (input.consume('Escape') && state !== 'attract') onEscape();
+  // Back out to the menu from results/finished — Esc (keyboard) or Backspace
+  // (gamepad B). NOT in race (there you pause with Start), NOT attract (menu owns it).
+  if ((input.consume('Escape') || input.consume('Backspace')) && state !== 'attract' && state !== 'race') onEscape();
   if (input.consumeAction('respawn') && state === 'race') {
     ship.d = 0; ship.vd = 0; ship.v = Math.min(ship.v, 15);
     ship.boostTimer = 0;

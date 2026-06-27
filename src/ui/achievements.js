@@ -151,10 +151,12 @@ export class Achievements {
       const got = items.filter((a) => this.unlocked[a.id]).length;
       const cards = items.map((a) => {
         const on = this.unlocked[a.id];
+        // Name + description always show (so locked trophies read as goals);
+        // the lock icon + dimmed 'on'-less card is what marks it unearned.
         return `<div class="trophy-card${on ? ' on' : ''}">
             <div class="tc-icon">${on ? a.icon : '🔒'}</div>
-            <div class="tc-name">${on ? a.name : '— — —'}</div>
-            <div class="tc-desc">${on ? a.desc : 'Locked'}</div>
+            <div class="tc-name">${a.name}</div>
+            <div class="tc-desc">${a.desc}</div>
           </div>`;
       }).join('');
       return `<div class="trophy-tier-head" style="color:${TIERS[tier].color}">
