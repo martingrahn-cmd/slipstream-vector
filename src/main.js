@@ -10,6 +10,7 @@ import { buildTrackMesh } from './track/trackMesh.js';
 import { buildScenery } from './track/scenery.js';
 import { ShipPhysics } from './ship/shipPhysics.js';
 import { ShipVisual } from './ship/shipVisual.js';
+import { AiDriver } from './ship/aiDriver.js';
 import { CameraRig } from './fx/cameraRig.js';
 import { Juice } from './fx/juice.js';
 import { Sparks, ExhaustTrails } from './fx/particles.js';
@@ -745,6 +746,10 @@ let playerFinishTime = null; // frozen at the line; the live results reuse it
 let resultsRefreshT = 0;
 let lastFinCount = -1;
 let showcaseFocus = null; // the ship the post-race broadcast cam is following (hysteresis)
+// Post-race: an AI takes the player's wheel too, so its ship keeps racing the
+// line (and boosting on pads) instead of standing still. Rebuilt per spline.
+let postRaceDriver = null;
+const POSTRACE_SKILL = { corner: 1.0, line: 0.92, boost: 0.6 };
 let debugCam = false;
 let paused = false;
 
@@ -967,7 +972,11 @@ function tick(now) {
       if (launchMsgT <= 0) { hud.flashCenter(launchMsg, 1100); launchMsg = null; }
     }
   } else if (state === 'finished') {
-    simInput = NULL_INPUT; // the player coasts to a stop; the AI field races on
+    // The player ship keeps racing too (auto-driven), so it joins the field and
+    // boosts on pads instead of standing still. The lap guard keeps its finish
+    // time frozen even though it keeps crossing the line.
+    if (!postRaceDriver || postRaceDriver.sp !== spline) postRaceDriver = new AiDriver(spline, POSTRACE_SKILL, 7);
+    simInput = postRaceDriver.update(realDt, ship);
     // The rest of the field is still racing — refresh the board the moment
     // anyone crosses (and on a slow heartbeat for the progress ordering).
     resultsRefreshT += realDt;
@@ -1008,7 +1017,10 @@ function tick(now) {
 
   // Visuals.
   const sn = ship.speedNorm;
-  shipVisual.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice.boostFactor);
+  // Lean the hull from the live input in race, and from the post-race AI's input
+  // while the ship auto-races the finish, so it still banks into corners.
+  const visInput = state === 'race' ? input : (state === 'finished' ? simInput : NULL_INPUT);
+  shipVisual.update(dt, ship, visInput, juice.boostFactor);
   if (ghost) {
     const ghosting = state === 'race' && selection.mode === 2;
     if (ghosting) ghost.sample(ship.lapTime, ship.s, ship.d, ship.h); // record this lap
