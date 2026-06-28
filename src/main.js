@@ -18,7 +18,10 @@ import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
 import { Hud, fmt } from './ui/hud.js';
 import { Minimap } from './ui/minimap.js';
-import { Input, NULL_INPUT, REBINDABLE, keyLabel } from './core/input.js';
+import { Input, NULL_INPUT, REBINDABLE, PAD_MENU, keyLabel, padLabel } from './core/input.js';
+
+// CONTROLS rows: the keyboard-rebindable actions, then the pad-only menu binds.
+const CTL_ROWS = [...REBINDABLE, ...PAD_MENU];
 import { AudioEngine } from './core/audio.js';
 import { Race } from './race.js';
 import { Menu, drawThumb, drawProfile, bar, hex } from './ui/menu.js';
@@ -434,13 +437,17 @@ function renderRecordsList() {
 
 function renderControlsList() {
   const list = document.getElementById('ctl-list'); if (!list) return;
-  const rows = REBINDABLE.map((a, i) => {
-    const keys = input.bindingCodes(a.id).map(keyLabel).join(' / ') || '—';
-    return `<div class="rec-row kb-row" data-i="${i}"><span class="rt">${a.label}</span><span class="leader"></span><span class="kb-key">${keys}</span></div>`;
+  const rows = CTL_ROWS.map((a, i) => {
+    // Keyboard cell: editable for driving/actions, fixed+dim for the menu binds.
+    const kb = a.kbFixed
+      ? `<span class="kb-key fixed">${keyLabel(a.kbFixed)}</span>`
+      : `<span class="kb-key">${input.bindingCodes(a.id).map(keyLabel).join(' / ') || '—'}</span>`;
+    const pad = input.padBindingDescs(a.id).map((d) => padLabel(d, input.padKind)).join(' / ') || '—';
+    return `<div class="rec-row kb-row" data-i="${i}"><span class="rt">${a.label}</span><span class="leader"></span>${kb}<span class="pad-key">${pad}</span></div>`;
   });
-  rows.push(`<div class="rec-row kb-reset" data-i="${REBINDABLE.length}"><span class="rt">RESET TO DEFAULTS</span><span class="rv">&#8635;</span></div>`);
+  rows.push(`<div class="rec-row kb-reset" data-i="${CTL_ROWS.length}"><span class="rt">RESET TO DEFAULTS</span><span class="rv">&#8635;</span></div>`);
   list.innerHTML = rows.join('');
-  menu.ctlCount = REBINDABLE.length + 1;
+  menu.ctlCount = CTL_ROWS.length + 1;
   menu._applyCtlSel();
 }
 
@@ -948,6 +955,8 @@ function tick(now) {
     // Repaint the boards that bake glyphs in (results / standings / podium sub).
     if (state === 'finished') hud.showResults(finishedView === 'standings' ? buildStandingsView() : buildResultsView());
     else if (state === 'podium') { const sub = podiumTitleEl.querySelector('.pt-sub'); if (sub) sub.innerHTML = `${glyph('confirm')} — STANDINGS`; }
+    // CONTROLS list bakes pad-family glyphs into the PAD column — repaint it too.
+    if (menu.sec === 'controls' && menu.view === 'section' && !input.capturing()) renderControlsList();
   }
   if (paused) return;
   if (state === 'podium') { podiumScene.update(realDt); return; }
@@ -1239,26 +1248,34 @@ function closeRebind() {
   document.querySelectorAll('#ctl-list .kb-row.binding').forEach((r) => r.classList.remove('binding'));
 }
 
-// Arm a key capture for the action at `idx` (or reset, on the last row).
+// Arm a capture for the action at `idx` (or reset, on the last row). Driving/
+// action rows take a key OR a pad input; the menu confirm/back rows are pad-only
+// (their keyboard side is fixed), so they capture a button/axis exclusively.
 function beginRebind(idx) {
   closeRebind();
-  if (idx >= REBINDABLE.length) {        // the RESET TO DEFAULTS row
+  if (idx >= CTL_ROWS.length) {          // the RESET TO DEFAULTS row
     input.resetBindings(); renderControlsList(); audio.uiSelect();
     return;
   }
-  const action = REBINDABLE[idx];
+  const action = CTL_ROWS[idx];
+  const padOnly = !!action.kbFixed;
   setTxt('rebind-action', `BIND: ${action.label}`);
+  setTxt('rebind-prompt', padOnly ? 'PRESS A BUTTON' : 'PRESS A KEY OR BUTTON');
   document.getElementById('rebind-capture')?.classList.remove('hidden');
   const rows = document.querySelectorAll('#ctl-list .kb-row');
   rows.forEach((r, i) => r.classList.toggle('binding', i === idx));
-  input.beginCapture((code) => {
+  input.beginCapture((bind) => {
     closeRebind();
-    if (code === 'Backspace') { audio.uiMove(); return; }     // silent cancel (NOT Escape — it exits fullscreen)
-    if (input.isReserved(code)) { audio.uiMove(); renderControlsList(); return; }
-    input.setBinding(action.id, code);                       // clears it elsewhere
+    if (typeof bind === 'string') {                          // a keyboard code
+      if (bind === 'Backspace' || bind === 'Escape') { audio.uiMove(); return; } // silent cancel
+      if (input.isReserved(bind)) { audio.uiMove(); renderControlsList(); return; }
+      input.setBinding(action.id, bind);                     // clears it elsewhere
+    } else {
+      input.setPadBinding(action.id, bind);                  // a pad descriptor
+    }
     audio.uiSelect();
     renderControlsList();
-  });
+  }, padOnly ? 'pad' : 'any');
 }
 
 // Entering a section sets the mode (race sections) and resizes the garage stage.

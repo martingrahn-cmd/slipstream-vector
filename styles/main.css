@@ -956,8 +956,19 @@ body.reduced-motion .section.active, body.reduced-motion .section.active .boot {
 
 /* ---- CONTROLS: key-rebinding rows + capture overlay ---- */
 .kb-row .leader { flex: 1; margin: 0 12px; align-self: center; height: 0; border-bottom: 1px dotted rgba(0, 240, 255, 0.22); }
-.kb-row .kb-key { font-family: 'Orbitron', sans-serif; font-size: 12px; color: var(--cyan); padding: 2px 9px; border: 1px solid rgba(0, 240, 255, 0.4); background: rgba(0, 240, 255, 0.07); letter-spacing: 0.04em; white-space: nowrap; }
-.kb-row.binding .kb-key { color: var(--hot); border-color: var(--hot); background: rgba(255, 210, 63, 0.09); animation: pulse 1.4s ease-in-out infinite; }
+.kb-row .kb-key { font-family: 'Orbitron', sans-serif; font-size: 12px; color: var(--cyan); padding: 2px 9px; border: 1px solid rgba(0, 240, 255, 0.4); background: rgba(0, 240, 255, 0.07); letter-spacing: 0.04em; white-space: nowrap; min-width: 84px; text-align: center; }
+.kb-row .kb-key.fixed { color: rgba(0, 240, 255, 0.5); border-style: dashed; border-color: rgba(0, 240, 255, 0.22); background: transparent; } /* menu confirm/back: kb side not rebindable */
+.kb-row .pad-key { font-family: 'Orbitron', sans-serif; font-size: 12px; color: var(--magenta); padding: 2px 9px; margin-left: 8px; border: 1px solid rgba(255, 64, 200, 0.4); background: rgba(255, 64, 200, 0.07); letter-spacing: 0.04em; white-space: nowrap; min-width: 84px; text-align: center; }
+.kb-row.binding .kb-key:not(.fixed), .kb-row.binding .pad-key { color: var(--hot); border-color: var(--hot); background: rgba(255, 210, 63, 0.09); animation: pulse 1.4s ease-in-out infinite; }
+/* Column header aligned over the KEYBOARD / GAMEPAD cells. */
+.kb-head { display: flex; align-items: center; padding: 2px 10px 6px; opacity: 0.55; }
+.kb-head .rt { font-size: 14px; }
+.kb-head .leader { flex: 1; margin: 0 12px; height: 0; }
+.kb-head .kb-key, .kb-head .pad-key { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.16em; min-width: 84px; text-align: center; }
+.kb-head .kb-key { color: var(--cyan); }
+.kb-head .pad-key { color: var(--magenta); margin-left: 8px; }
+.legend .lg-row.sub { display: block; font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 11.5px; line-height: 1.5; letter-spacing: 0.02em; color: rgba(223, 230, 255, 0.66); margin-bottom: 7px; }
+.legend .lg-row.sub i { color: var(--cyan); font-style: normal; }
 .kb-reset { margin-top: 8px; }
 .kb-reset .rt { color: var(--magenta); letter-spacing: 0.16em; }
 .kb-reset .rv { color: var(--magenta); }
@@ -968,7 +979,7 @@ body.reduced-motion .section.active, body.reduced-motion .section.active .boot {
 .kb-capture .prompt { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: 0.4em; color: #fff; text-shadow: 0 0 22px rgba(0, 240, 255, 0.7); animation: pressPulse 1.25s ease-in-out infinite; }
 .kb-capture .cancel-hint { font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 0.14em; font-size: 12px; color: rgba(223, 230, 255, 0.7); }
 .kb-capture .cancel-hint b { color: var(--cyan); }
-body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-capture .prompt { animation: none; }
+body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-row.binding .pad-key, body.reduced-motion .kb-capture .prompt { animation: none; }
 
 /* ---- responsive fallbacks (the console targets ~1280; degrade gracefully) ---- */
 @media (max-width: 1120px) {

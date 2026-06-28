@@ -155,7 +155,7 @@
         <section class="section" data-sec="controls">
           <div class="col mid">
             <div class="boot" data-boot="&gt;&gt; CONTROLS"></div>
-            <div class="opt-grp">KEYBOARD</div>
+            <div class="kb-head"><span class="rt"></span><span class="leader"></span><span class="kb-key">KEYBOARD</span><span class="pad-key">GAMEPAD</span></div>
             <div class="rec-list" id="ctl-list"></div>
           </div>
           <div class="col right">
@@ -164,21 +164,16 @@
               <div class="lg-row"><span>CANCEL</span><b>&#9003;</b></div>
               <div class="lg-row"><span>RESET</span><b>last row</b></div>
             </div></div>
-            <div class="opt-grp">GAMEPAD &middot; FIXED</div>
+            <div class="opt-grp">GAMEPAD</div>
             <div class="vp-frame"><div class="legend">
-              <div class="lg-row"><span>STEER</span><b>L-STICK / D-PAD</b></div>
-              <div class="lg-row"><span>THROTTLE</span><b>RT</b></div>
-              <div class="lg-row"><span>BRAKE</span><b>LT</b></div>
-              <div class="lg-row"><span>AIRBRAKE</span><b>LB / RB</b></div>
-              <div class="lg-row"><span>CONFIRM</span><b>A</b></div>
-              <div class="lg-row"><span>BACK</span><b>B</b></div>
-              <div class="lg-row"><span>RESPAWN</span><b>X</b></div>
-              <div class="lg-row"><span>PAUSE</span><b>START</b></div>
+              <div class="lg-row sub">Bind a row, then press the key <i>or</i> the controller button you want.</div>
+              <div class="lg-row sub">MENU CONFIRM / BACK are pad-only &mdash; bind them so a generic controller can navigate.</div>
+              <div class="lg-row sub">Steer/throttle/brake also accept a stick or trigger.</div>
             </div></div>
           </div>
           <div id="rebind-capture" class="kb-capture hidden">
             <div class="kb-cap-tag" id="rebind-action">BIND</div>
-            <div class="prompt">PRESS A KEY</div>
+            <div class="prompt" id="rebind-prompt">PRESS A KEY OR BUTTON</div>
             <div class="cancel-hint"><b>&#9003;</b> to cancel</div>
           </div>
         </section>
