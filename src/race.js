@@ -168,13 +168,13 @@ export class Race {
   }
 
   // Per-render-frame visuals.
-  updateVisuals(dt) {
+  updateVisuals(dt, camera) {
     for (const r of this.racers) {
       const boosting = r.phys.boostTimer > 0 ? 1 : 0;
       r.boostEnv += (boosting - r.boostEnv) * Math.min(1, 8 * dt);
       r.vis.update(dt, r.phys, r.driver.input, r.boostEnv);
     }
-    if (this.fxBatch) this.fxBatch.flush(); // push the frame's instance writes once
+    if (this.fxBatch) this.fxBatch.flush(camera); // push instance writes + billboard the glows
   }
 
   // 1-based position of the player and the full standings.

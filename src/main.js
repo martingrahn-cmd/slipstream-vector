@@ -1067,7 +1067,7 @@ function tick(now) {
     ghost.update(ship.lapTime, ghosting);                              // replay the best behind/ahead
     hud.setGhostDelta(ghosting ? ghost.deltaAt(ship.s, ship.lapTime) : null);
   }
-  race.updateVisuals(dt);
+  race.updateVisuals(dt, camera);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
   // (Ground dust removed — it read as ugly golden cube/squares behind the ship.)

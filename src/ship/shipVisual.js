@@ -69,18 +69,20 @@ export class ShipVisual {
         this.cores.push(core);
       }
     }
-    // Engine glow sprites.
+    // Engine glow sprites (batched AI ships write instanced glows to fxBatch instead).
     this.glows = [];
-    const glowTex = makeGlowTexture();
-    for (const n of this.nozzles) {
-      const spr = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: glowTex, color: C.ENGINE, transparent: true, opacity: 0.85,
-        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      }));
-      spr.position.copy(n).add(new THREE.Vector3(0, 0, 0.15));
-      spr.scale.setScalar(1.05);
-      this.lean.add(spr);
-      this.glows.push(spr);
+    if (!this.fxBatch) {
+      const glowTex = makeGlowTexture();
+      for (const n of this.nozzles) {
+        const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTex, color: C.ENGINE, transparent: true, opacity: 0.85,
+          blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+        }));
+        spr.position.copy(n).add(new THREE.Vector3(0, 0, 0.15));
+        spr.scale.setScalar(1.05);
+        this.lean.add(spr);
+        this.glows.push(spr);
+      }
     }
 
     // Blob shadow on the track surface.
@@ -229,10 +231,12 @@ export class ShipVisual {
     if (this.fxBatch) {
       this.lean.updateWorldMatrix(true, false);
       const coreOp = Math.min(0.85, (0.28 + 0.34 * throttleAmt + 0.4 * boostFactor) * flick);
+      const glowSc = (1.1 + throttleAmt * 0.5 + boostFactor * 1.2) * flick;
       for (let i = 0; i < this.nozzles.length; i++) {
         this.fxBatch.write(this.fxBase + i, this.lean.matrixWorld, this.nozzles[i],
           1 + boostFactor * 0.6, flameLen, this._engineCol,
           1 + boostFactor * 0.5, flameLen * 0.62, coreOp);
+        this.fxBatch.writeGlow(this.fxBase + i, this.lean.matrixWorld, this.nozzles[i], glowSc, this._engineCol);
       }
     }
 
@@ -300,13 +304,14 @@ export class ShipVisual {
   }
 }
 
-// Batches the AI field's engine flames + cores into two InstancedMeshes instead
-// of 4 cone meshes per ship (7 ships -> 28 draws -> 2). Each batched ShipVisual
-// claims a slot range and writes its per-nozzle world transform + colour every
-// frame, so the result is identical to the per-ship meshes: same cone geometry,
-// same additive blend; flame colour via instanceColor, core opacity folded into
-// the instance colour (additive: colour·opacity == per-ship opacity). Glows stay
-// per-ship sprites; the player ship is never batched.
+// Batches the AI field's engine flames + cores + glows into three InstancedMeshes
+// instead of ~6 meshes/sprites per ship (7 ships: 28 cone draws + 14 glow sprites
+// -> 3). Each batched ShipVisual claims a slot range and writes its per-nozzle
+// transform + colour every frame, identical to the per-ship versions: same cone
+// geometry + additive blend (flame colour via instanceColor, core opacity folded
+// into the colour), and the glows are camera-billboarded quads (same glow texture,
+// additive, opacity 0.85, colour via instanceColor) — like the old Sprites. The
+// player ship is never batched.
 const _IDQ = new THREE.Quaternion();
 const _CORE_BASE = new THREE.Color(0xcdf6ff);
 export class EngineFXBatch {
@@ -323,20 +328,27 @@ export class EngineFXBatch {
     });
     this.flames = new THREE.InstancedMesh(mkCone(0.18), mkMat(0.55), capacity);
     this.cores = new THREE.InstancedMesh(mkCone(0.085), mkMat(1.0), capacity);
+    // Instanced glow quads (replace the per-ship Sprites); billboarded in flush().
+    this.glowTex = makeGlowTexture();
+    const glowMat = mkMat(0.85); glowMat.map = this.glowTex; glowMat.side = THREE.DoubleSide;
+    this.glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMat, capacity);
     const zero = new THREE.Matrix4().makeScale(0, 0, 0); // unwritten slots are invisible
-    for (const im of [this.flames, this.cores]) {
+    for (const im of [this.flames, this.cores, this.glows]) {
       im.frustumCulled = false;                          // the field spans the track; no shared bound
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      im.renderOrder = 1;                                // match the per-ship glow mesh order
+      im.renderOrder = 1;
       for (let i = 0; i < capacity; i++) im.setMatrixAt(i, zero);
       im.count = 0;                                      // grows as ships claim slots
       scene.add(im);
     }
+    this.glowPos = []; this.glowScale = new Float32Array(capacity);
+    for (let i = 0; i < capacity; i++) this.glowPos.push(new THREE.Vector3());
     this._m = new THREE.Matrix4();
     this._s = new THREE.Vector3();
     this._c = new THREE.Color();
+    this._gv = new THREE.Vector3();
   }
-  claim(n) { const base = this.used; this.used += n; this.flames.count = this.used; this.cores.count = this.used; return base; }
+  claim(n) { const base = this.used; this.used += n; this.flames.count = this.cores.count = this.glows.count = this.used; return base; }
   // Write one nozzle slot. leanWorld: the ship's lean matrixWorld this frame.
   write(slot, leanWorld, nozzle, flameXY, flameLen, flameCol, coreXY, coreLen, coreOpacity) {
     this._m.compose(nozzle, _IDQ, this._s.set(flameXY, flameXY, flameLen)).premultiply(leanWorld);
@@ -346,13 +358,29 @@ export class EngineFXBatch {
     this.cores.setMatrixAt(slot, this._m);
     this.cores.setColorAt(slot, this._c.copy(_CORE_BASE).multiplyScalar(coreOpacity));
   }
-  flush() {
-    this.flames.instanceMatrix.needsUpdate = true; this.cores.instanceMatrix.needsUpdate = true;
-    if (this.flames.instanceColor) this.flames.instanceColor.needsUpdate = true;
-    if (this.cores.instanceColor) this.cores.instanceColor.needsUpdate = true;
+  // Glow billboard data for a nozzle (the matrix is composed in flush() with the
+  // camera orientation so the quad faces the screen, exactly like a Sprite).
+  writeGlow(slot, leanWorld, nozzle, scale, color) {
+    this._gv.copy(nozzle); this._gv.z += 0.15; this._gv.applyMatrix4(leanWorld);
+    this.glowPos[slot].copy(this._gv);
+    this.glowScale[slot] = scale;
+    this.glows.setColorAt(slot, color);
+  }
+  // camera: orient the glow quads to face it (view-plane billboard, like Sprites).
+  flush(camera) {
+    const q = camera ? camera.quaternion : _IDQ;
+    for (let i = 0; i < this.used; i++) {
+      this._m.compose(this.glowPos[i], q, this._s.setScalar(this.glowScale[i]));
+      this.glows.setMatrixAt(i, this._m);
+    }
+    for (const im of [this.flames, this.cores, this.glows]) {
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
   }
   dispose(scene) {
-    for (const im of [this.flames, this.cores]) { scene.remove(im); im.geometry.dispose(); im.material.dispose(); im.dispose(); }
+    for (const im of [this.flames, this.cores, this.glows]) { scene.remove(im); im.geometry.dispose(); im.material.dispose(); im.dispose(); }
+    this.glowTex.dispose();
   }
 }
 
