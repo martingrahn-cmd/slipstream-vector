@@ -41,6 +41,10 @@ export class Input {
 
     // Gamepad mirror state — polled each update(), never event-driven.
     this.gamepadActive = false;
+    // Last input device that was actually USED (not just connected) + which kind
+    // of pad — drives the on-screen button prompts (keyboard vs Xbox vs PS).
+    this.lastDevice = 'kb';   // 'kb' | 'pad'
+    this.padKind = 'xbox';    // 'xbox' | 'ps' (generic falls back to xbox)
     this._gp = { steer: 0, throttle: 0, brake: 0, airbrake: false };
     this._navHeld = { up: 0, down: 0, left: 0, right: 0 };
     this._prevNav = { up: false, down: false, left: false, right: false };
@@ -59,6 +63,7 @@ export class Input {
         return;
       }
       if (e.repeat) return;
+      this.lastDevice = 'kb'; // a real keypress → show keyboard prompts
       this.keys.add(e.code);
       this.pressed.add(e.code);
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Backspace'].includes(e.code)) {
@@ -218,7 +223,23 @@ export class Input {
       if (now && !this._prevBtn[i]) this.pressed.add(c);
       this._prevBtn[i] = now;
     }
+
+    // Did the pad actually get USED this frame? If so, switch the prompts to it
+    // and note which kind it is (so we show Xbox vs PlayStation glyphs).
+    const used = g.airbrake || g.throttle > 0.15 || g.brake > 0.15 || Math.abs(g.steer) > 0.3 // 0.3 floor: a deliberate steer, never stick drift (even if deadzone is 0)
+      || nav.up || nav.down || nav.left || nav.right
+      || GP_ACTIONS.some(([i]) => bp(i));
+    if (used) { this.lastDevice = 'pad'; this.padKind = detectPadKind(gp.id); }
   }
+}
+
+// Map a gamepad id to a glyph set. Sony pads (vendor 054c) show PlayStation
+// symbols; everything else falls back to the Xbox A/B/X/Y convention.
+function detectPadKind(id) {
+  const s = (id || '').toLowerCase();
+  if (s.includes('054c') || s.includes('dualsense') || s.includes('dualshock')
+    || s.includes('playstation') || s.includes('sony')) return 'ps';
+  return 'xbox';
 }
 
 function ramp(value, target, dt, rise, release) {

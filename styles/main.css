@@ -554,6 +554,17 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
   font-size: 12px; letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.4);
 }
+/* Input-sensitive button-prompt chips: keyboard key-cap, Xbox round button,
+   PlayStation symbol (the shapes read on their own, no border). */
+.kbtn {
+  display: inline-block; min-width: 1.5em; padding: 0 0.38em; margin: 0 0.12em;
+  border: 1px solid currentColor; border-radius: 5px;
+  font-family: 'Orbitron', monospace; font-weight: 700; font-size: 0.82em;
+  line-height: 1.55; text-align: center; vertical-align: middle; opacity: 0.92;
+}
+.kbtn.pad.xbox { min-width: 1.65em; border-radius: 50%; line-height: 1.5; }
+.kbtn.pad.ps { border: 0; min-width: 0; font-size: 1.0em; opacity: 1; }
+.kbtn.wide { border-radius: 6px; min-width: 0; } /* multi-char labels (D-PAD) stay a pill, not a stretched circle */
 /* Cards + footer bar share one width so the bar lines up under the cards. */
 #overlay .menu-body { display: flex; flex-direction: column; gap: 12px; }
 #overlay .menu-bar {

@@ -325,6 +325,37 @@ const CONTROLS_LEGEND = '<div class="lg-row"><span>STEER</span><b>&larr; &rarr; 
   + '<div class="lg-row"><span>RESPAWN</span><b>R / X</b></div>'
   + '<div class="lg-row"><span>PAUSE</span><b>P / START</b></div>';
 
+// Input-sensitive button prompts: the same action renders as a keyboard key, an
+// Xbox face button, or a PlayStation symbol depending on the last device used.
+const GLYPHS = {
+  confirm:  { kb: 'ENTER', xbox: 'A', ps: '&#10005;' },          // ✕
+  back:     { kb: '&#9003;', xbox: 'B', ps: '&#9675;' },         // ⌫ · ○
+  pause:    { kb: 'P', xbox: '&#9776;', ps: 'OPTIONS' },         // ☰
+  respawn:  { kb: 'R', xbox: 'X', ps: '&#9633;' },               // □
+  navigate: { kb: '&uarr;&darr;', xbox: 'D-PAD', ps: 'D-PAD' },
+  change:   { kb: '&larr;&rarr;', xbox: 'D-PAD', ps: 'D-PAD' },
+};
+function glyph(action) {
+  const set = GLYPHS[action]; if (!set) return '';
+  const pad = input.lastDevice === 'pad';
+  const dev = pad ? input.padKind : 'kb';
+  const label = set[dev] || set.kb;
+  const wide = !label.startsWith('&') && label.length > 1; // multi-char word (D-PAD) → pill, not a round button
+  return `<span class="kbtn ${pad ? `pad ${input.padKind}` : 'kb'}${wide ? ' wide' : ''}">${label}</span>`;
+}
+// Repaint the prompts that aren't rebuilt every frame (menu hint + title gate).
+function refreshPrompts() {
+  const hint = document.querySelector('.keys-hint');
+  if (hint) {
+    hint.innerHTML = `${glyph('navigate')} navigate &nbsp;&nbsp; ${glyph('confirm')} open &nbsp;&nbsp; `
+      + `${glyph('change')} change &nbsp;&nbsp; ${glyph('back')} back`
+      + (input.lastDevice === 'kb' ? ` &nbsp;&nbsp; <span class="kbtn kb">F</span> fullscreen` : '');
+  }
+  const intro = document.getElementById('intro-prompt');
+  if (intro) intro.innerHTML = `PRESS ${glyph('confirm')}`;
+}
+let _promptDev = '', _promptKind = ''; // last-rendered prompt state (repaint on change)
+
 function setTxt(id, t) { const e = document.getElementById(id); if (e) e.textContent = t; }
 function setHTML(id, h) { const e = document.getElementById(id); if (e) e.innerHTML = h; }
 
@@ -521,7 +552,7 @@ function buildResultsView() {
         right1: fmt(playerFinishTime),
         right2: ship.bestLap && ship.bestLap <= best ? 'NEW RECORD' : `BEST LAP ${fmt(ship.bestLap)}`,
       }],
-      footer: 'ENTER — AGAIN &nbsp;·&nbsp; &#9003; — MENU',
+      footer: `${glyph('confirm')} — AGAIN &nbsp;·&nbsp; ${glyph('back')} — MENU`,
     };
   }
   // Real-racing reveal: only show drivers who have ACTUALLY crossed the line
@@ -536,7 +567,7 @@ function buildResultsView() {
     ...(champ.active ? { right2: `+${CHAMP_PTS[i] ?? 0}` } : {}),
   }));
   const allIn = finished.length >= total;
-  const advance = champ.active ? 'ENTER — STANDINGS' : 'ENTER — RACE AGAIN &nbsp;·&nbsp; &#9003; — MENU';
+  const advance = champ.active ? `${glyph('confirm')} — STANDINGS` : `${glyph('confirm')} — RACE AGAIN &nbsp;·&nbsp; ${glyph('back')} — MENU`;
   return {
     tag: champ.active
       ? `CHAMPIONSHIP · ROUND ${champ.round + 1}/${TRACKS.length} · ${trackDef.name.toUpperCase()}`
@@ -579,8 +610,8 @@ function buildStandingsView() {
       right1: `${e.pts} PTS`,
     })),
     footer: last
-      ? (champ.unlockMsg ? `${champ.unlockMsg} — ENTER: MENU` : 'ENTER — MENU')
-      : `ENTER — ROUND ${champ.round + 2}/${TRACKS.length}`,
+      ? (champ.unlockMsg ? `${champ.unlockMsg} — ${glyph('confirm')} MENU` : `${glyph('confirm')} — MENU`)
+      : `${glyph('confirm')} — ROUND ${champ.round + 2}/${TRACKS.length}`,
   };
 }
 
@@ -648,7 +679,7 @@ function enterPodium() {
     `CHAMPIONSHIP · ${CLASSES[champ.classIndex].name} CLASS`;
   podiumTitleEl.querySelector('.pt-title').textContent =
     playerRank === 1 ? 'CHAMPION' : `P${playerRank} OVERALL`;
-  podiumTitleEl.querySelector('.pt-sub').textContent = 'ENTER — STANDINGS';
+  podiumTitleEl.querySelector('.pt-sub').innerHTML = `${glyph('confirm')} — STANDINGS`;
   podiumTitleEl.classList.remove('hidden');
   audio.championFanfare();
   if (playerRank <= 3) juice.addTrauma(0.12);
@@ -907,6 +938,15 @@ function tick(now) {
 
   input.update(realDt);
   handleKeys();
+  // Repaint button prompts when the player switches device (keyboard ↔ pad, or
+  // a different pad kind) — cheap, only fires on an actual change.
+  if (input.lastDevice !== _promptDev || input.padKind !== _promptKind) {
+    _promptDev = input.lastDevice; _promptKind = input.padKind;
+    refreshPrompts();
+    // Repaint the boards that bake glyphs in (results / standings / podium sub).
+    if (state === 'finished') hud.showResults(finishedView === 'standings' ? buildStandingsView() : buildResultsView());
+    else if (state === 'podium') { const sub = podiumTitleEl.querySelector('.pt-sub'); if (sub) sub.innerHTML = `${glyph('confirm')} — STANDINGS`; }
+  }
   if (paused) return;
   if (state === 'podium') { podiumScene.update(realDt); return; }
 
@@ -1625,6 +1665,8 @@ buildWorld(trackIndex);
 hud.showOverlay(true);
 applyReducedMotion();
 wireClicks();
+refreshPrompts(); // paint the initial (keyboard) button prompts before the first frame
+_promptDev = input.lastDevice; _promptKind = input.padKind; // seed so the first tick isn't a redundant repaint
 requestAnimationFrame((t) => { last = t; tick(t); });
 
 // Dev/debug hook: lets tooling (and tuning sessions) step the sim without
@@ -1669,7 +1711,7 @@ window.__game = {
     podiumTitleEl.className = rank === 1 ? 'champ' : '';
     podiumTitleEl.querySelector('.pt-tag').textContent = 'CHAMPIONSHIP · DEMO';
     podiumTitleEl.querySelector('.pt-title').textContent = rank === 1 ? 'CHAMPION' : `P${rank} OVERALL`;
-    podiumTitleEl.querySelector('.pt-sub').textContent = 'ENTER — STANDINGS';
+    podiumTitleEl.querySelector('.pt-sub').innerHTML = `${glyph('confirm')} — STANDINGS`;
     podiumTitleEl.classList.remove('hidden');
     audio.championFanfare();
     return 'podium demo, rank ' + rank;
