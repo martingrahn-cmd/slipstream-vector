@@ -829,7 +829,9 @@ function startCountdown() {
   // First race: teach the airbrake during the calm countdown (ship held at the
   // line), not as a flash mid-corner where a new player can't read it.
   if (onboarding) {
-    const ak = input.bindingCodes('airbrake').map(keyLabel)[0] || 'SHIFT';
+    const ak = input.lastDevice === 'pad'
+      ? (input.padKind === 'ps' ? 'L1 / R1' : 'LB / RB')   // gamepad airbrake = shoulder buttons
+      : (input.bindingCodes('airbrake').map(keyLabel)[0] || 'SHIFT');
     hud.setSub(`NEW PILOT? HOLD ${ak} TO AIRBRAKE — DRIFT THE TIGHT CORNERS`);
   }
 }
@@ -1114,7 +1116,7 @@ function tick(now) {
   // Post-race: drop the driving instruments (speed + boost) so the trackside
   // broadcast reads clean behind the bottom results board.
   document.body.classList.toggle('spectating', state === 'finished');
-  pauseBtn.classList.toggle('hidden', !(state === 'race' && !paused));
+  pauseBtn.classList.toggle('hidden', !((state === 'race' || state === 'countdown') && !paused));
   // Slipstream cue fades in with the draft (readable feedback for the tow).
   slipEl.style.opacity = state === 'race' ? Math.max(0, Math.min(1, (ship.draft - 0.25) / 0.4)) : 0;
   hud.update(realDt, ship, selection.mode === 2 ? 0 : TOTAL_LAPS); // TT: open-ended laps
@@ -1407,8 +1409,8 @@ function handleKeys() {
   // The pause menu owns all input while open; otherwise P (or gamepad Start) opens
   // it mid-race. NOT Escape — the browser steals it to leave fullscreen.
   if (paused) { applyPauseKeys(); return; }
-  if (state === 'race' && input.consumeAction('pause')) {
-    openPause();
+  if ((state === 'race' || state === 'countdown') && input.consumeAction('pause')) {
+    openPause(); // also during the countdown, so you can abort before GO
     return;
   }
 
@@ -1656,7 +1658,7 @@ function wireClicks() {
   });
 
   // The in-race pause button opens the menu without the P key.
-  pauseBtn.addEventListener('click', () => { if (state === 'race' && !paused) openPause(); });
+  pauseBtn.addEventListener('click', () => { if ((state === 'race' || state === 'countdown') && !paused) openPause(); });
 }
 
 // ------------------------------------------------------------------- boot
