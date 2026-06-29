@@ -719,6 +719,27 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
     ]), 0x4a3f66);
   }
 
+  // 23. PREMIUM high-poly detail (opaque parts): round turbine nacelles + a
+  // canopy dome. Baked into the hull like everything else → 0 extra draws, just
+  // more triangles (cheap on a fill-bound budget). Glow rings added to the glow
+  // set below. AI ships get it too when the flag is on — same draw count.
+  if (PREMIUM) {
+    const MTL = 0x2e3440; // dark machined metal, reads on every livery
+    const xf = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
+    for (const sx of [-1, 1]) {
+      const ex = sx * 1.05;
+      opaque.push([xf(new THREE.CylinderGeometry(0.27, 0.32, 0.52, 28, 1, true), ex, 0.06, 2.16, Math.PI / 2), MTL]); // nacelle shell
+      opaque.push([xf(new THREE.CylinderGeometry(0.20, 0.27, 0.16, 28, 1, true), ex, 0.06, 1.92, Math.PI / 2), MTL]); // flared intake
+      opaque.push([xf(new THREE.TorusGeometry(0.30, 0.045, 14, 40), ex, 0.06, 2.44), V.accent]);                       // bevel lip
+      opaque.push([xf(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 18), ex, 0.06, 2.30, Math.PI / 2), MTL]);            // turbine hub
+      for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; opaque.push([xf(new THREE.BoxGeometry(0.022, 0.18, 0.05), ex + Math.cos(a) * 0.135, 0.06 + Math.sin(a) * 0.135, 2.32, 0, 0, a), MTL]); } // blades
+      opaque.push([xf(new THREE.TorusGeometry(0.15, 0.012, 8, 32), ex, 0.06, 2.36), MTL]);                            // inner ring
+    }
+    const dome = new THREE.SphereGeometry(0.22, 36, 22, 0, Math.PI * 2, 0, Math.PI * 0.55);
+    dome.scale(0.9, 0.7, 1.5); dome.translate(0, 0.36, 0.2);
+    opaque.push([dome, C.SHIP_CANOPY]);
+  }
+
   const baked = opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false }));
   const hullGeo = mergeGeoms(baked);
   hullGeo.computeVertexNormals(); // flat per-face normals (non-indexed) for the rim
@@ -769,6 +790,17 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   glows.push(colorize(geomFrom([
     0, 0.31, -0.62, 0.11, 0.33, -0.30, -0.11, 0.33, -0.30,
   ]), C.ENGINE));
+
+  // PREMIUM high-poly detail (glow parts): the turbine's neon ring + core disc,
+  // folded into the glow set (C.ENGINE → re-tinted to the livery glow below).
+  if (PREMIUM) {
+    const xg = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
+    for (const sx of [-1, 1]) {
+      const ex = sx * 1.05;
+      glows.push(colorize(xg(new THREE.TorusGeometry(0.235, 0.03, 12, 40), ex, 0.06, 2.40).toNonIndexed(), C.ENGINE));
+      glows.push(colorize(xg(new THREE.CircleGeometry(0.18, 36), ex, 0.06, 2.45).toNonIndexed(), C.ENGINE));
+    }
+  }
 
   const glowMesh = new THREE.Mesh(mergeGeoms(glows), new THREE.MeshBasicMaterial({
     vertexColors: true, transparent: true, opacity: 0.9,
