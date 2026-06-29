@@ -1551,33 +1551,88 @@ function buildSearchlights(rng, spline, groundY) {
 // A skyline cluster beyond the mesas with glowing window strips piercing the
 // haze — the destination on the horizon.
 function buildCity(rng, groundY, cx, cz, cityAng) {
-  const dist = 620;
+  const dist = 600;
   const ccx = cx + Math.cos(cityAng) * dist;
   const ccz = cz + Math.sin(cityAng) * dist;
   const opa = [], glo = [];
   const cl = new THREE.Color(TUNING.COL.EDGE_L), cr = new THREE.Color(TUNING.COL.EDGE_R);
-  const n = 26;
+  // Window palette: mostly warm (lived-in offices) + a little neon. Weighted.
+  const WIN = [
+    [new THREE.Color(0xffb15a), 0.30], [new THREE.Color(0xff7e3c), 0.18], [new THREE.Color(0xffe6c0), 0.12],
+    [new THREE.Color(0xfff2d6), 0.08], [cl, 0.18], [cr, 0.14],
+  ];
+  const pickWin = () => { let r = rng(); for (const [c, w] of WIN) { r -= w; if (r <= 0) return c; } return WIN[0][0]; };
+  const beacon = [cr, cl, new THREE.Color(0xff3a3a)];
+
+  // A grid of lit window cells over the four faces of one tower; baked straight
+  // into a position+colour BufferGeometry (one per tower) so the glow merge
+  // stays cheap. The opaque tower depth-tests out the windows on its far side.
+  const windowGeo = (w, h, d, rot, px, py, pz) => {
+    const P = [], C = [];
+    const quad = (ax, ay, az, ux, uy, uz, vx, vy, vz, col) => {
+      const x2 = ax + ux, y2 = ay + uy, z2 = az + uz;        // a + u
+      const x3 = ax + ux + vx, y3 = ay + uy + vy, z3 = az + uz + vz; // a + u + v
+      const x4 = ax + vx, y4 = ay + vy, z4 = az + vz;        // a + v
+      P.push(ax, ay, az, x2, y2, z2, x3, y3, z3, ax, ay, az, x3, y3, z3, x4, y4, z4);
+      for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+    };
+    const cols = Math.max(3, Math.round(w / 3.4)), rows = Math.max(5, Math.round(h / 6.5));
+    const cw = w / cols, ch = h / rows, gx = cw * 0.62, gy = ch * 0.58;
+    for (const face of [0, 1, 2, 3]) {
+      const onX = face < 2, sign = face % 2 ? 1 : -1;
+      const span = onX ? d : w, off = (onX ? w : d) / 2 + 0.4;
+      const nc = onX ? Math.max(3, Math.round(span / 3.4)) : cols;
+      const sw = span / nc, sgx = sw * 0.62;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < nc; c++) {
+          if (rng() > 0.6) continue; // ~60% of cells are lit
+          const cy = -h / 2 + (r + 0.5) * ch;
+          const ct = -span / 2 + (c + 0.5) * sw;
+          const col = pickWin();
+          if (onX) quad(sign * off, cy - gy / 2, ct - sgx / 2, 0, gy, 0, 0, 0, sgx, col);
+          else quad(ct - sgx / 2, cy - gy / 2, sign * off, sgx, 0, 0, 0, gy, 0, col);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    g.rotateY(rot); g.translate(px, py, pz);
+    return g;
+  };
+
+  const n = 44;
   for (let i = 0; i < n; i++) {
-    const a = rng() * Math.PI * 2, r = rng() * 170;
-    const px = ccx + Math.cos(a) * r;
-    const pz = ccz + Math.sin(a) * r * 0.7;
-    const w = 14 + rng() * 22, d = 14 + rng() * 22, h = 50 + rng() * 130;
+    // Two depth rings: a nearer ring of bigger towers + a far backdrop ring.
+    const near = rng() < 0.42;
+    const rr = near ? 40 + rng() * 110 : 160 + rng() * 150;
+    const a = rng() * Math.PI * 2;
+    const px = ccx + Math.cos(a) * rr;
+    const pz = ccz + Math.sin(a) * rr * 0.7;
+    const w = (near ? 24 : 14) + rng() * (near ? 26 : 20);
+    const d = (near ? 24 : 14) + rng() * (near ? 26 : 20);
+    const h = (near ? 90 : 50) + rng() * (near ? 190 : 120);
+    const rot = rng() * 0.6;
+    const py = groundY + h / 2;
     const tower = new THREE.BoxGeometry(w, h, d);
-    tower.rotateY(rng() * 0.4);
-    tower.translate(px, groundY + h / 2, pz);
-    opa.push(bakeFlatColors(tower, 0x1c0f42, { rim: false }));
-    const strips = 1 + Math.floor(rng() * 3);
-    for (let k = 0; k < strips; k++) {
-      const sh = h * (0.35 + rng() * 0.4);
-      const strip = new THREE.BoxGeometry(0.5, sh, 1.0);
-      strip.translate(px - w / 2 - 0.3, groundY + sh / 2 + h * 0.08, pz + (rng() - 0.5) * d * 0.6);
-      glo.push(colorTint(strip, rng() < 0.6 ? cl : cr));
+    tower.rotateY(rot); tower.translate(px, py, pz);
+    opa.push(bakeFlatColors(tower, 0x190d3c, { rim: false }));
+    glo.push(windowGeo(w, h, d, rot, px, py, pz));
+    // Antenna spire + blinking beacon tip on the taller towers (comms-mast look).
+    if (h > 150 && rng() < 0.6) {
+      const sh = 12 + rng() * 26;
+      const mast = new THREE.BoxGeometry(0.9, sh, 0.9);
+      mast.translate(px, groundY + h + sh / 2, pz);
+      opa.push(bakeFlatColors(mast, 0x120a2c, { rim: false }));
+      const tip = new THREE.BoxGeometry(2.4, 2.4, 2.4);
+      tip.translate(px, groundY + h + sh, pz);
+      glo.push(colorTint(tip, beacon[Math.floor(rng() * beacon.length)]));
     }
   }
   const g = new THREE.Group();
   g.add(new THREE.Mesh(mergeGeoms(opa), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
   const glowMesh = new THREE.Mesh(mergeGeoms(glo), new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 0.5,
+    vertexColors: true, transparent: true, opacity: 0.62,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
   }));
   glowMesh.renderOrder = 1;
