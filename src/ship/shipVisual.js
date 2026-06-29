@@ -520,6 +520,34 @@ function scaleAround(geom, sx, sy, sz, cx, cy, cz) {
   return geom;
 }
 
+// Smooth premium fin: a rounded-corner polygon (from 4 ship-space corners)
+// extruded thin with beveled edges, in the corners' plane. Replaces the hard
+// fin slabs when PREMIUM; baked into the hull like everything else (no draws).
+function roundedFinShape(pts, r) {
+  const sh = new THREE.Shape(); const n = pts.length;
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], L = (v) => Math.hypot(v[0], v[1]) || 1, nz = (v) => { const l = L(v); return [v[0] / l, v[1] / l]; };
+  for (let i = 0; i < n; i++) {
+    const cur = pts[i], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    const v1 = nz(sub(prev, cur)), v2 = nz(sub(next, cur));
+    const rr = Math.min(r, L(sub(prev, cur)) * 0.45, L(sub(next, cur)) * 0.45);
+    const p1 = [cur[0] + v1[0] * rr, cur[1] + v1[1] * rr], p2 = [cur[0] + v2[0] * rr, cur[1] + v2[1] * rr];
+    if (i === 0) sh.moveTo(p1[0], p1[1]); else sh.lineTo(p1[0], p1[1]);
+    sh.quadraticCurveTo(cur[0], cur[1], p2[0], p2[1]);
+  }
+  sh.closePath(); return sh;
+}
+function quadFin(p0, p1, p2, p3, expand = 0.04, r = 0.13, thick = 0.06) {
+  const corners = [p0, p1, p2, p3]; const cen = new THREE.Vector3(); corners.forEach((p) => cen.add(p)); cen.multiplyScalar(0.25);
+  const E = corners.map((p) => p.clone().add(p.clone().sub(cen).normalize().multiplyScalar(expand)));
+  const ex = new THREE.Vector3().subVectors(E[1], E[0]).normalize();
+  const nrm = new THREE.Vector3().crossVectors(ex, new THREE.Vector3().subVectors(E[3], E[0])).normalize();
+  const ey = new THREE.Vector3().crossVectors(nrm, ex).normalize();
+  const to2 = (p) => { const d = new THREE.Vector3().subVectors(p, E[0]); return [d.dot(ex), d.dot(ey)]; };
+  const geo = new THREE.ExtrudeGeometry(roundedFinShape(E.map(to2), r), { depth: thick, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 2, steps: 1, curveSegments: 12 });
+  const m = new THREE.Matrix4().makeBasis(ex, ey, nrm); m.setPosition(E[0].clone().addScaledVector(nrm, -thick / 2));
+  geo.applyMatrix4(m); return geo;
+}
+
 export function buildShipMesh(V = DEFAULT_VARIANT) {
   const group = new THREE.Group();
   const hexa = (cx, w, yT, yM, yB) => [
@@ -572,13 +600,23 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
     [[0.951, 0.352, 1.20], [1.149, 0.352, 1.20]],
   ]), V.accent);
 
-  // 6. Tail fin (scaled per team).
-  opaque.push([scaleAround(
-    slab([0, 0.42, 0.95], [0, 0.92, 2.25], [0, 0.30, 2.40], [0, 0.32, 1.05], 0.05),
-    1, V.finScale, 1, 0, 0.36, 0), V.accent]);
-
-  // 7. Splayed airbrake fins.
-  both(slab([1.20, 0.30, 0.95], [1.66, 0.62, 1.75], [1.62, 0.58, 2.15], [1.18, 0.26, 2.05], 0.05), V.accent);
+  // 6 + 7. Tail fin + splayed airbrake fins. PREMIUM swaps the sharp slabs for
+  // smooth rounded fins (still baked into the hull, so zero extra draws).
+  if (!PREMIUM) {
+    opaque.push([scaleAround(
+      slab([0, 0.42, 0.95], [0, 0.92, 2.25], [0, 0.30, 2.40], [0, 0.32, 1.05], 0.05),
+      1, V.finScale, 1, 0, 0.36, 0), V.accent]);
+    both(slab([1.20, 0.30, 0.95], [1.66, 0.62, 1.75], [1.62, 0.58, 2.15], [1.18, 0.26, 2.05], 0.05), V.accent);
+  } else {
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+    opaque.push([scaleAround(quadFin(
+      V3(0, 0.42, 0.95), V3(0, 0.92, 2.25), V3(0, 0.30, 2.40), V3(0, 0.32, 1.05), 0.04, 0.16, 0.06),
+      1, V.finScale, 1, 0, 0.36, 0), V.accent]);
+    for (const sx of [-1, 1]) {
+      opaque.push([quadFin(
+        V3(sx * 1.20, 0.30, 0.95), V3(sx * 1.66, 0.62, 1.75), V3(sx * 1.62, 0.58, 2.15), V3(sx * 1.18, 0.26, 2.05), 0.04, 0.10, 0.05), V.accent]);
+    }
+  }
 
   // 8. Belly keel.
   opaque.push([slab([0, -0.03, 0.00], [0, -0.16, 0.60], [0, -0.16, 1.60], [0, 0.02, 1.90], 0.05), C.SHIP_CANOPY]);
@@ -624,8 +662,9 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   // 15. Airbrake actuator arms.
   both(slab([1.02, 0.18, 1.55], [1.38, 0.42, 1.75], [1.36, 0.40, 1.88], [1.00, 0.16, 1.68], 0.04), C.SHIP_CANOPY);
 
-  // 16. Fin livery: white panel + dark slash on both faces of the fin.
-  for (const sx of [-1, 1]) {
+  // 16. Fin livery: white panel + dark slash on both faces of the fin. Skipped
+  // for PREMIUM — the smooth fin reads cleaner as a single accent surface.
+  if (!PREMIUM) for (const sx of [-1, 1]) {
     opaque.push([scaleAround(slab(
       [sx * 0.045, 0.55, 1.30], [sx * 0.045, 0.80, 1.95],
       [sx * 0.045, 0.62, 2.04], [sx * 0.045, 0.45, 1.44], 0.012),
