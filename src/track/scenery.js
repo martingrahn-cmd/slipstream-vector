@@ -493,9 +493,48 @@ function buildMesas(rng, spline, groundY, theme) {
   ];
   const geoms = [];
   const glows = [];
-  const winA = new THREE.Color(TUNING.COL.EDGE_L);
-  const winB = new THREE.Color(TUNING.COL.EDGE_R);
-  const winC = new THREE.Color(0xffd9a0);
+  const winA = new THREE.Color(TUNING.COL.EDGE_L);   // cyan
+  const winB = new THREE.Color(TUNING.COL.EDGE_R);   // magenta
+  const winC = new THREE.Color(0xffd9a0);            // warm
+  const winW = [new THREE.Color(0xffb15a), new THREE.Color(0xff7e3c), new THREE.Color(0xfff0d0)]; // warm spread
+  // Warm-dominant office-window picker (a little cyan/magenta neon mixed in).
+  const winPick = () => { const r = rng(); return r < 0.40 ? winC : r < 0.58 ? winW[0] : r < 0.70 ? winW[1] : r < 0.80 ? winW[2] : r < 0.90 ? winA : winB; };
+  // A dense grid of OPAQUE lit window cells over a tower's four faces, built in
+  // the archetype's UNIT space (from its bbox) so it can be scaled/rotated/
+  // translated exactly like the tower. Opaque so the windows read crisply over
+  // the bright magenta facade instead of washing out the way additive would.
+  const mesaWindows = (ub, sc, ysc) => {
+    const hx = (ub.max.x - ub.min.x) / 2, hz = (ub.max.z - ub.min.z) / 2, y0 = ub.min.y, y1 = ub.max.y, uh = y1 - y0;
+    if (hx < 0.05 || hz < 0.05 || uh < 0.05) return null;
+    const P = [], C = [];
+    const quad = (ax, ay, az, ux, uy, uz, vx, vy, vz, col) => {
+      P.push(ax, ay, az, ax + ux, ay + uy, az + uz, ax + ux + vx, ay + uy + vy, az + uz + vz,
+        ax, ay, az, ax + ux + vx, ay + uy + vy, az + uz + vz, ax + vx, ay + vy, az + vz);
+      for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+    };
+    const rows = Math.max(4, Math.round(uh * sc * ysc / 8));
+    const cuh = uh / rows, winUh = cuh * 0.62, eps = 0.02;
+    for (const face of [0, 1, 2, 3]) {
+      const onX = face < 2, sign = face % 2 ? 1 : -1;
+      const halfOut = onX ? hx : hz, halfSpan = onX ? hz : hx;
+      const nc = Math.max(2, Math.round(halfSpan * 2 * sc / 7));
+      const cuw = (halfSpan * 2) / nc, winUw = cuw * 0.6;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < nc; c++) {
+          if (rng() > 0.6) continue;
+          const cyU = y0 + (r + 0.5) * cuh - winUh / 2, ctU = -halfSpan + (c + 0.5) * cuw - winUw / 2;
+          const col = winPick();
+          if (onX) quad(sign * (halfOut + eps), cyU, ctU, 0, winUh, 0, 0, 0, winUw, col);
+          else quad(ctU, cyU, sign * (halfOut + eps), winUw, 0, 0, 0, winUh, 0, col);
+        }
+      }
+    }
+    if (!P.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    return g;
+  };
   const f = makeFrame();
   const tries = 600, placed = [];
   const MAX = theme.mesaMax ?? 150;
@@ -528,6 +567,7 @@ function buildMesas(rng, spline, groundY, theme) {
     const ys = towers ? 0.9 + rng() * 1.3 : islands ? 0.7 + rng() * 0.45 : 0.7 + rng() * 0.6;
     const ry = rng() * Math.PI * 2;
     const g = make();
+    const ub = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position')); // unit bbox for the window grid
     g.scale(scale, scale * ys, scale);
     g.rotateY(ry);
     const box = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
@@ -547,22 +587,14 @@ function buildMesas(rng, spline, groundY, theme) {
       geoms.push(bakeFlatColors(beach, theme.sand, { rim: false }));
     }
     if (towers) {
-      // Glowing window columns, transformed exactly like their tower.
-      const nStrips = 1 + Math.floor(rng() * 2);
-      for (let k = 0; k < nStrips; k++) {
-        const strip = new THREE.BoxGeometry(0.1, unitH * 0.55, 0.04);
-        strip.translate((rng() - 0.5) * 0.55, unitH * (rng() - 0.5) * 0.12, faceZ + 0.03);
-        strip.rotateY(rng() < 0.5 ? 0 : Math.PI); // front or back face
-        strip.scale(scale, scale * ys, scale);
-        strip.rotateY(ry);
-        strip.translate(px, ty, pz);
-        const c = rng() < 0.55 ? winA : rng() < 0.6 ? winB : winC;
-        glows.push(colorTint(strip, c));
-      }
+      // Dense lit window GRID over the facades, transformed exactly like the
+      // tower. Opaque (in the building mesh) so it reads over the magenta.
+      const wg = mesaWindows(ub, scale, ys);
+      if (wg) { wg.scale(scale, scale * ys, scale); wg.rotateY(ry); wg.translate(px, ty, pz); geoms.push(wg); }
     }
   }
   const out = new THREE.Group();
-  out.add(new THREE.Mesh(mergeGeoms(geoms), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
+  out.add(new THREE.Mesh(mergeGeoms(geoms), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide })));
   if (glows.length) {
     const glowMesh = new THREE.Mesh(mergeGeoms(glows), new THREE.MeshBasicMaterial({
       vertexColors: true, transparent: true, opacity: 0.7,
