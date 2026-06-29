@@ -10,6 +10,13 @@ import { makeFrame } from '../track/spline.js';
 
 const C = T.COL;
 
+// Premium ship look (cel form + two-tone belly + iridescent rim + themed glow),
+// behind a flag so it can be A/B'd against the classic flat-neon hull. Read at
+// BUILD time, so toggling it + a field rebuild swaps the whole grid's style.
+let PREMIUM = (typeof localStorage !== 'undefined' && localStorage.getItem('sv-premium') === '1');
+export function premiumShip() { return PREMIUM; }
+export function setPremiumShip(on) { PREMIUM = !!on; try { localStorage.setItem('sv-premium', on ? '1' : '0'); } catch (e) { /* ignore */ } }
+
 const DEFAULT_VARIANT = {
   scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1,
   hull: 0xe8e4f0, accent: 0xff2e88,
@@ -159,6 +166,9 @@ export class ShipVisual {
 
     this._m = new THREE.Matrix4();
     this._engineCol = new THREE.Color();
+    // Engine exhaust hue: premium liveries (player ship only — AI use the shared
+    // cyan batch) theme the flames/glow/boost-bloom to their own glow colour.
+    this.engBase = (PREMIUM && V.glow != null) ? V.glow : C.ENGINE;
   }
 
   // ship: ShipPhysics. input: smoothed axes. boostFactor: juice envelope 0..1.
@@ -211,7 +221,7 @@ export class ShipVisual {
     const throttleAmt = input.throttle;
     const flick = 1 + 0.15 * Math.sin(this.time * 30 * Math.PI * 2 + Math.sin(this.time * 17) * 3);
     const flameLen = (0.5 + 1.8 * throttleAmt + 1.5 * boostFactor) * flick;
-    this._engineCol.setHex(C.ENGINE).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor * 0.3); // keep the cyan look on boost
+    this._engineCol.setHex(this.engBase).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor * 0.3); // base hue (themed for premium liveries) whitening on boost
     for (const fl of this.flames) {
       fl.scale.set(1 + boostFactor * 0.6, 1 + boostFactor * 0.6, flameLen);
       fl.material.color.copy(this._engineCol);
@@ -673,7 +683,7 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   const baked = opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false }));
   const hullGeo = mergeGeoms(baked);
   hullGeo.computeVertexNormals(); // flat per-face normals (non-indexed) for the rim
-  const hullMesh = new THREE.Mesh(hullGeo, makeHullMaterial(V.accent));
+  const hullMesh = new THREE.Mesh(hullGeo, makeHullMaterial(V));
   group.add(hullMesh);
 
   // ---- glow set: slot rails, leading-edge strips, fin edge, nozzle discs ----
@@ -728,6 +738,8 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   }));
   glowMesh.renderOrder = 1;
   group.add(glowMesh);
+  // Premium liveries re-theme the baked cyan engine-glow to their own glow hue.
+  if (PREMIUM && V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
 
   // Team proportions. Applied on the static mesh group (below the lean node),
   // so roll/pitch animation never shears the scaled geometry.
@@ -742,7 +754,15 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
 
 // Hull material: baked vertex colours + a view-angle fresnel rim in the team
 // accent, so the silhouette catches a light against the busier backgrounds.
-function makeHullMaterial(accentHex) {
+// The hull material. Classic = flat vertex colours + a fresnel accent rim.
+// Premium (behind the flag) = adds 3-step cel form, AO, a two-tone underbelly,
+// a soft gloss kiss and a dual/iridescent rim — still UNLIT, still flat-neon.
+function makeHullMaterial(V) {
+  const accentHex = (V && typeof V === 'object') ? (V.accent ?? 0xff2e88) : V; // tolerate accent-only callers
+  return PREMIUM ? makePremiumHull(V && typeof V === 'object' ? V : { accent: accentHex }) : makeClassicHull(accentHex);
+}
+
+function makeClassicHull(accentHex) {
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
@@ -784,6 +804,76 @@ function makeHullMaterial(accentHex) {
     fog: true,
     side: THREE.DoubleSide,
   });
+}
+
+function makePremiumHull(V) {
+  const col = (h, d) => new THREE.Color(h != null ? h : d);
+  const hull = col(V.hull, 0xe8e4f0), accent = col(V.accent, 0xff2e88);
+  const belly = V.bellyTint != null ? col(V.bellyTint) : hull.clone().lerp(new THREE.Color(0x0a0c16), 0.72);
+  const glow = col(V.glow, C.ENGINE), rim = col(V.rim, V.accent ?? 0xff2e88), a2 = col(V.accent2, V.accent ?? 0xff2e88);
+  const irid = V.irid ? 1 : 0;
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        rimCol: { value: rim }, rim2Col: { value: glow }, uBelly: { value: belly },
+        uRimA: { value: irid ? accent : rim }, uRimB: { value: irid ? a2 : rim }, uIrid: { value: irid },
+        rimStrength: { value: 0.6 }, uBoost: { value: 0 },
+      },
+    ]),
+    vertexShader: /* glsl */ `
+      attribute vec3 color;
+      varying vec3 vColor; varying vec3 vNobj; varying vec3 vN; varying vec3 vView; varying float vPosY;
+      #include <fog_pars_vertex>
+      void main() {
+        vColor = color; vNobj = normalize(normal); vPosY = position.y;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vView = normalize(-mvPosition.xyz);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 rimCol; uniform vec3 rim2Col; uniform vec3 uBelly;
+      uniform vec3 uRimA; uniform vec3 uRimB; uniform float uIrid;
+      uniform float rimStrength; uniform float uBoost;
+      varying vec3 vColor; varying vec3 vNobj; varying vec3 vN; varying vec3 vView; varying float vPosY;
+      #include <fog_pars_fragment>
+      void main() {
+        vec3 No = normalize(vNobj);
+        float key = max(dot(No, normalize(vec3(0.34, 0.86, 0.38))), 0.0); // soft baked key, object space
+        float kq = floor(key * 3.0 + 0.5) / 3.0;                          // 3-step cel form
+        float shade = mix(0.82, 1.20, kq);
+        float ao = mix(0.72, 1.0, clamp(No.y * 0.5 + 0.5, 0.0, 1.0));      // belly a touch darker
+        vec3 base = vColor * shade * ao;
+        float belly = smoothstep(0.16, -0.10, vPosY); base = mix(base, uBelly, belly * 0.72); // two-tone
+        float gloss = smoothstep(0.88, 0.99, key); base += gloss * 0.16;  // polished kiss on top panels
+        float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.4);
+        vec3 irid = mix(uRimA, uRimB, clamp(vN.x * 0.6 + 0.5, 0.0, 1.0));  // banks across the silhouette
+        vec3 baseRim = mix(rimCol, irid, uIrid);
+        vec3 rc = mix(baseRim, vec3(1.0), uBoost * 0.4);
+        float rs = rimStrength * mix(1.0, 1.6, uBoost);
+        float coolMask = clamp(-No.y * 1.4, 0.0, 1.0);
+        vec3 col = base + rc * rim * rs + rim2Col * rim * coolMask * 0.5;
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }
+    `,
+    fog: true,
+    side: THREE.DoubleSide,
+  });
+}
+
+// Re-tint baked glow vertices that match `fromCol` (the cyan engine glow) to a
+// livery's own glow hue — used so a premium livery's neon is fully on-palette.
+function retintGlow(geo, fromCol, toHex) {
+  const c = geo.attributes.color; if (!c) return;
+  const f = new THREE.Color(fromCol), to = new THREE.Color(toHex);
+  for (let i = 0; i < c.count; i++) {
+    if (Math.abs(c.getX(i) - f.r) < 0.14 && Math.abs(c.getY(i) - f.g) < 0.14 && Math.abs(c.getZ(i) - f.b) < 0.14) c.setXYZ(i, to.r, to.g, to.b);
+  }
+  c.needsUpdate = true;
 }
 
 function makeGlowTexture() {

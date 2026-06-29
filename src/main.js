@@ -9,7 +9,7 @@ import { TrackSpline, makeFrame } from './track/spline.js';
 import { buildTrackMesh } from './track/trackMesh.js';
 import { buildScenery } from './track/scenery.js';
 import { ShipPhysics } from './ship/shipPhysics.js';
-import { ShipVisual } from './ship/shipVisual.js';
+import { ShipVisual, premiumShip, setPremiumShip } from './ship/shipVisual.js';
 import { AiDriver } from './ship/aiDriver.js';
 import { CameraRig } from './fx/cameraRig.js';
 import { Juice } from './fx/juice.js';
@@ -35,9 +35,21 @@ import { DIFFICULTIES } from './worlds/difficulty.js';
 
 // Prestige livery (index 2 on every team) unlocked by winning the Phantom cup.
 const CHAMPION_LIVERY = { hull: 0x1a1208, accent: 0xffd23f };
+// Premium liveries — bespoke palettes designed for the premium ship shader
+// (extra fields: bellyTint / accent2 / glow / rim / irid). Only offered while
+// the premium flag is on. Hex values curated in the livery lab.
+const PREMIUM_LIVERIES = [
+  { name: 'CARBON VYPER', hull: 0x16191f, bellyTint: 0x0a0c10, accent: 0x9dff1f, accent2: 0x5a6b14, glow: 0xaaff2b, rim: 0xb6ff3a },
+  { name: 'IRIS PRISM', hull: 0xcdd6e8, bellyTint: 0x2a2350, accent: 0xff3df0, accent2: 0x19f0ff, glow: 0x3affd0, rim: 0x7df6ff, irid: true },
+];
 function championUnlocked() { return localStorage.getItem('sv-champion') === '1'; }
-function liveryCount() { return 2 + (championUnlocked() ? 1 : 0); }
-function liveryOf(team, idx) { return idx >= 2 ? CHAMPION_LIVERY : team.liveries[idx]; }
+function liveryCount() { return 2 + (championUnlocked() ? 1 : 0) + (premiumShip() ? PREMIUM_LIVERIES.length : 0); }
+function liveryOf(team, idx) {
+  if (idx < 2) return team.liveries[idx];
+  let i = 2;
+  if (championUnlocked()) { if (idx === i) return CHAMPION_LIVERY; i++; }
+  return PREMIUM_LIVERIES[idx - i] || team.liveries[0];
+}
 function unlockedClasses() {
   return Math.max(0, Math.min(CLASSES.length - 1,
     parseInt(localStorage.getItem('sv-unlocked') ?? '0', 10) || 0));
@@ -499,6 +511,7 @@ function updateMenu() {
   setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
   setTxt('opt-fs', document.fullscreenElement ? 'ON' : 'OFF');
   setTxt('opt-motion', document.body.classList.contains('reduced-motion') ? 'REDUCED' : 'FULL');
+  setTxt('opt-shipstyle', premiumShip() ? 'PREMIUM' : 'CLASSIC');
   setTxt('opt-gp-state', input.gamepadActive ? 'CONNECTED' : 'NONE');
   const legend = document.getElementById('opt-legend');
   if (legend && !legend.dataset.filled) { legend.dataset.filled = '1'; legend.innerHTML = CONTROLS_LEGEND; }
@@ -1203,6 +1216,10 @@ function editRow(row, dir) {
     toggleFullscreen();
   } else if (row === 'motion') {
     applyReducedMotion(true);
+  } else if (row === 'shipstyle') {
+    setPremiumShip(!premiumShip());
+    selection.livery = Math.min(selection.livery, liveryCount() - 1); // premium liveries vanish when off
+    buildField();
   } else if (row === 'tier') {
     trophyTier = TROPHY_FILTERS[n(TROPHY_FILTERS.length, TROPHY_FILTERS.indexOf(trophyTier), dir)];
   }
