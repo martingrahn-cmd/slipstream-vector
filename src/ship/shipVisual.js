@@ -829,9 +829,129 @@ function buildPronghorn(V) {
 }
 
 // Dispatcher: each team's variant.arch selects a hull builder. Unknown → pronghorn.
-const ARCH_BUILDERS = { pronghorn: buildPronghorn };
+const ARCH_BUILDERS = { pronghorn: buildPronghorn, manta: buildManta, delta: buildDelta, twinboom: buildTwinboom };
 export function buildShipMesh(V = DEFAULT_VARIANT) {
   return (ARCH_BUILDERS[V.arch] || ARCH_BUILDERS.pronghorn)(V);
+}
+
+// ===================== shared archetype kit =====================
+// 6-point hull cross-section (x,y): outer at yM, deck at yT, belly at yB.
+function hex6(w, yT, yM, yB) { return [[-w, yM], [-w * 0.5, yT], [w * 0.5, yT], [w, yM], [w * 0.5, yB], [-w * 0.5, yB]]; }
+// 8-point flat lens cross-section (wide, slightly domed top) for the manta.
+function lens8(W, T) { return [[-W, 0], [-W * 0.55, T * 0.55], [0, T], [W * 0.55, T * 0.55], [W, 0], [W * 0.55, -T * 0.45], [0, -T * 0.62], [-W * 0.55, -T * 0.45]]; }
+// thin triangular plate (wing / fin / canard), extruded `t` along an axis.
+function tri3d(a, b, c, t, axis) {
+  const o = (p, s) => axis === 'y' ? [p[0], p[1] + s, p[2]] : axis === 'x' ? [p[0] + s, p[1], p[2]] : [p[0], p[1], p[2] + s];
+  const U = [o(a, t / 2), o(b, t / 2), o(c, t / 2)], D = [o(a, -t / 2), o(b, -t / 2), o(c, -t / 2)], v = [];
+  v.push(...U[0], ...U[1], ...U[2]); v.push(...D[0], ...D[2], ...D[1]);
+  for (let i = 0; i < 3; i++) { const j = (i + 1) % 3; v.push(...U[i], ...U[j], ...D[j], ...U[i], ...D[j], ...D[i]); }
+  return geomFrom(v);
+}
+// additive glow disc (non-indexed fan).
+function discGeo(cx, cy, cz, r, segs) {
+  const v = [];
+  for (let i = 0; i < segs; i++) { const a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2; v.push(cx, cy, cz, cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, cz, cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, cz); }
+  return geomFrom(v);
+}
+const gcol = (geo, hex) => colorize(geo.index ? geo.toNonIndexed() : geo, hex);
+const xform = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
+
+// Engine at each nozzle: classic dark bell + cyan glow disc; PREMIUM adds a
+// detailed turbine (graphite nacelle + bevel lip + hub + blades + neon ring).
+function addEngines(opaque, glows, nozzles, accentHex) {
+  for (const n of nozzles) {
+    const r = n.r || 0.2, z = n.z;
+    opaque.push([xform(new THREE.CylinderGeometry(r * 0.95, r * 1.12, r * 1.7, 18, 1, true), n.x, n.y, z - r * 0.8, Math.PI / 2), C.SHIP_CANOPY]);
+    glows.push(gcol(discGeo(n.x, n.y, z + 0.03, r * 0.82, 18), C.ENGINE));
+    if (PREMIUM) {
+      opaque.push([xform(new THREE.CylinderGeometry(r, r * 1.18, r * 2.0, 28, 1, true), n.x, n.y, z - r, Math.PI / 2), 0x2e3440]);
+      opaque.push([xform(new THREE.TorusGeometry(r * 1.12, r * 0.16, 12, 40), n.x, n.y, z + r * 0.05), accentHex]);
+      opaque.push([xform(new THREE.CylinderGeometry(r * 0.22, r * 0.22, r * 0.7, 14), n.x, n.y, z - r * 0.5, Math.PI / 2), 0x2e3440]);
+      for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; opaque.push([xform(new THREE.BoxGeometry(r * 0.09, r * 0.72, r * 0.2), n.x + Math.cos(a) * r * 0.5, n.y + Math.sin(a) * r * 0.5, z - r * 0.35, 0, 0, a), 0x2e3440]); }
+      glows.push(gcol(xform(new THREE.TorusGeometry(r * 0.9, r * 0.1, 12, 36), n.x, n.y, z + 0.02), C.ENGINE));
+    }
+  }
+}
+// Assemble an archetype: opaque [geo,colorHex] → baked hull; glows (already
+// colorized) → additive glow mesh; same userData contract as the pronghorn.
+function assembleShip(V, opaque, glows, nozzles, reactive) {
+  const group = new THREE.Group();
+  const hullGeo = mergeGeoms(opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false })));
+  hullGeo.computeVertexNormals();
+  const hullMesh = new THREE.Mesh(hullGeo, makeHullMaterial(V));
+  group.add(hullMesh);
+  const glowMesh = new THREE.Mesh(mergeGeoms(glows), new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+  }));
+  glowMesh.renderOrder = 1;
+  group.add(glowMesh);
+  if (PREMIUM && V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
+  group.scale.set(V.scaleX, 1, V.scaleZ);
+  group.userData = { hullMat: hullMesh.material, hullGeo, glowGeo: glowMesh.geometry, shipScale: [V.scaleX, 1, V.scaleZ], nozzles, reactive };
+  return group;
+}
+
+// HALCYON — low, wide, soft manta wing-body (handling).
+function buildManta(V) {
+  const opaque = [], glows = [];
+  opaque.push([loft([
+    { z: -2.0, pts: lens8(0.22, 0.12) }, { z: -1.2, pts: lens8(0.62, 0.16) }, { z: -0.35, pts: lens8(1.1, 0.16) },
+    { z: 0.4, pts: lens8(1.3, 0.14) }, { z: 1.2, pts: lens8(0.95, 0.12) }, { z: 1.9, pts: lens8(0.5, 0.1) }, { z: 2.45, pts: lens8(0.16, 0.07) },
+  ], { capStart: true, capEnd: true }), V.hull]);
+  // upturned wingtip winglets
+  const tip = tri3d([1.2, 0.0, 0.2], [1.42, 0.26, 0.5], [1.0, 0.0, 0.8], 0.04, 'x');
+  opaque.push([tip, V.accent], [mirrorX(tip), V.accent]);
+  // low dark canopy + dorsal accent line
+  const mc = new THREE.SphereGeometry(0.16, 16, 10); mc.scale(1.3, 0.5, 1.7); mc.translate(0, 0.1, -0.3);
+  opaque.push([mc, C.SHIP_CANOPY]);
+  glows.push(gcol(ribbon([[[-0.02, 0.15, -1.6], [0.02, 0.15, -1.6]], [[-0.02, 0.1, 1.85], [0.02, 0.1, 1.85]]]), V.accent));
+  const nozzles = [{ x: -0.36, y: 0.04, z: 2.05, r: 0.2 }, { x: 0.36, y: 0.04, z: 2.05, r: 0.2 }];
+  addEngines(opaque, glows, nozzles, V.accent);
+  const reactive = { brake: [[[-0.45, 0.14, 1.7], [0.45, 0.14, 1.7]], [[-0.45, 0.14, 1.95], [0.45, 0.14, 1.95]]], boost: { pos: [0, 0.08, 2.05], scale: 1.2 } };
+  return assembleShip(V, opaque, glows, nozzles, reactive);
+}
+
+// RAZORBACK — wide, low, forward-swept delta arrow (speed).
+function buildDelta(V) {
+  const opaque = [], glows = [];
+  opaque.push([loft([
+    { z: -3.0, pts: hex6(0.05, 0.05, 0.0, -0.05) }, { z: -1.4, pts: hex6(0.5, 0.1, 0.0, -0.12) },
+    { z: 0.4, pts: hex6(1.25, 0.13, 0.0, -0.14) }, { z: 2.0, pts: hex6(1.7, 0.12, 0.0, -0.12) }, { z: 2.5, pts: hex6(1.55, 0.1, 0.0, -0.1) },
+  ], { capStart: true, capEnd: true }), V.hull]);
+  // forward-swept wing blades
+  const wing = tri3d([0.5, 0.02, -0.6], [2.2, 0.06, 1.4], [1.5, 0.0, 2.3], 0.05, 'y');
+  opaque.push([wing, V.hull], [mirrorX(wing), V.hull]);
+  // low swept-back tail fin + canopy
+  opaque.push([tri3d([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, 'x'), V.accent]);
+  opaque.push([xform(new THREE.SphereGeometry(0.18, 16, 10), 0, 0.02, -0.7), C.SHIP_CANOPY]);
+  glows.push(gcol(ribbon([[[-0.02, 0.16, -2.6], [0.02, 0.16, -2.6]], [[-0.02, 0.14, 2.0], [0.02, 0.14, 2.0]]]), V.accent));
+  const nozzles = [{ x: -0.95, y: 0.04, z: 2.25, r: 0.28 }, { x: 0.95, y: 0.04, z: 2.25, r: 0.28 }];
+  addEngines(opaque, glows, nozzles, V.accent);
+  const reactive = { brake: [[[-1.0, 0.12, 2.0], [1.0, 0.12, 2.0]], [[-1.0, 0.12, 2.25], [1.0, 0.12, 2.25]]], boost: { pos: [0, 0.1, 2.3], scale: 1.7 } };
+  return assembleShip(V, opaque, glows, nozzles, reactive);
+}
+
+// NOVASURGE — short, heavy, twin-boom with big rear engines (thrust).
+function buildTwinboom(V) {
+  const opaque = [], glows = [];
+  opaque.push([loft([
+    { z: -1.9, pts: hex6(0.16, 0.18, 0.04, -0.1) }, { z: -0.8, pts: hex6(0.46, 0.42, 0.08, -0.2) },
+    { z: 0.6, pts: hex6(0.52, 0.46, 0.08, -0.22) }, { z: 1.6, pts: hex6(0.4, 0.34, 0.06, -0.16) },
+  ], { capStart: true, capEnd: true }), V.hull]);
+  for (const sx of [-1, 1]) {
+    const boom = loft([{ z: -0.3, pts: hex6(0.16, 0.16, 0.0, -0.16) }, { z: 1.7, pts: hex6(0.28, 0.24, 0.0, -0.24) }], { capEnd: true });
+    boom.translate(sx * 0.78, 0.02, 0);
+    opaque.push([boom, V.hull]);
+  }
+  // tall fin + canopy
+  opaque.push([tri3d([0, 0.4, 0.4], [0, 1.15, 1.5], [0, 0.4, 1.9], 0.06, 'x'), V.accent]);
+  opaque.push([xform(new THREE.SphereGeometry(0.22, 16, 10), 0, 0.28, -0.3), C.SHIP_CANOPY]);
+  glows.push(gcol(ribbon([[[-0.02, 0.48, -1.0], [0.02, 0.48, -1.0]], [[-0.02, 0.4, 1.4], [0.02, 0.4, 1.4]]]), V.accent));
+  const nozzles = [{ x: -0.78, y: 0.02, z: 2.0, r: 0.42 }, { x: 0.78, y: 0.02, z: 2.0, r: 0.42 }];
+  addEngines(opaque, glows, nozzles, V.accent);
+  const reactive = { brake: [[[-0.5, 0.46, 1.2], [0.5, 0.46, 1.2]], [[-0.5, 0.46, 1.45], [0.5, 0.46, 1.45]]], boost: { pos: [0, 0.1, 1.9], scale: 1.9 } };
+  return assembleShip(V, opaque, glows, nozzles, reactive);
 }
 
 // Hull material: baked vertex colours + a view-angle fresnel rim in the team
