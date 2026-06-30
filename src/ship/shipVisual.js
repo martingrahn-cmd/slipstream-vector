@@ -19,7 +19,7 @@ export function setPremiumShip(on) { PREMIUM = !!on; try { localStorage.setItem(
 
 const DEFAULT_VARIANT = {
   scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1,
-  hull: 0xe8e4f0, accent: 0xff2e88,
+  hull: 0xe8e4f0, accent: 0xff2e88, arch: 'pronghorn',
 };
 
 export class ShipVisual {
@@ -37,12 +37,12 @@ export class ShipVisual {
     this.hullGeo = shipGroup.userData.hullGeo; // shared with the ghost ship + reflection
 
     // Engine flames: one cone per exhaust bell, additive, scaled by throttle/boost.
+    // Nozzle positions are data-driven per archetype (group.userData.nozzles, in
+    // unscaled hull-local space); X/Z scale by the team scale, Y stays (group y=1).
     this.flames = [];
     this.cores = [];
-    this.nozzles = [
-      new THREE.Vector3(-1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
-      new THREE.Vector3(1.05 * V.scaleX, 0.06, 2.46 * V.scaleZ),
-    ];
+    const nozData = shipGroup.userData.nozzles || [{ x: -1.05, y: 0.06, z: 2.46 }, { x: 1.05, y: 0.06, z: 2.46 }];
+    this.nozzles = nozData.map((n) => new THREE.Vector3(n.x * V.scaleX, n.y, n.z * V.scaleZ));
     // AI ships share ONE instanced flame/core batch (7 ships × 2 cones × 2 layers:
     // 28 draws -> 2). They skip the per-ship cone meshes and write their slots in
     // update() with identical transforms/colours. The player stays unbatched.
@@ -109,11 +109,15 @@ export class ShipVisual {
     this.brakeMesh = null;
     this.boostMesh = null;
     if (opts.reactive) {
-      const brakeGeom = ribbon([
+      // Tail-FX placement is per-archetype (group.userData.reactive); pronghorn defaults.
+      const rx = shipGroup.userData.reactive || {};
+      const brake = rx.brake || [
         [[-0.34, 0.30, 2.26], [0.34, 0.30, 2.26]],
         [[-0.34, 0.30, 2.42], [0.34, 0.30, 2.42]],
-      ]);
-      this.brakeMesh = new THREE.Mesh(brakeGeom, new THREE.MeshBasicMaterial({
+      ];
+      const boostPos = rx.boost ? rx.boost.pos : [0, 0.12, 2.3];
+      const boostScale = rx.boost ? rx.boost.scale : 1.4;
+      this.brakeMesh = new THREE.Mesh(ribbon(brake), new THREE.MeshBasicMaterial({
         color: 0xff4a2e, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
       }));
@@ -123,8 +127,8 @@ export class ShipVisual {
         map: makeGlowTexture(), color: C.ENGINE, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       }));
-      this.boostMesh.position.set(0, 0.12, 2.3);
-      this.boostMesh.scale.setScalar(1.4);
+      this.boostMesh.position.set(boostPos[0], boostPos[1], boostPos[2]);
+      this.boostMesh.scale.setScalar(boostScale);
       this.lean.add(this.boostMesh);
     }
 
@@ -548,7 +552,7 @@ function quadFin(p0, p1, p2, p3, expand = 0.04, r = 0.13, thick = 0.06) {
   geo.applyMatrix4(m); return geo;
 }
 
-export function buildShipMesh(V = DEFAULT_VARIANT) {
+function buildPronghorn(V) {
   const group = new THREE.Group();
   const hexa = (cx, w, yT, yM, yB) => [
     [cx - w, yM], [cx - 0.55 * w, yT], [cx + 0.55 * w, yT],
@@ -820,7 +824,14 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
   group.userData.hullGeo = hullGeo;
   group.userData.glowGeo = glowMesh.geometry;
   group.userData.shipScale = [V.scaleX, 1, V.scaleZ];
+  group.userData.nozzles = [{ x: -1.05, y: 0.06, z: 2.46 }, { x: 1.05, y: 0.06, z: 2.46 }];
   return group;
+}
+
+// Dispatcher: each team's variant.arch selects a hull builder. Unknown → pronghorn.
+const ARCH_BUILDERS = { pronghorn: buildPronghorn };
+export function buildShipMesh(V = DEFAULT_VARIANT) {
+  return (ARCH_BUILDERS[V.arch] || ARCH_BUILDERS.pronghorn)(V);
 }
 
 // Hull material: baked vertex colours + a view-angle fresnel rim in the team
