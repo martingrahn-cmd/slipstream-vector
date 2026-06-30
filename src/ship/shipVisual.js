@@ -909,6 +909,14 @@ function buildManta(V) {
   const mc = new THREE.SphereGeometry(0.16, 16, 10); mc.scale(1.3, 0.5, 1.7); mc.translate(0, 0.1, -0.3);
   opaque.push([mc, C.SHIP_CANOPY]);
   glows.push(gcol(ribbon([[[-0.02, 0.15, -1.6], [0.02, 0.15, -1.6]], [[-0.02, 0.1, 1.85], [0.02, 0.1, 1.85]]]), V.accent));
+  // --- surface detail ---
+  const mEdge = ribbon([[[0.34, 0.11, -1.05], [0.30, 0.09, -0.95]], [[1.06, 0.05, -0.15], [1.0, 0.03, -0.05]], [[1.30, 0.02, 0.55], [1.24, 0.0, 0.65]]]); // swept leading-edge glow
+  glows.push(gcol(mEdge, V.accent), gcol(mirrorX(mEdge), V.accent));
+  for (const z of [-0.6, 0.25, 1.05]) { const w = z < -0.2 ? 0.6 : z < 0.7 ? 0.85 : 0.6; opaque.push([ribbon([[[-w, 0.125, z], [w, 0.125, z]], [[-w, 0.125, z + 0.05], [w, 0.125, z + 0.05]]]), 0x4a3f66]); } // deck seams
+  const mStripe = ribbon([[[0.5, 0.07, -0.6], [0.5, 0.02, -0.6]], [[1.0, 0.04, 0.4], [1.0, -0.01, 0.4]]]); // accent flank stripe
+  opaque.push([mStripe, V.accent], [mirrorX(mStripe), V.accent]);
+  glows.push(gcol(ribbon([[[-0.13, 0.17, -0.5], [0.13, 0.17, -0.5]], [[-0.13, 0.19, -0.12], [0.13, 0.19, -0.12]]]), V.accent)); // canopy frame
+  glows.push(gcol(discGeo(-1.2, 0.1, 0.55, 0.05, 8), C.EDGE_L), gcol(discGeo(1.2, 0.1, 0.55, 0.05, 8), C.EDGE_R)); // nav lights
   const nozzles = [{ x: -0.36, y: 0.04, z: 2.05, r: 0.2 }, { x: 0.36, y: 0.04, z: 2.05, r: 0.2 }];
   addEngines(opaque, glows, nozzles, V.accent);
   const reactive = { brake: [[[-0.45, 0.14, 1.7], [0.45, 0.14, 1.7]], [[-0.45, 0.14, 1.95], [0.45, 0.14, 1.95]]], boost: { pos: [0, 0.08, 2.05], scale: 1.2 } };
@@ -930,6 +938,13 @@ function buildDelta(V) {
   opaque.push([tri3d([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, 'x'), V.accent]);
   opaque.push([xform(new THREE.SphereGeometry(0.18, 16, 10), 0, 0.02, -0.7), C.SHIP_CANOPY]);
   glows.push(gcol(ribbon([[[-0.02, 0.16, -2.6], [0.02, 0.16, -2.6]], [[-0.02, 0.14, 2.0], [0.02, 0.14, 2.0]]]), V.accent));
+  // --- surface detail ---
+  const dEdge = ribbon([[[0.55, 0.07, -0.45], [0.5, 0.05, -0.35]], [[1.6, 0.25, 1.28], [1.52, 0.23, 1.36]]]); // forward-swept wing edge glow
+  glows.push(gcol(dEdge, V.accent), gcol(mirrorX(dEdge), V.accent));
+  glows.push(gcol(geomFrom([0, 0.145, -2.2, 0.16, 0.135, -1.7, -0.16, 0.135, -1.7]), V.accent)); // nose chevron
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const x = sx * (0.32 + i * 0.13); opaque.push([slab([x, 0.07, -1.5], [x + sx * 0.05, 0.07, -1.5], [x + sx * 0.05, 0.07, -1.18], [x, 0.07, -1.18], 0.02), C.SHIP_CANOPY]); } // intake slats
+  for (const z of [-0.3, 0.7, 1.5]) { const w = z < 0 ? 0.55 : z < 1 ? 0.95 : 1.25; opaque.push([ribbon([[[-w, 0.135, z], [w, 0.135, z]], [[-w, 0.135, z + 0.06], [w, 0.135, z + 0.06]]]), 0x2a1626]); } // deck seams
+  glows.push(gcol(discGeo(-1.55, 0.24, 1.32, 0.05, 8), C.EDGE_L), gcol(discGeo(1.55, 0.24, 1.32, 0.05, 8), C.EDGE_R)); // nav lights
   const nozzles = [{ x: -0.95, y: 0.04, z: 2.25, r: 0.28 }, { x: 0.95, y: 0.04, z: 2.25, r: 0.28 }];
   addEngines(opaque, glows, nozzles, V.accent);
   const reactive = { brake: [[[-1.0, 0.12, 2.0], [1.0, 0.12, 2.0]], [[-1.0, 0.12, 2.25], [1.0, 0.12, 2.25]]], boost: { pos: [0, 0.1, 2.3], scale: 1.7 } };
@@ -952,6 +967,12 @@ function buildTwinboom(V) {
   opaque.push([tri3d([0, 0.4, 0.4], [0, 1.15, 1.5], [0, 0.4, 1.9], 0.06, 'x'), V.accent]);
   opaque.push([xform(new THREE.SphereGeometry(0.22, 16, 10), 0, 0.28, -0.3), C.SHIP_CANOPY]);
   glows.push(gcol(ribbon([[[-0.02, 0.48, -1.0], [0.02, 0.48, -1.0]], [[-0.02, 0.4, 1.4], [0.02, 0.4, 1.4]]]), V.accent));
+  // --- surface detail ---
+  for (const sx of [-1, 1]) { const bs = ribbon([[[sx * 0.78, 0.18, -0.2], [sx * 0.78, 0.08, -0.2]], [[sx * 0.78, 0.24, 1.5], [sx * 0.78, 0.12, 1.5]]]); opaque.push([bs, V.accent]); } // boom accent stripes
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const z = -0.3 + i * 0.4; opaque.push([slab([sx * 0.5, 0.22, z], [sx * 0.54, 0.12, z], [sx * 0.54, 0.12, z + 0.18], [sx * 0.5, 0.22, z + 0.18], 0.02), C.SHIP_CANOPY]); } // pod louvres
+  for (const z of [-0.8, 0.2, 1.0]) opaque.push([ribbon([[[-0.38, 0.47, z], [0.38, 0.47, z]], [[-0.38, 0.47, z + 0.06], [0.38, 0.47, z + 0.06]]]), 0x2a1a40]); // pod deck seams
+  glows.push(gcol(ribbon([[[0, 0.42, 0.52], [0, 0.42, 0.58]], [[0, 1.1, 1.48], [0, 1.1, 1.54]]]), V.accent)); // fin edge glow
+  glows.push(gcol(discGeo(-0.78, 0.24, 1.62, 0.06, 8), C.EDGE_L), gcol(discGeo(0.78, 0.24, 1.62, 0.06, 8), C.EDGE_R)); // nav lights
   const nozzles = [{ x: -0.78, y: 0.02, z: 2.0, r: 0.42 }, { x: 0.78, y: 0.02, z: 2.0, r: 0.42 }];
   addEngines(opaque, glows, nozzles, V.accent);
   const reactive = { brake: [[[-0.5, 0.46, 1.2], [0.5, 0.46, 1.2]], [[-0.5, 0.46, 1.45], [0.5, 0.46, 1.45]]], boost: { pos: [0, 0.1, 1.9], scale: 1.9 } };
