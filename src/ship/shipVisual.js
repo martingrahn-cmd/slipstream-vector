@@ -10,13 +10,6 @@ import { makeFrame } from '../track/spline.js';
 
 const C = T.COL;
 
-// Premium ship look (cel form + two-tone belly + iridescent rim + themed glow),
-// behind a flag so it can be A/B'd against the classic flat-neon hull. Read at
-// BUILD time, so toggling it + a field rebuild swaps the whole grid's style.
-let PREMIUM = (typeof localStorage !== 'undefined' && localStorage.getItem('sv-premium') === '1');
-export function premiumShip() { return PREMIUM; }
-export function setPremiumShip(on) { PREMIUM = !!on; try { localStorage.setItem('sv-premium', on ? '1' : '0'); } catch (e) { /* ignore */ } }
-
 const DEFAULT_VARIANT = {
   scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1,
   hull: 0xe8e4f0, accent: 0xff2e88, arch: 'pronghorn',
@@ -172,7 +165,7 @@ export class ShipVisual {
     this._engineCol = new THREE.Color();
     // Engine exhaust hue: premium liveries (player ship only — AI use the shared
     // cyan batch) theme the flames/glow/boost-bloom to their own glow colour.
-    this.engBase = (PREMIUM && V.glow != null) ? V.glow : C.ENGINE;
+    this.engBase = (V.glow != null) ? V.glow : C.ENGINE;
   }
 
   // ship: ShipPhysics. input: smoothed axes. boostFactor: juice envelope 0..1.
@@ -524,9 +517,9 @@ function scaleAround(geom, sx, sy, sz, cx, cy, cz) {
   return geom;
 }
 
-// Smooth premium fin: a rounded-corner polygon (from 4 ship-space corners)
-// extruded thin with beveled edges, in the corners' plane. Replaces the hard
-// fin slabs when PREMIUM; baked into the hull like everything else (no draws).
+// Smooth fin: a rounded-corner polygon (from 4 ship-space corners) extruded
+// thin with beveled edges, in the corners' plane. Baked into the hull like
+// everything else (no extra draws).
 function roundedFinShape(pts, r) {
   const sh = new THREE.Shape(); const n = pts.length;
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], L = (v) => Math.hypot(v[0], v[1]) || 1, nz = (v) => { const l = L(v); return [v[0] / l, v[1] / l]; };
@@ -604,14 +597,9 @@ function buildPronghorn(V) {
     [[0.951, 0.352, 1.20], [1.149, 0.352, 1.20]],
   ]), V.accent);
 
-  // 6 + 7. Tail fin + splayed airbrake fins. PREMIUM swaps the sharp slabs for
-  // smooth rounded fins (still baked into the hull, so zero extra draws).
-  if (!PREMIUM) {
-    opaque.push([scaleAround(
-      slab([0, 0.42, 0.95], [0, 0.92, 2.25], [0, 0.30, 2.40], [0, 0.32, 1.05], 0.05),
-      1, V.finScale, 1, 0, 0.36, 0), V.accent]);
-    both(slab([1.20, 0.30, 0.95], [1.66, 0.62, 1.75], [1.62, 0.58, 2.15], [1.18, 0.26, 2.05], 0.05), V.accent);
-  } else {
+  // 6 + 7. Tail fin + splayed airbrake fins: smooth rounded fins, baked into the
+  // hull like everything else (zero extra draws).
+  {
     const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
     opaque.push([scaleAround(quadFin(
       V3(0, 0.42, 0.95), V3(0, 0.92, 2.25), V3(0, 0.30, 2.40), V3(0, 0.32, 1.05), 0.04, 0.16, 0.06),
@@ -666,19 +654,6 @@ function buildPronghorn(V) {
   // 15. Airbrake actuator arms.
   both(slab([1.02, 0.18, 1.55], [1.38, 0.42, 1.75], [1.36, 0.40, 1.88], [1.00, 0.16, 1.68], 0.04), C.SHIP_CANOPY);
 
-  // 16. Fin livery: white panel + dark slash on both faces of the fin. Skipped
-  // for PREMIUM — the smooth fin reads cleaner as a single accent surface.
-  if (!PREMIUM) for (const sx of [-1, 1]) {
-    opaque.push([scaleAround(slab(
-      [sx * 0.045, 0.55, 1.30], [sx * 0.045, 0.80, 1.95],
-      [sx * 0.045, 0.62, 2.04], [sx * 0.045, 0.45, 1.44], 0.012),
-      1, V.finScale, 1, 0, 0.36, 0), V.hull]);
-    opaque.push([scaleAround(slab(
-      [sx * 0.058, 0.60, 1.52], [sx * 0.058, 0.74, 1.86],
-      [sx * 0.058, 0.68, 1.90], [sx * 0.058, 0.55, 1.58], 0.012),
-      1, V.finScale, 1, 0, 0.36, 0), C.SHIP_CANOPY]);
-  }
-
   // 17. Underside strakes below each sponson.
   both(slab([0.95, -0.18, 0.20], [0.95, -0.28, 0.70], [0.95, -0.28, 1.45], [0.95, -0.16, 1.70], 0.03), C.SHIP_CANOPY);
 
@@ -723,11 +698,10 @@ function buildPronghorn(V) {
     ]), 0x4a3f66);
   }
 
-  // 23. PREMIUM high-poly detail (opaque parts): round turbine nacelles + a
-  // canopy dome. Baked into the hull like everything else → 0 extra draws, just
-  // more triangles (cheap on a fill-bound budget). Glow rings added to the glow
-  // set below. AI ships get it too when the flag is on — same draw count.
-  if (PREMIUM) {
+  // 23. High-poly detail (opaque parts): round turbine nacelles + a canopy dome.
+  // Baked into the hull like everything else → 0 extra draws, just more triangles
+  // (cheap on a fill-bound budget). Glow rings added to the glow set below.
+  {
     const MTL = 0x2e3440; // dark machined metal, reads on every livery
     const xf = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
     for (const sx of [-1, 1]) {
@@ -795,9 +769,9 @@ function buildPronghorn(V) {
     0, 0.31, -0.62, 0.11, 0.33, -0.30, -0.11, 0.33, -0.30,
   ]), C.ENGINE));
 
-  // PREMIUM high-poly detail (glow parts): the turbine's neon ring + core disc,
-  // folded into the glow set (C.ENGINE → re-tinted to the livery glow below).
-  if (PREMIUM) {
+  // High-poly detail (glow parts): the turbine's neon ring + core disc, folded
+  // into the glow set (C.ENGINE → re-tinted to the livery glow below).
+  {
     const xg = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
     for (const sx of [-1, 1]) {
       const ex = sx * 1.05;
@@ -814,7 +788,7 @@ function buildPronghorn(V) {
   glowMesh.renderOrder = 1;
   group.add(glowMesh);
   // Premium liveries re-theme the baked cyan engine-glow to their own glow hue.
-  if (PREMIUM && V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
+  if (V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
 
   // Team proportions. Applied on the static mesh group (below the lean node),
   // so roll/pitch animation never shears the scaled geometry.
@@ -859,14 +833,14 @@ function discGeo(cx, cy, cz, r, segs) {
 const gcol = (geo, hex) => colorize(geo.index ? geo.toNonIndexed() : geo, hex);
 const xform = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz); g.translate(x, y, z); return g; };
 
-// Engine at each nozzle: classic dark bell + cyan glow disc; PREMIUM adds a
-// detailed turbine (graphite nacelle + bevel lip + hub + blades + neon ring).
+// Engine at each nozzle: dark bell + cyan glow disc + a detailed turbine
+// (graphite nacelle + bevel lip + hub + blades + neon ring).
 function addEngines(opaque, glows, nozzles, accentHex) {
   for (const n of nozzles) {
     const r = n.r || 0.2, z = n.z;
     opaque.push([xform(new THREE.CylinderGeometry(r * 0.95, r * 1.12, r * 1.7, 18, 1, true), n.x, n.y, z - r * 0.8, Math.PI / 2), C.SHIP_CANOPY]);
     glows.push(gcol(discGeo(n.x, n.y, z + 0.03, r * 0.82, 18), C.ENGINE));
-    if (PREMIUM) {
+    {
       opaque.push([xform(new THREE.CylinderGeometry(r, r * 1.18, r * 2.0, 28, 1, true), n.x, n.y, z - r, Math.PI / 2), 0x2e3440]);
       opaque.push([xform(new THREE.TorusGeometry(r * 1.12, r * 0.16, 12, 40), n.x, n.y, z + r * 0.05), accentHex]);
       opaque.push([xform(new THREE.CylinderGeometry(r * 0.22, r * 0.22, r * 0.7, 14), n.x, n.y, z - r * 0.5, Math.PI / 2), 0x2e3440]);
@@ -889,7 +863,7 @@ function assembleShip(V, opaque, glows, nozzles, reactive) {
   }));
   glowMesh.renderOrder = 1;
   group.add(glowMesh);
-  if (PREMIUM && V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
+  if (V.glow != null) retintGlow(glowMesh.geometry, C.ENGINE, V.glow);
   group.scale.set(V.scaleX, 1, V.scaleZ);
   group.userData = { hullMat: hullMesh.material, hullGeo, glowGeo: glowMesh.geometry, shipScale: [V.scaleX, 1, V.scaleZ], nozzles, reactive };
   return group;
@@ -979,58 +953,12 @@ function buildTwinboom(V) {
   return assembleShip(V, opaque, glows, nozzles, reactive);
 }
 
-// Hull material: baked vertex colours + a view-angle fresnel rim in the team
-// accent, so the silhouette catches a light against the busier backgrounds.
-// The hull material. Classic = flat vertex colours + a fresnel accent rim.
-// Premium (behind the flag) = adds 3-step cel form, AO, a two-tone underbelly,
-// a soft gloss kiss and a dual/iridescent rim — still UNLIT, still flat-neon.
+// Hull material: baked vertex colours + a 3-step cel form, AO, a two-tone
+// underbelly, a soft gloss kiss and a dual/iridescent fresnel rim — still UNLIT,
+// still flat-neon, one draw. The rim catches a light against busy backgrounds.
 function makeHullMaterial(V) {
   const accentHex = (V && typeof V === 'object') ? (V.accent ?? 0xff2e88) : V; // tolerate accent-only callers
-  return PREMIUM ? makePremiumHull(V && typeof V === 'object' ? V : { accent: accentHex }) : makeClassicHull(accentHex);
-}
-
-function makeClassicHull(accentHex) {
-  return new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
-      { rimCol: { value: new THREE.Color(accentHex) }, rimStrength: { value: 0.5 }, uBoost: { value: 0 } },
-    ]),
-    vertexShader: /* glsl */ `
-      attribute vec3 color;
-      varying vec3 vColor;
-      varying vec3 vN;
-      varying vec3 vView;
-      #include <fog_pars_vertex>
-      void main() {
-        vColor = color;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        vN = normalize(normalMatrix * normal);
-        vView = normalize(-mvPosition.xyz);
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 rimCol;
-      uniform float rimStrength;
-      uniform float uBoost;
-      varying vec3 vColor;
-      varying vec3 vN;
-      varying vec3 vView;
-      #include <fog_pars_fragment>
-      void main() {
-        float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.6);
-        // On boost the whole silhouette ignites: rim runs hotter and whitens.
-        vec3 rc = mix(rimCol, vec3(1.0), uBoost * 0.4);
-        float rs = rimStrength * mix(1.0, 1.5, uBoost);
-        vec3 col = vColor + rc * rim * rs;
-        gl_FragColor = vec4(col, 1.0);
-        #include <fog_fragment>
-      }
-    `,
-    fog: true,
-    side: THREE.DoubleSide,
-  });
+  return makePremiumHull(V && typeof V === 'object' ? V : { accent: accentHex });
 }
 
 function makePremiumHull(V) {
