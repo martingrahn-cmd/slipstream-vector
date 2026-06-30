@@ -191,7 +191,10 @@ export class PodiumScene {
   _clearShips() {
     for (const s of this.ships) {
       this.scene.remove(s.obj);
-      s.obj.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+      s.obj.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose();
+      });
     }
     this.ships = [];
     if (this._marker) { this.scene.remove(this._marker); this._marker = null; }

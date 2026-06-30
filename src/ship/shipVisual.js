@@ -825,12 +825,15 @@ function buildPronghorn(V) {
   group.userData.glowGeo = glowMesh.geometry;
   group.userData.shipScale = [V.scaleX, 1, V.scaleZ];
   group.userData.nozzles = [{ x: -1.05, y: 0.06, z: 2.46 }, { x: 1.05, y: 0.06, z: 2.46 }];
+  group.userData.reactive = { brake: [[[-0.34, 0.30, 2.26], [0.34, 0.30, 2.26]], [[-0.34, 0.30, 2.42], [0.34, 0.30, 2.42]]], boost: { pos: [0, 0.12, 2.3], scale: 1.4 } };
   return group;
 }
 
 // Dispatcher: each team's variant.arch selects a hull builder. Unknown → pronghorn.
+// Merge DEFAULT_VARIANT so partial/{} variants (e.g. a podium entry) never NaN out.
 const ARCH_BUILDERS = { pronghorn: buildPronghorn, manta: buildManta, delta: buildDelta, twinboom: buildTwinboom };
 export function buildShipMesh(V = DEFAULT_VARIANT) {
+  V = { ...DEFAULT_VARIANT, ...V };
   return (ARCH_BUILDERS[V.arch] || ARCH_BUILDERS.pronghorn)(V);
 }
 
@@ -1050,7 +1053,7 @@ function makePremiumHull(V) {
         float shade = mix(0.82, 1.20, kq);
         float ao = mix(0.72, 1.0, clamp(No.y * 0.5 + 0.5, 0.0, 1.0));      // belly a touch darker
         vec3 base = vColor * shade * ao;
-        float belly = smoothstep(0.16, -0.10, vPosY); base = mix(base, uBelly, belly * 0.72); // two-tone
+        float belly = smoothstep(0.05, -0.12, vPosY); base = mix(base, uBelly, belly * 0.72); // two-tone (band kept below the deck so flat manta/delta decks stay bright)
         float gloss = smoothstep(0.88, 0.99, key); base += gloss * 0.16;  // polished kiss on top panels
         float rim = pow(1.0 - max(dot(normalize(vN), normalize(vView)), 0.0), 2.4);
         vec3 irid = mix(uRimA, uRimB, clamp(vN.x * 0.6 + 0.5, 0.0, 1.0));  // banks across the silhouette

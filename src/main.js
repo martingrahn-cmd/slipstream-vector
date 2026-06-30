@@ -671,6 +671,13 @@ function celebrateChampion() {
 // Top-three standings as podium entries, each with a ship variant to render.
 // The player gets their real hull/livery; rivals get their accent on a clean
 // hull so the three ships read as distinct teams.
+// Recover an entry's team from its display name ("TEAMNAME · PILOT") so the
+// rival's hull archetype (+ proportions) flows onto the podium — otherwise every
+// rival falls back to the pronghorn and the three ships don't read as distinct.
+function teamForEntry(e) {
+  const nm = (e.name || '').toUpperCase();
+  return TEAMS.find((t) => nm.startsWith(t.name.toUpperCase())) || TEAMS[0];
+}
 function podiumEntries() {
   const sorted = [...champ.points.values()].sort((a, b) => b.pts - a.pts);
   const playerRank = sorted.findIndex((e) => e.player) + 1;
@@ -681,7 +688,7 @@ function podiumEntries() {
     player: e.player,
     variant: e.player
       ? playerVariant
-      : { scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1, hull: 0xd8d4e8, accent: e.accent },
+      : { ...teamForEntry(e).variant, hull: 0xd8d4e8, accent: e.accent }, // rival's own hull, clean silver livery
   }));
   return { top3, playerRank };
 }
