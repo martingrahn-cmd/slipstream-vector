@@ -1122,7 +1122,8 @@ function tick(now) {
   const poolGlow = (state === 'race' || state === 'countdown')
     ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
   _engPool.copy(_ENGINE_C).lerp(_WHITE_C, juice.boostFactor * 0.15); // keep the cyan look on boost (just a hint hotter)
-  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool);
+  const nozOff = shipVisual && shipVisual.nozzles[0] ? Math.abs(shipVisual.nozzles[0].x) : 1.05;
+  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;

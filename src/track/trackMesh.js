@@ -19,8 +19,8 @@ export function buildTrackMesh(spline, theme) {
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
   return {
     group,
-    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null) => {
-      surface.update(t, speed, shipDist, shipLat, glow, engColor);
+    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null) => {
+      surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
     },
   };
@@ -212,13 +212,14 @@ function buildSurface(spline, theme) {
   const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  const update = (t, speed, shipDist = 0, shipLat = 0, glow = 0, engColor = null) => {
+  const update = (t, speed, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null) => {
     mat.uniforms.uTime.value = t;
     mat.uniforms.uSpeed.value = Math.max(0, Math.min(1, speed || 0));
     mat.uniforms.uShipDist.value = shipDist;
     mat.uniforms.uShipLat.value = shipLat;
     mat.uniforms.uShipGlow.value = glow;
     if (engColor) mat.uniforms.engCol.value.copy(engColor);
+    if (nozzleOff != null) mat.uniforms.uNozzleOff.value = nozzleOff; // align road wake to the player hull's nozzle x
   };
   return { mesh, update };
 }

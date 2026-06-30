@@ -916,11 +916,12 @@ function buildManta(V) {
 function buildDelta(V) {
   const opaque = [], glows = [];
   opaque.push([loft([
-    { z: -3.0, pts: hex6(0.05, 0.05, 0.0, -0.05) }, { z: -1.4, pts: hex6(0.5, 0.1, 0.0, -0.12) },
-    { z: 0.4, pts: hex6(1.25, 0.13, 0.0, -0.14) }, { z: 2.0, pts: hex6(1.7, 0.12, 0.0, -0.12) }, { z: 2.5, pts: hex6(1.55, 0.1, 0.0, -0.1) },
+    { z: -3.0, pts: hex6(0.05, 0.05, 0.0, -0.05) }, { z: -1.4, pts: hex6(0.45, 0.1, 0.0, -0.12) },
+    { z: 0.4, pts: hex6(1.05, 0.13, 0.0, -0.14) }, { z: 2.0, pts: hex6(1.5, 0.12, 0.0, -0.12) }, { z: 2.5, pts: hex6(1.36, 0.1, 0.0, -0.1) },
   ], { capStart: true, capEnd: true }), V.hull]);
-  // forward-swept wing blades
-  const wing = tri3d([0.5, 0.02, -0.6], [2.2, 0.06, 1.4], [1.5, 0.0, 2.3], 0.05, 'y');
+  // forward-swept wing blades, narrowed + slight dihedral (tips raised) so a
+  // banked wingtip clears the road (half-span × 1.14 team scale stays < ceiling).
+  const wing = tri3d([0.5, 0.05, -0.5], [1.6, 0.24, 1.3], [1.25, 0.12, 2.2], 0.05, 'y');
   opaque.push([wing, V.hull], [mirrorX(wing), V.hull]);
   // low swept-back tail fin + canopy
   opaque.push([tri3d([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, 'x'), V.accent]);
