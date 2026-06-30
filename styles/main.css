@@ -850,6 +850,9 @@ body.reduced-motion .rail-caret, body.reduced-motion .navitem { transition: none
 /* control rows */
 .ctl-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px; padding: 7px 10px; position: relative; opacity: 0.66; transition: opacity 140ms; }
 .ctl-row.big { grid-template-columns: auto 1fr auto; }
+/* Read-only display row (no arrows, not focusable) — e.g. the pilot's fixed livery. */
+.ctl-row.readonly { grid-template-columns: auto 1fr; opacity: 0.85; }
+.ctl-row.readonly .swatch-pair { margin: 0; }
 .ctl-row label { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.2em; font-size: 11px; color: rgba(255, 255, 255, 0.55); }
 .ctl-row .value { font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 16px; color: #fff; justify-self: start; }
 .ctl-row.big .value { font-size: 22px; }

@@ -9,7 +9,7 @@ const STAGE = {
   championship: ['class', 'difficulty', 'tweak', 'go'],
   single: ['track', 'class', 'difficulty', 'tweak', 'go'],
   time: ['track', 'class', 'tweak', 'go'],
-  garage: ['team', 'livery', 'pilot'],
+  garage: ['team', 'pilot'],
   options: ['music', 'sfx', 'deadzone', 'rumble', 'fullscreen', 'motion'],
   controls: ['ctllist'],
   records: ['reclist'],

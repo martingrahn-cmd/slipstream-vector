@@ -33,23 +33,10 @@ import { TEAMS, PILOT_BIOS, pilotSlug } from './worlds/teams.js';
 import { CLASSES, classKmh } from './worlds/classes.js';
 import { DIFFICULTIES } from './worlds/difficulty.js';
 
-// Prestige livery (index 2 on every team) unlocked by winning the Phantom cup.
-const CHAMPION_LIVERY = { hull: 0x1a1208, accent: 0xffd23f };
-// Premium liveries — bespoke palettes designed for the ship shader (extra
-// fields: bellyTint / accent2 / glow / rim / irid). Offered on every team, after
-// the two team liveries (+ champion). Hex values curated in the livery lab.
-const PREMIUM_LIVERIES = [
-  { name: 'CARBON VYPER', hull: 0x16191f, bellyTint: 0x0a0c10, accent: 0x9dff1f, accent2: 0x5a6b14, glow: 0xaaff2b, rim: 0xb6ff3a },
-  { name: 'IRIS PRISM', hull: 0xcdd6e8, bellyTint: 0x2a2350, accent: 0xff3df0, accent2: 0x19f0ff, glow: 0x3affd0, rim: 0x7df6ff, irid: true },
-];
+// One livery per pilot: team.liveries[0/1] is the signature colour of the team's
+// first / second driver, hard-tied to the pilot for player and AI alike.
 function championUnlocked() { return localStorage.getItem('sv-champion') === '1'; }
-function liveryCount() { return 2 + (championUnlocked() ? 1 : 0) + PREMIUM_LIVERIES.length; }
-function liveryOf(team, idx) {
-  if (idx < 2) return team.liveries[idx];
-  let i = 2;
-  if (championUnlocked()) { if (idx === i) return CHAMPION_LIVERY; i++; }
-  return PREMIUM_LIVERIES[idx - i] || team.liveries[0];
-}
+function liveryOf(team, pilot) { return team.liveries[pilot & 1]; }
 function unlockedClasses() {
   return Math.max(0, Math.min(CLASSES.length - 1,
     parseInt(localStorage.getItem('sv-unlocked') ?? '0', 10) || 0));
@@ -158,8 +145,7 @@ const selection = {
   // Rival difficulty (default PRO ≈ the old per-track average). Always free to pick.
   difficulty: clampInt(localStorage.getItem('sv-difficulty') ?? '1', DIFFICULTIES.length),
   team: clampInt(localStorage.getItem('sv-team'), TEAMS.length),
-  livery: clampInt(localStorage.getItem('sv-livery'), liveryCount()),
-  pilot: clampInt(localStorage.getItem('sv-pilot'), 2), // which of the team's 2 named drivers you are
+  pilot: clampInt(localStorage.getItem('sv-pilot'), 2), // which of the team's 2 named drivers you are — also picks the livery
 };
 
 // Championship: points across the whole roster, awarded per finish position.
@@ -227,7 +213,7 @@ function selectionInfo() {
     ...selection,
     pilotName: team.pilots[selection.pilot] || team.pilots[0],
     teamName: team.name,
-    accentCss: `#${liveryOf(team, selection.livery).accent.toString(16).padStart(6, '0')}`,
+    accentCss: `#${liveryOf(team, selection.pilot).accent.toString(16).padStart(6, '0')}`,
   };
 }
 let debugView = { x: 0, z: 0, h: 760 };
@@ -309,7 +295,7 @@ function buildField() {
   if (race) race.dispose(scene);
   const team = TEAMS[selection.team];
   const cls = CLASSES[selection.classIdx];
-  const variant = { ...team.variant, ...liveryOf(team, selection.livery) };
+  const variant = { ...team.variant, ...liveryOf(team, selection.pilot) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
   shipVisual = new ShipVisual(spline, scene, variant, { reactive: true, groundStyle: theme.groundStyle });
   // Time-trial ghost: a translucent clone of the player's hull that replays the
@@ -325,7 +311,6 @@ function buildField() {
   ship.reset(12);
   podium.setShip(variant);
   localStorage.setItem('sv-team', String(selection.team));
-  localStorage.setItem('sv-livery', String(selection.livery));
   localStorage.setItem('sv-pilot', String(selection.pilot));
   localStorage.setItem('sv-class', String(selection.classIdx));
   localStorage.setItem('sv-difficulty', String(selection.difficulty));
@@ -389,7 +374,7 @@ function pilotFaceInner(name) {
 function entryCardHTML() {
   const team = TEAMS[selection.team];
   const name = team.pilots[selection.pilot] || team.pilots[0];
-  const lv = liveryOf(team, selection.livery);
+  const lv = liveryOf(team, selection.pilot);
   const acc = `#${hex(lv.accent)}`;
   return `<div class="entry-face" style="--pa:${acc}">${pilotFaceInner(name)}</div>`
     + `<div class="entry-meta">`
@@ -482,8 +467,9 @@ function updateMenu() {
   setTxt('menu-team', team.fullName.toUpperCase());
   setTxt('menu-blurb', team.blurb);
   setHTML('menu-stats', ['speed', 'thrust', 'handling'].map((k) => `<div class="stat"><label>${k.toUpperCase()}</label>${bar(team.bars[k])}</div>`).join(''));
-  const liveries = team.liveries.slice(); if (liveryCount() > 2) liveries.push(CHAMPION_LIVERY);
-  setHTML('menu-livery', liveries.map((lv, i) => `<span class="swatch-pair${i === selection.livery ? ' sel' : ''}${i === 2 ? ' champ' : ''}"><i style="background:#${hex(lv.hull)}"></i><i style="background:#${hex(lv.accent)}"></i></span>`).join(''));
+  // LIVERY is read-only now: it just shows the chosen pilot's signature colours.
+  const lvCur = liveryOf(team, selection.pilot);
+  setHTML('menu-livery', `<span class="swatch-pair sel"><i style="background:#${hex(lvCur.hull)}"></i><i style="background:#${hex(lvCur.accent)}"></i></span>`);
   setTxt('menu-pilot', team.pilots[selection.pilot] || team.pilots[0]);
   // Driver dossier: a big hero portrait of the driver you ARE, plus a compact
   // teammate card that switches you to the other seat when clicked (reusing the
@@ -634,9 +620,10 @@ function buildStandingsView() {
   };
 }
 
-// Winning a cup unlocks the next speed class; winning Phantom unlocks the
-// prestige champion livery. Returns a message for the finale board, or null
-// if there was nothing left to unlock.
+// Winning a cup unlocks the next speed class; winning the top (Overdrive) cup
+// crowns you GRAND CHAMPION (a title flag — sv-champion — reserved for a future
+// prestige flourish). Returns a message for the finale board, or null if there
+// was nothing left to unlock.
 function processUnlock(classWon) {
   if (classWon < CLASSES.length - 1) {
     const have = unlockedClasses();
@@ -646,7 +633,7 @@ function processUnlock(classWon) {
     }
   } else if (!championUnlocked()) {
     localStorage.setItem('sv-champion', '1');
-    return 'CHAMPION LIVERY UNLOCKED';
+    return 'GRAND CHAMPION';
   }
   return null;
 }
@@ -668,26 +655,29 @@ function celebrateChampion() {
 }
 
 // Top-three standings as podium entries, each with a ship variant to render.
-// The player gets their real hull/livery; rivals get their accent on a clean
-// hull so the three ships read as distinct teams.
-// Recover an entry's team from its display name ("TEAMNAME · PILOT") so the
-// rival's hull archetype (+ proportions) flows onto the podium — otherwise every
-// rival falls back to the pronghorn and the three ships don't read as distinct.
+// Every ship — player and rivals — wears its pilot's real hull archetype +
+// signature livery, recovered from the display name ("TEAMNAME · PILOT"), so the
+// podium reads exactly like the grid (otherwise rivals fall back to a generic
+// pronghorn/silver and stop looking like their team).
 function teamForEntry(e) {
   const nm = (e.name || '').toUpperCase();
   return TEAMS.find((t) => nm.startsWith(t.name.toUpperCase())) || TEAMS[0];
+}
+function liveryForEntry(e) {
+  const team = teamForEntry(e);
+  const nm = (e.name || '').toUpperCase();
+  const pi = team.pilots.findIndex((p) => nm.includes(p.toUpperCase()));
+  return liveryOf(team, pi >= 0 ? pi : 0);
 }
 function podiumEntries() {
   const sorted = [...champ.points.values()].sort((a, b) => b.pts - a.pts);
   const playerRank = sorted.findIndex((e) => e.player) + 1;
   const team = TEAMS[selection.team];
-  const playerVariant = { ...team.variant, ...liveryOf(team, selection.livery) };
+  const playerVariant = { ...team.variant, ...liveryOf(team, selection.pilot) };
   const top3 = sorted.slice(0, 3).map((e) => ({
     name: e.name,
     player: e.player,
-    variant: e.player
-      ? playerVariant
-      : { ...teamForEntry(e).variant, hull: 0xd8d4e8, accent: e.accent }, // rival's own hull, clean silver livery
+    variant: e.player ? playerVariant : { ...teamForEntry(e).variant, ...liveryForEntry(e) },
   }));
   return { top3, playerRank };
 }
@@ -1204,12 +1194,9 @@ function editRow(row, dir) {
     buildField();
   } else if (row === 'team') {
     selection.team = n(TEAMS.length, selection.team, dir); buildField();
-  } else if (row === 'livery') {
-    selection.livery = n(liveryCount(), selection.livery, dir); buildField();
   } else if (row === 'pilot') {
-    selection.pilot = n(2, selection.pilot, dir);   // which of the team's 2 drivers you are
-    selection.livery = selection.pilot;             // that driver's signature livery follows
-    buildField();                                   // you now occupy that driver's seat
+    selection.pilot = n(2, selection.pilot, dir);   // which of the team's 2 drivers you are —
+    buildField();                                   // each driver wears their own signature livery
   } else if (row === 'music') {
     audio.setMusicVolume(audio.musicVolume + dir);
   } else if (row === 'sfx') {
@@ -1742,7 +1729,7 @@ window.__game = {
     const top3 = [0, 1, 2].map((i) => {
       const isPlayer = i + 1 === rank;
       if (isPlayer) {
-        return { name: 'YOU', player: true, variant: { ...pTeam.variant, ...liveryOf(pTeam, selection.livery) } };
+        return { name: 'YOU', player: true, variant: { ...pTeam.variant, ...liveryOf(pTeam, selection.pilot) } };
       }
       const team = TEAMS[rivals[ri++ % rivals.length]];
       return { name: team.fullName || team.name, player: false, variant: { ...team.variant, ...team.liveries[1] } };

@@ -1,4 +1,5 @@
-// Four racing teams: visual variant + two liveries + driver personality +
+// Four racing teams: visual variant + one signature livery PER PILOT
+// (liveries[0/1] = the team's first/second driver, hard-tied) + personality +
 // SHIP STATS (WipEout-style strengths/weaknesses). The stats apply to the
 // ship — player and AI alike get the team's ship. Drivers never cheat:
 // difficulty only changes driver skill, never physics. No rubber-banding.
@@ -19,8 +20,10 @@ export const TEAMS = [
     bars: { speed: 3, thrust: 3, handling: 3 },
     blurb: 'The all-rounder. No habits to unlearn.',
     liveries: [
-      { hull: 0xe8e4f0, accent: 0xff2e88 }, // white / magenta
-      { hull: 0x232038, accent: 0x00f0ff }, // gunmetal / cyan
+      // JUNO VEX — pearl-gold hull, rose accent, magenta→GOLD iridescent rim (rookie gold)
+      { hull: 0xf3eddc, accent: 0xff4f9d, glow: 0xff7ab0, rim: 0xffd24d, accent2: 0xffd24d, irid: true, bellyTint: 0x2c1a30 },
+      // KAIDE SORO — near-black aubergine hull, electric-violet accent (calm dark twin)
+      { hull: 0x231a30, accent: 0xb14dff, glow: 0xb14dff, rim: 0xcf86ff, bellyTint: 0x0e0820 },
     ],
   },
   {
@@ -34,8 +37,10 @@ export const TEAMS = [
     bars: { speed: 2, thrust: 3, handling: 5 },
     blurb: 'Carves corners like they owe it money.',
     liveries: [
-      { hull: 0xfff3e0, accent: 0xffb13d }, // cream / amber
-      { hull: 0x1d3c48, accent: 0x7df9ff }, // deep teal / ice
+      // MERIDIAN BLUE — porcelain hull, true azure accent (bluer than the cyan road edge)
+      { hull: 0xe9eef3, accent: 0x2f8bff, glow: 0x4da3ff, rim: 0x8fd0ff, bellyTint: 0x14304a },
+      // SOL ANARA — deep-teal hull, jade-mint accent, warm amber champion rim
+      { hull: 0x123832, accent: 0x33e3b0, glow: 0x33e3b0, rim: 0xffc24d, accent2: 0x8ff7d6, irid: true, bellyTint: 0x06181a },
     ],
   },
   {
@@ -49,8 +54,10 @@ export const TEAMS = [
     bars: { speed: 5, thrust: 2, handling: 2 },
     blurb: 'Fastest thing on the straights. Pray for the corners.',
     liveries: [
-      { hull: 0x241019, accent: 0xff3d2e }, // black / red
-      { hull: 0xd8e2e8, accent: 0x16101e }, // silver / black
+      // VOSS KRAIT — predator near-black hull, blood-red accent (darkest ship on the grid)
+      { hull: 0x180b0d, accent: 0xff2a1c, glow: 0xff3a1f, rim: 0xff5a30, bellyTint: 0x060203 },
+      // KIRA NOX — chrome shell, amber-orange accent, ice-white mirror irid rim (the AI)
+      { hull: 0xd8dfe6, accent: 0xff8a1e, glow: 0xffa030, rim: 0x9fe6ff, accent2: 0xeaf6ff, irid: true, bellyTint: 0x2a2e34 },
     ],
   },
   {
@@ -64,8 +71,10 @@ export const TEAMS = [
     bars: { speed: 2, thrust: 5, handling: 3 },
     blurb: 'Launches out of every corner. Lives for the pads.',
     liveries: [
-      { hull: 0x3a1b6b, accent: 0xffe066 }, // violet / gold
-      { hull: 0xe8e4f0, accent: 0x3fae6b }, // white / jungle green
+      // LYRA STORM — electric-violet hull, lemon-gold accent (reckless boost-gold)
+      { hull: 0x2a1656, accent: 0xffe23a, glow: 0xffcf2a, rim: 0xffee8c, bellyTint: 0x0d0622 },
+      // ECHO TANE — pearl-violet hull, acid-green accent, acid→jade iridescent (signal-green)
+      { hull: 0xe4e0ec, accent: 0x8ef23a, glow: 0x6fd624, rim: 0xd8ff8a, accent2: 0x3fae6b, irid: true, bellyTint: 0x161320 },
     ],
   },
 ];
