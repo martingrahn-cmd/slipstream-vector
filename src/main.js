@@ -1595,6 +1595,9 @@ function backToMenu() {
   }
   rig.reset(ship);
   input.clearPressed();
+  // Land on the console-menu nav rail (DEPTH 0), not deep in a section on the
+  // GO row — otherwise the next ENTER re-activates GO and relaunches the race.
+  menu.toNav();
   updateMenu();
   revealMenu();
 }
