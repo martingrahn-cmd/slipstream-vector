@@ -551,7 +551,6 @@ function buildPronghorn(V) {
     [cx - w, yM], [cx - 0.55 * w, yT], [cx + 0.55 * w, yT],
     [cx + w, yM], [cx + 0.55 * w, yB], [cx - 0.55 * w, yB],
   ];
-  const diamond = (w, yT, yM, yB) => [[-w, yM], [0, yT], [w, yM], [0, yB]];
   const octa = (cx, cy, r) => {
     const pts = [];
     for (let i = 0; i < 8; i++) {
@@ -562,6 +561,7 @@ function buildPronghorn(V) {
   };
 
   const opaque = []; // [geometry, colorHex]
+  const glows = [];  // colorized geoms → additive glow mesh (declared up-front so addCanopy can add its spar)
   const both = (geom, color) => { opaque.push([geom, color], [mirrorX(geom), color]); };
 
   // 1. Sponson prongs (the split nose).
@@ -579,12 +579,8 @@ function buildPronghorn(V) {
     { z: 2.40, pts: hexa(0, 0.14, 0.24, 0.12, 0.04) },
   ], { capStart: true, capEnd: true }), V.hull]);
 
-  // 3. Canopy.
-  opaque.push([loft([
-    { z: -0.55, pts: diamond(0.02, 0.20, 0.18, 0.16) },
-    { z: 0.05, pts: diamond(0.20, 0.58, 0.42, 0.30) },
-    { z: 0.75, pts: diamond(0.16, 0.50, 0.40, 0.32) },
-  ], { capEnd: true }), C.SHIP_CANOPY]);
+  // 3. Pilot canopy — a raised glass bubble on the centre pod.
+  addCanopy(opaque, glows, 0, 0.4, -0.02, 0.2, 0.29, 0.62, V.accent);
 
   // 4. Wing bridges.
   both(slab([0.32, 0.12, -0.05], [0.95, 0.12, 0.55], [0.95, 0.10, 1.45], [0.32, 0.12, 0.80], 0.06), V.hull);
@@ -713,9 +709,6 @@ function buildPronghorn(V) {
       for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; opaque.push([xf(new THREE.BoxGeometry(0.022, 0.18, 0.05), ex + Math.cos(a) * 0.135, 0.06 + Math.sin(a) * 0.135, 2.32, 0, 0, a), MTL]); } // blades
       opaque.push([xf(new THREE.TorusGeometry(0.15, 0.012, 8, 32), ex, 0.06, 2.36), MTL]);                            // inner ring
     }
-    const dome = new THREE.SphereGeometry(0.22, 36, 22, 0, Math.PI * 2, 0, Math.PI * 0.55);
-    dome.scale(0.9, 0.7, 1.5); dome.translate(0, 0.36, 0.2);
-    opaque.push([dome, C.SHIP_CANOPY]);
   }
 
   const baked = opaque.map(([g, col]) => bakeFlatColors(g, col, { rim: false }));
@@ -725,7 +718,7 @@ function buildPronghorn(V) {
   group.add(hullMesh);
 
   // ---- glow set: slot rails, leading-edge strips, fin edge, nozzle discs ----
-  const glows = [];
+  // (glows[] is declared up-front; the canopy spar is already in it)
   const railPts = [[-2.30, 0.556], [-1.90, 0.550], [-1.00, 0.610], [0.00, 0.690], [1.20, 0.740], [1.90, 0.787]];
   const rail = ribbon(railPts.map(([z, x]) => [[x, 0.00, z], [x, 0.08, z]]));
   glows.push(colorize(rail, C.ENGINE), colorize(mirrorX(rail), C.ENGINE));
@@ -869,6 +862,29 @@ function assembleShip(V, opaque, glows, nozzles, reactive) {
   return group;
 }
 
+// A believable pilot CANOPY — a raised dark-glass bubble (elongated dome, so a
+// seated pilot plausibly fits) sunk into a machined coaming, with an accent
+// crown spar. Every hull calls this so it clearly reads "the pilot sits HERE".
+// Glass + coaming bake into the hull; the spar folds into the glow set.
+// cx/cy/cz = base centre (cy sits on the deck); W/H/L = half-width / height /
+// half-length of the dome.
+function addCanopy(opaque, glows, cx, cy, cz, W, H, L, accentHex) {
+  // recessed coaming ring the bubble sits IN (reads as a cockpit tub, not a blob)
+  const rim = new THREE.CylinderGeometry(1, 1.05, 0.09, 22, 1, true);
+  rim.scale(W * 1.08, 1, L * 1.08); rim.translate(cx, cy + 0.03, cz);
+  opaque.push([rim, 0x2e3440]);
+  // dark glass bubble — upper half-ellipsoid, longer fore-aft than wide
+  const glass = new THREE.SphereGeometry(1, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  glass.scale(W, H, L); glass.translate(cx, cy + 0.05, cz);
+  opaque.push([glass, C.SHIP_CANOPY]);
+  // crown spar: a thin accent rib running nose→tail over the canopy top
+  glows.push(gcol(ribbon([
+    [[cx - 0.02, cy + 0.08, cz - L * 0.84], [cx + 0.02, cy + 0.08, cz - L * 0.84]],
+    [[cx - 0.025, cy + H * 0.92, cz - L * 0.08], [cx + 0.025, cy + H * 0.92, cz - L * 0.08]],
+    [[cx - 0.02, cy + H * 0.58, cz + L * 0.82], [cx + 0.02, cy + H * 0.58, cz + L * 0.82]],
+  ]), accentHex));
+}
+
 // HALCYON — low, wide, soft manta wing-body (handling).
 function buildManta(V) {
   const opaque = [], glows = [];
@@ -879,9 +895,8 @@ function buildManta(V) {
   // upturned wingtip winglets
   const tip = tri3d([1.2, 0.0, 0.2], [1.42, 0.26, 0.5], [1.0, 0.0, 0.8], 0.04, 'x');
   opaque.push([tip, V.accent], [mirrorX(tip), V.accent]);
-  // low dark canopy + dorsal accent line
-  const mc = new THREE.SphereGeometry(0.16, 16, 10); mc.scale(1.3, 0.5, 1.7); mc.translate(0, 0.1, -0.3);
-  opaque.push([mc, C.SHIP_CANOPY]);
+  // pilot canopy — a raised glass bubble forward of centre + dorsal accent line
+  addCanopy(opaque, glows, 0, 0.13, -0.4, 0.26, 0.3, 0.66, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.15, -1.6], [0.02, 0.15, -1.6]], [[-0.02, 0.1, 1.85], [0.02, 0.1, 1.85]]]), V.accent));
   // --- surface detail ---
   const mEdge = ribbon([[[0.34, 0.11, -1.05], [0.30, 0.09, -0.95]], [[1.06, 0.05, -0.15], [1.0, 0.03, -0.05]], [[1.30, 0.02, 0.55], [1.24, 0.0, 0.65]]]); // swept leading-edge glow
@@ -908,9 +923,9 @@ function buildDelta(V) {
   // banked wingtip clears the road (half-span × 1.14 team scale stays < ceiling).
   const wing = tri3d([0.5, 0.05, -0.5], [1.6, 0.24, 1.3], [1.25, 0.12, 2.2], 0.05, 'y');
   opaque.push([wing, V.hull], [mirrorX(wing), V.hull]);
-  // low swept-back tail fin + canopy
+  // low swept-back tail fin + a raised pilot canopy forward on the spine
   opaque.push([tri3d([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, 'x'), V.accent]);
-  opaque.push([xform(new THREE.SphereGeometry(0.18, 16, 10), 0, 0.02, -0.7), C.SHIP_CANOPY]);
+  addCanopy(opaque, glows, 0, 0.12, -0.6, 0.24, 0.3, 0.62, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.16, -2.6], [0.02, 0.16, -2.6]], [[-0.02, 0.14, 2.0], [0.02, 0.14, 2.0]]]), V.accent));
   // --- surface detail ---
   const dEdge = ribbon([[[0.55, 0.07, -0.45], [0.5, 0.05, -0.35]], [[1.6, 0.25, 1.28], [1.52, 0.23, 1.36]]]); // forward-swept wing edge glow
@@ -937,9 +952,9 @@ function buildTwinboom(V) {
     boom.translate(sx * 0.78, 0.02, 0);
     opaque.push([boom, V.hull]);
   }
-  // tall fin + canopy
+  // tall fin + a raised pilot canopy on the centre pod
   opaque.push([tri3d([0, 0.4, 0.4], [0, 1.15, 1.5], [0, 0.4, 1.9], 0.06, 'x'), V.accent]);
-  opaque.push([xform(new THREE.SphereGeometry(0.22, 16, 10), 0, 0.28, -0.3), C.SHIP_CANOPY]);
+  addCanopy(opaque, glows, 0, 0.42, -0.25, 0.27, 0.32, 0.6, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.48, -1.0], [0.02, 0.48, -1.0]], [[-0.02, 0.4, 1.4], [0.02, 0.4, 1.4]]]), V.accent));
   // --- surface detail ---
   for (const sx of [-1, 1]) { const bs = ribbon([[[sx * 0.78, 0.18, -0.2], [sx * 0.78, 0.08, -0.2]], [[sx * 0.78, 0.24, 1.5], [sx * 0.78, 0.12, 1.5]]]); opaque.push([bs, V.accent]); } // boom accent stripes
