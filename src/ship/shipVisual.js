@@ -888,25 +888,30 @@ function addCanopy(opaque, glows, cx, cy, cz, W, H, L, accentHex) {
 // HALCYON — low, wide, soft manta wing-body (handling).
 function buildManta(V) {
   const opaque = [], glows = [];
+  // Broad swept manta wing-body: a long graceful leading-edge sweep out to wide
+  // wingtips near the rear, then a swept trailing edge into a slim tail. Flat and
+  // low — the whole body is the wing.
   opaque.push([loft([
-    { z: -2.0, pts: lens8(0.22, 0.12) }, { z: -1.2, pts: lens8(0.62, 0.16) }, { z: -0.35, pts: lens8(1.1, 0.16) },
-    { z: 0.4, pts: lens8(1.3, 0.14) }, { z: 1.2, pts: lens8(0.95, 0.12) }, { z: 1.9, pts: lens8(0.5, 0.1) }, { z: 2.45, pts: lens8(0.16, 0.07) },
+    { z: -2.1, pts: lens8(0.14, 0.10) }, { z: -1.2, pts: lens8(0.52, 0.15) }, { z: -0.2, pts: lens8(0.98, 0.16) },
+    { z: 0.6, pts: lens8(1.42, 0.14) }, { z: 1.25, pts: lens8(1.72, 0.12) }, { z: 1.75, pts: lens8(1.5, 0.10) },
+    { z: 2.1, pts: lens8(0.8, 0.09) }, { z: 2.5, pts: lens8(0.2, 0.08) },
   ], { capStart: true, capEnd: true }), V.hull]);
-  // upturned wingtip winglets
-  const tip = tri3d([1.2, 0.0, 0.2], [1.42, 0.26, 0.5], [1.0, 0.0, 0.8], 0.04, 'x');
+  // soft upturned wingtips (gentle, not pointy) at the widest span
+  const tip = quadFin(
+    new THREE.Vector3(1.55, 0.02, 0.95), new THREE.Vector3(1.78, 0.16, 1.3),
+    new THREE.Vector3(1.5, 0.06, 1.62), new THREE.Vector3(1.32, 0.0, 1.28), 0.03, 0.1, 0.05);
   opaque.push([tip, V.accent], [mirrorX(tip), V.accent]);
   // pilot canopy — a raised glass bubble forward of centre + dorsal accent line
   addCanopy(opaque, glows, 0, 0.13, -0.4, 0.26, 0.3, 0.66, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.15, -1.6], [0.02, 0.15, -1.6]], [[-0.02, 0.1, 1.85], [0.02, 0.1, 1.85]]]), V.accent));
-  // --- surface detail ---
-  const mEdge = ribbon([[[0.34, 0.11, -1.05], [0.30, 0.09, -0.95]], [[1.06, 0.05, -0.15], [1.0, 0.03, -0.05]], [[1.30, 0.02, 0.55], [1.24, 0.0, 0.65]]]); // swept leading-edge glow
+  // --- surface detail (tracks the wide swept wing) ---
+  const mEdge = ribbon([[[0.5, 0.13, -0.85], [0.44, 0.11, -0.75]], [[1.2, 0.08, 0.2], [1.12, 0.06, 0.3]], [[1.66, 0.03, 1.1], [1.56, 0.01, 1.22]]]); // swept leading-edge glow → wingtip
   glows.push(gcol(mEdge, V.accent), gcol(mirrorX(mEdge), V.accent));
-  for (const z of [-0.6, 0.25, 1.05]) { const w = z < -0.2 ? 0.6 : z < 0.7 ? 0.85 : 0.6; opaque.push([ribbon([[[-w, 0.125, z], [w, 0.125, z]], [[-w, 0.125, z + 0.05], [w, 0.125, z + 0.05]]]), 0x4a3f66]); } // deck seams
-  const mStripe = ribbon([[[0.5, 0.07, -0.6], [0.5, 0.02, -0.6]], [[1.0, 0.04, 0.4], [1.0, -0.01, 0.4]]]); // accent flank stripe
+  for (const z of [-0.4, 0.5, 1.15]) { const w = z < 0 ? 0.7 : z < 0.9 ? 1.15 : 1.45; opaque.push([ribbon([[[-w, 0.125, z], [w, 0.125, z]], [[-w, 0.125, z + 0.06], [w, 0.125, z + 0.06]]]), 0x4a3f66]); } // deck seams
+  const mStripe = ribbon([[[0.55, 0.09, -0.2], [0.55, 0.03, -0.2]], [[1.25, 0.05, 0.75], [1.25, -0.01, 0.75]]]); // accent flank stripe
   opaque.push([mStripe, V.accent], [mirrorX(mStripe), V.accent]);
-  glows.push(gcol(ribbon([[[-0.13, 0.17, -0.5], [0.13, 0.17, -0.5]], [[-0.13, 0.19, -0.12], [0.13, 0.19, -0.12]]]), V.accent)); // canopy frame
-  glows.push(gcol(discGeo(-1.2, 0.1, 0.55, 0.05, 8), C.EDGE_L), gcol(discGeo(1.2, 0.1, 0.55, 0.05, 8), C.EDGE_R)); // nav lights
-  const nozzles = [{ x: -0.36, y: 0.04, z: 2.05, r: 0.2 }, { x: 0.36, y: 0.04, z: 2.05, r: 0.2 }];
+  glows.push(gcol(discGeo(-1.62, 0.05, 1.2, 0.055, 8), C.EDGE_L), gcol(discGeo(1.62, 0.05, 1.2, 0.055, 8), C.EDGE_R)); // nav lights at the wingtips
+  const nozzles = [{ x: -0.3, y: 0.07, z: 2.02, r: 0.16 }, { x: 0.3, y: 0.07, z: 2.02, r: 0.16 }];
   addEngines(opaque, glows, nozzles, V.accent);
   const reactive = { brake: [[[-0.45, 0.14, 1.7], [0.45, 0.14, 1.7]], [[-0.45, 0.14, 1.95], [0.45, 0.14, 1.95]]], boost: { pos: [0, 0.08, 2.05], scale: 1.2 } };
   return assembleShip(V, opaque, glows, nozzles, reactive);
@@ -919,22 +924,28 @@ function buildDelta(V) {
     { z: -3.0, pts: hex6(0.05, 0.05, 0.0, -0.05) }, { z: -1.4, pts: hex6(0.45, 0.1, 0.0, -0.12) },
     { z: 0.4, pts: hex6(1.05, 0.13, 0.0, -0.14) }, { z: 2.0, pts: hex6(1.5, 0.12, 0.0, -0.12) }, { z: 2.5, pts: hex6(1.36, 0.1, 0.0, -0.1) },
   ], { capStart: true, capEnd: true }), V.hull]);
-  // forward-swept wing blades, narrowed + slight dihedral (tips raised) so a
-  // banked wingtip clears the road (half-span × 1.14 team scale stays < ceiling).
-  const wing = tri3d([0.5, 0.05, -0.5], [1.6, 0.24, 1.3], [1.25, 0.12, 2.2], 0.05, 'y');
+  // big forward-swept delta wings with SOFT tips (not thin pointy blades), with
+  // dihedral (tips raised) so a banked wingtip clears the road.
+  const wing = quadFin(
+    new THREE.Vector3(0.5, 0.03, -0.65), new THREE.Vector3(1.72, 0.2, 0.95),
+    new THREE.Vector3(1.5, 0.11, 2.25), new THREE.Vector3(0.85, 0.05, 2.05), 0.04, 0.14, 0.06);
   opaque.push([wing, V.hull], [mirrorX(wing), V.hull]);
   // low swept-back tail fin + a raised pilot canopy forward on the spine
   opaque.push([tri3d([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, 'x'), V.accent]);
   addCanopy(opaque, glows, 0, 0.12, -0.6, 0.24, 0.3, 0.62, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.16, -2.6], [0.02, 0.16, -2.6]], [[-0.02, 0.14, 2.0], [0.02, 0.14, 2.0]]]), V.accent));
   // --- surface detail ---
-  const dEdge = ribbon([[[0.55, 0.07, -0.45], [0.5, 0.05, -0.35]], [[1.6, 0.25, 1.28], [1.52, 0.23, 1.36]]]); // forward-swept wing edge glow
+  const dEdge = ribbon([[[0.52, 0.04, -0.6], [0.46, 0.03, -0.5]], [[1.7, 0.2, 0.9], [1.62, 0.19, 1.0]]]); // forward-swept wing leading-edge glow
   glows.push(gcol(dEdge, V.accent), gcol(mirrorX(dEdge), V.accent));
   glows.push(gcol(geomFrom([0, 0.145, -2.2, 0.16, 0.135, -1.7, -0.16, 0.135, -1.7]), V.accent)); // nose chevron
-  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const x = sx * (0.32 + i * 0.13); opaque.push([slab([x, 0.07, -1.5], [x + sx * 0.05, 0.07, -1.5], [x + sx * 0.05, 0.07, -1.18], [x, 0.07, -1.18], 0.02), C.SHIP_CANOPY]); } // intake slats
+  // twin dorsal air intakes on the fuselage shoulders, angled back to feed the rear engines
+  for (const sx of [-1, 1]) {
+    opaque.push([slab([sx * 0.22, 0.13, 0.35], [sx * 0.52, 0.12, 0.5], [sx * 0.52, 0.0, 1.25], [sx * 0.22, 0.02, 1.05], 0.03), C.SHIP_CANOPY]);
+    glows.push(gcol(ribbon([[[sx * 0.22, 0.14, 0.34], [sx * 0.52, 0.13, 0.49]], [[sx * 0.26, 0.04, 1.1], [sx * 0.54, 0.03, 1.22]]]), V.accent)); // intake lip
+  }
   for (const z of [-0.3, 0.7, 1.5]) { const w = z < 0 ? 0.55 : z < 1 ? 0.95 : 1.25; opaque.push([ribbon([[[-w, 0.135, z], [w, 0.135, z]], [[-w, 0.135, z + 0.06], [w, 0.135, z + 0.06]]]), 0x2a1626]); } // deck seams
-  glows.push(gcol(discGeo(-1.55, 0.24, 1.32, 0.05, 8), C.EDGE_L), gcol(discGeo(1.55, 0.24, 1.32, 0.05, 8), C.EDGE_R)); // nav lights
-  const nozzles = [{ x: -0.95, y: 0.04, z: 2.25, r: 0.28 }, { x: 0.95, y: 0.04, z: 2.25, r: 0.28 }];
+  glows.push(gcol(discGeo(-1.68, 0.19, 1.0, 0.05, 8), C.EDGE_L), gcol(discGeo(1.68, 0.19, 1.0, 0.05, 8), C.EDGE_R)); // nav lights at the wingtips
+  const nozzles = [{ x: -0.52, y: 0.06, z: 2.28, r: 0.22 }, { x: 0.52, y: 0.06, z: 2.28, r: 0.22 }];
   addEngines(opaque, glows, nozzles, V.accent);
   const reactive = { brake: [[[-1.0, 0.12, 2.0], [1.0, 0.12, 2.0]], [[-1.0, 0.12, 2.25], [1.0, 0.12, 2.25]]], boost: { pos: [0, 0.1, 2.3], scale: 1.7 } };
   return assembleShip(V, opaque, glows, nozzles, reactive);
