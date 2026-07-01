@@ -298,6 +298,7 @@ function buildField() {
   const variant = { ...team.variant, ...liveryOf(team, selection.pilot) };
   ship = new ShipPhysics(spline, juice, team.stats, cls);
   shipVisual = new ShipVisual(spline, scene, variant, { reactive: true, groundStyle: theme.groundStyle });
+  trails.setColor(shipVisual.engBase); // exhaust ribbon runs the ship's glow hue at the nozzle
   // Time-trial ghost: a translucent clone of the player's hull that replays the
   // best lap. Built every field rebuild; the saved path loads only in TT.
   ghost = new GhostShip(spline, scene, shipVisual.hullGeo, variant.scaleX ?? 1, variant.scaleZ ?? 1);
