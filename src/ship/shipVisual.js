@@ -163,8 +163,9 @@ export class ShipVisual {
 
     this._m = new THREE.Matrix4();
     this._engineCol = new THREE.Color();
-    // Engine exhaust hue: premium liveries (player ship only — AI use the shared
-    // cyan batch) theme the flames/glow/boost-bloom to their own glow colour.
+    this._coreCol = new THREE.Color(); // white-hot inner core, tinted by the ship's hue
+    // Engine exhaust hue: every ship (player AND AI) themes its flames / glow /
+    // core / boost-bloom to its own livery glow colour.
     this.engBase = (V.glow != null) ? V.glow : C.ENGINE;
   }
 
@@ -218,7 +219,8 @@ export class ShipVisual {
     const throttleAmt = input.throttle;
     const flick = 1 + 0.15 * Math.sin(this.time * 30 * Math.PI * 2 + Math.sin(this.time * 17) * 3);
     const flameLen = (0.5 + 1.8 * throttleAmt + 1.5 * boostFactor) * flick;
-    this._engineCol.setHex(this.engBase).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor * 0.3); // base hue (themed for premium liveries) whitening on boost
+    this._engineCol.setHex(this.engBase).lerp(new THREE.Color(C.ENGINE_BOOST), boostFactor * 0.3); // base hue (themed per livery) whitening on boost
+    this._coreCol.copy(this._engineCol).lerp(_WHITE, 0.5); // hot inner core = a lightened version of the ship's hue (no fixed cyan)
     for (const fl of this.flames) {
       fl.scale.set(1 + boostFactor * 0.6, 1 + boostFactor * 0.6, flameLen);
       fl.material.color.copy(this._engineCol);
@@ -226,6 +228,7 @@ export class ShipVisual {
     // White-hot core: shorter, thinner, brighter — the inner tongue of the jet.
     for (const c of this.cores) {
       c.scale.set(1 + boostFactor * 0.5, 1 + boostFactor * 0.5, flameLen * 0.62);
+      c.material.color.copy(this._coreCol);
       c.material.opacity = Math.min(0.85, (0.28 + 0.34 * throttleAmt + 0.4 * boostFactor) * flick);
     }
     for (const g of this.glows) {
@@ -242,7 +245,7 @@ export class ShipVisual {
       for (let i = 0; i < this.nozzles.length; i++) {
         this.fxBatch.write(this.fxBase + i, this.lean.matrixWorld, this.nozzles[i],
           1 + boostFactor * 0.6, flameLen, this._engineCol,
-          1 + boostFactor * 0.5, flameLen * 0.62, coreOp);
+          1 + boostFactor * 0.5, flameLen * 0.62, coreOp, this._coreCol);
         this.fxBatch.writeGlow(this.fxBase + i, this.lean.matrixWorld, this.nozzles[i], glowSc, this._engineCol);
       }
     }
@@ -320,7 +323,7 @@ export class ShipVisual {
 // additive, opacity 0.85, colour via instanceColor) — like the old Sprites. The
 // player ship is never batched.
 const _IDQ = new THREE.Quaternion();
-const _CORE_BASE = new THREE.Color(0xcdf6ff);
+const _WHITE = new THREE.Color(0xffffff);
 export class EngineFXBatch {
   constructor(scene, capacity) {
     this.used = 0;
@@ -357,13 +360,13 @@ export class EngineFXBatch {
   }
   claim(n) { const base = this.used; this.used += n; this.flames.count = this.cores.count = this.glows.count = this.used; return base; }
   // Write one nozzle slot. leanWorld: the ship's lean matrixWorld this frame.
-  write(slot, leanWorld, nozzle, flameXY, flameLen, flameCol, coreXY, coreLen, coreOpacity) {
+  write(slot, leanWorld, nozzle, flameXY, flameLen, flameCol, coreXY, coreLen, coreOpacity, coreCol) {
     this._m.compose(nozzle, _IDQ, this._s.set(flameXY, flameXY, flameLen)).premultiply(leanWorld);
     this.flames.setMatrixAt(slot, this._m);
     this.flames.setColorAt(slot, flameCol);
     this._m.compose(nozzle, _IDQ, this._s.set(coreXY, coreXY, coreLen)).premultiply(leanWorld);
     this.cores.setMatrixAt(slot, this._m);
-    this.cores.setColorAt(slot, this._c.copy(_CORE_BASE).multiplyScalar(coreOpacity));
+    this.cores.setColorAt(slot, this._c.copy(coreCol || _WHITE).multiplyScalar(coreOpacity));
   }
   // Glow billboard data for a nozzle (the matrix is composed in flush() with the
   // camera orientation so the quad faces the screen, exactly like a Sprite).
