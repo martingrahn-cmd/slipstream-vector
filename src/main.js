@@ -732,8 +732,7 @@ const _vel = new THREE.Vector3();
 const _dots = [];
 const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
 const _dustB = new THREE.Color(0x33271a);
-const _engPool = new THREE.Color();          // engine light-pool colour, cyan -> white on boost
-const _ENGINE_C = new THREE.Color(T.COL.ENGINE);
+const _engPool = new THREE.Color();          // engine light-pool colour — the ship's glow hue, hint-hotter on boost
 const _WHITE_C = new THREE.Color(0xffffff);
 juice.on('wallHit', ({ side, severity }) => {
   spline.frameAt(ship.s, _f);
@@ -1224,7 +1223,7 @@ function tick(now) {
   // Engine light-pool on the road behind the ship (throttle + boost, cyan->white).
   const poolGlow = (state === 'race' || state === 'countdown')
     ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
-  _engPool.copy(_ENGINE_C).lerp(_WHITE_C, juice.boostFactor * 0.15); // keep the cyan look on boost (just a hint hotter)
+  _engPool.setHex(shipVisual ? shipVisual.engBase : T.COL.ENGINE).lerp(_WHITE_C, juice.boostFactor * 0.15); // road wake runs the ship's glow hue (hint hotter on boost)
   const nozOff = shipVisual && shipVisual.nozzles[0] ? Math.abs(shipVisual.nozzles[0].x) : 1.05;
   track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff);
   const raceProgress = state === 'race'
