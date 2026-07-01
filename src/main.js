@@ -873,7 +873,7 @@ function showIntro() {
 
   // Duck the (menu) music so the pilot's line carries. Non-persisting: we poke
   // the bus gain directly, NOT setMusicVolume (which would save the ducked value).
-  if (audio.musicBus) { _introDuck = audio.musicBus.gain.value; audio.musicBus.gain.value = _introDuck * 0.14; }
+  if (audio.musicBus) { _introDuck = audio.musicBus.gain.value; audio.musicBus.gain.value = _introDuck * 0.4; }
 
   // Play WITH sound — GO was a user gesture, so autoplay-with-audio is allowed.
   const vid = el.querySelector('.cf__vid');
