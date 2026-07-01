@@ -905,11 +905,15 @@ function buildManta(V) {
     { z: 0.6, pts: lens8(1.42 * bw, 0.14) }, { z: 1.25, pts: lens8(1.72 * bw, 0.12) }, { z: 1.75, pts: lens8(1.5 * bw, 0.10) },
     { z: 2.1, pts: lens8(0.8 * bw, 0.09) }, { z: 2.5, pts: lens8(0.2 * bw, 0.08) },
   ], { capStart: true, capEnd: true }), V.hull]);
-  // soft upturned wingtips (gentle, not pointy) at the widest span
-  const tip = quadFin(
-    new THREE.Vector3(1.55 * bw, 0.02, 0.95), new THREE.Vector3(1.78 * bw, 0.16, 1.3),
-    new THREE.Vector3(1.5 * bw, 0.06, 1.62), new THREE.Vector3(1.32 * bw, 0.0, 1.28), 0.03, 0.1, 0.05);
-  opaque.push([tip, V.accent], [mirrorX(tip), V.accent]);
+  // soft upturned wingtips at the widest span — editor knobs: tipSize (scale
+  // about the tip's own centre), tipRaise (upturn), tipX/tipZ (position).
+  {
+    const ts = t.tipSize ?? 1, trs = t.tipRaise ?? 1, ttx = t.tipX ?? 0, ttz = t.tipZ ?? 0;
+    const cx = 1.5375 * bw, cz = 1.2875; // tip centroid
+    const tp = (x, y, z) => new THREE.Vector3(cx + (x * bw - cx) * ts + ttx, y * trs, cz + (z - cz) * ts + ttz);
+    const tip = quadFin(tp(1.55, 0.02, 0.95), tp(1.78, 0.16, 1.3), tp(1.5, 0.06, 1.62), tp(1.32, 0.0, 1.28), 0.03, 0.1, 0.05);
+    opaque.push([tip, V.accent], [mirrorX(tip), V.accent]);
+  }
   // pilot canopy — a raised glass bubble forward of centre + dorsal accent line
   addCanopy(opaque, glows, 0, t.canY ?? 0.13, t.canZ ?? -0.4, t.canW ?? 0.26, t.canH ?? 0.3, t.canL ?? 0.66, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.15, -1.6], [0.02, 0.15, -1.6]], [[-0.02, 0.1, 1.85], [0.02, 0.1, 1.85]]]), V.accent));
