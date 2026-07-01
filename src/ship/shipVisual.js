@@ -602,9 +602,12 @@ function buildPronghorn(V) {
     opaque.push([scaleAround(quadFin(
       V3(0, 0.42, 0.95 + fz), V3(0, 0.92, 2.25 + fz), V3(0, 0.30, 2.40 + fz), V3(0, 0.32, 1.05 + fz), 0.04, 0.16, 0.06),
       1, V.finScale, 1, 0, 0.36, 0), V.accent]);
+    // splayed V airbrake fins — vfinH height / vfinSpread how wide the V opens / vfinZ fore-aft
+    const vh = t.vfinH ?? 1, vsp = t.vfinSpread ?? 1, vz = t.vfinZ ?? 0;
     for (const sx of [-1, 1]) {
+      const vf = (x, y, z) => V3(x * vsp, 0.28 + (y - 0.28) * vh, z + vz);
       opaque.push([quadFin(
-        V3(sx * 1.20, 0.30, 0.95), V3(sx * 1.66, 0.62, 1.75), V3(sx * 1.62, 0.58, 2.15), V3(sx * 1.18, 0.26, 2.05), 0.04, 0.10, 0.05), V.accent]);
+        vf(sx * 1.20, 0.30, 0.95), vf(sx * 1.66, 0.62, 1.75), vf(sx * 1.62, 0.58, 2.15), vf(sx * 1.18, 0.26, 2.05), 0.04, 0.10, 0.05), V.accent]);
     }
   }
 
