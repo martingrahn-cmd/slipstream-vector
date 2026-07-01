@@ -133,10 +133,9 @@ export class ExhaustTrails {
       side: THREE.DoubleSide,
     }));
     this.mesh.frustumCulled = false;
-    // Trail runs the ship's glow hue at the NOZZLE, cooling to the base engine
-    // cyan down the WAKE (colHead → colTail gradient). setColor() themes the head.
+    // The ribbon is the ship's glow hue (matches the direct engine glow),
+    // set via setColor(); defaults to the base engine cyan. Whitens on boost.
     this.colHead = new THREE.Color(T.COL.ENGINE);
-    this.colTail = new THREE.Color(T.COL.ENGINE);
     this.colBoost = new THREE.Color(0xfff6e8);
     this._c = new THREE.Color();
     this._dir = new THREE.Vector3();
@@ -149,7 +148,7 @@ export class ExhaustTrails {
     for (const tr of this.trails) tr.points.length = 0;
   }
 
-  // Theme the nozzle end of the trail to the ship's glow hue (wake stays cyan).
+  // Theme the whole trail to the ship's glow hue (matches the engine glow).
   setColor(hex) { this.colHead.set(hex); }
 
   push(trailIdx, worldPos) {
@@ -165,8 +164,8 @@ export class ExhaustTrails {
 
   update(dt, camera, boostFactor, speedNorm) {
     const width = 0.12 + 0.22 * boostFactor;
-    const alphaBase = (0.08 + speedNorm * 0.35 + boostFactor * 0.35)
-      * Math.min(speedNorm * 4, 1); // no ghost ribbon while parked
+    const alphaBase = (0.08 + speedNorm * 0.24 + boostFactor * 0.35)
+      * Math.min(speedNorm * 4, 1); // lower speed-alpha so the ship-hue holds (doesn't blow to white); no ghost ribbon while parked
     for (let trIdx = 0; trIdx < 2; trIdx++) {
       const tr = this.trails[trIdx];
       const base = trIdx * this.maxPoints * 2;
@@ -186,11 +185,9 @@ export class ExhaustTrails {
         if (this._dir.lengthSq() < 1e-6) this._dir.set(0, 0, 1);
         this._side.subVectors(p.pos, camera.position).cross(this._dir).normalize();
         const fade = 1 - p.t / this.maxAge;
-        // gradient: hold the ship's glow hue over the first ~half of the trail
-        // (so it clearly reads as the ship's colour), then cool to base cyan down
-        // the wake; whiten on boost.
-        const grad = Math.min(1, Math.max(0, i / (this.maxPoints - 1) - 0.45) / 0.55);
-        this._c.copy(this.colHead).lerp(this.colTail, grad).lerp(this.colBoost, boostFactor);
+        // the ribbon is the ship's glow hue the whole length (matches the direct
+        // engine glow), fading out via alpha; only boost whitens it.
+        this._c.copy(this.colHead).lerp(this.colBoost, boostFactor);
         const w = width * (0.4 + 0.6 * fade);
         this.positions[k] = p.pos.x + this._side.x * w;
         this.positions[k + 1] = p.pos.y + this._side.y * w;
