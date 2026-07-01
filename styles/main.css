@@ -1008,23 +1008,101 @@ body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-row.binding
    is missing (png+jpg both 404), the <img> removes itself and initials show. */
 .face-init { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-weight: 800; color: var(--pa, var(--cyan)); text-shadow: 0 0 12px var(--pa, var(--cyan)); }
 .pilot-roster { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; min-height: 0; }
-.pilot-hero { position: relative; display: flex; flex-direction: column; gap: 7px; }
-/* Frame matches the art's 2:3 aspect so the WHOLE portrait shows (no chin crop). */
-.hero-face { position: relative; width: auto; height: clamp(190px, 33vh, 300px); aspect-ratio: 2 / 3; margin: 0 auto; flex: none; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.07); overflow: hidden; clip-path: polygon(0 0, 100% 0, 100% 93%, 91% 100%, 0 100%); box-shadow: 0 0 24px -6px var(--pa, var(--cyan)); }
-.hero-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
-.hero-face .face-init { font-size: 46px; }
-.hero-name { margin-top: 9px; text-align: center; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; color: #fff; }
-.hero-name b { display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: var(--pa, var(--cyan)); vertical-align: middle; border: 1px solid var(--pa, var(--cyan)); border-radius: 2px; }
-.pilot-bio { font-family: 'Rajdhani', sans-serif; font-size: 14.5px; line-height: 1.42; color: rgba(228, 234, 255, 0.88); }
-.pilot-mate { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; text-align: left; transition: border-color 140ms, background 140ms; }
-.pilot-mate:hover { border-color: var(--pa, var(--cyan)); background: rgba(255, 255, 255, 0.06); }
-.mate-face { position: relative; width: 46px; height: 46px; flex: none; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.07); overflow: hidden; clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%); }
-.mate-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-.mate-face .face-init { font-size: 15px; }
-.mate-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.mate-tag { font-family: 'Rajdhani', sans-serif; font-size: 9.5px; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.4); }
-.mate-name { font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 12px; color: #fff; }
-.mate-swap { flex: none; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.12em; color: var(--pa, var(--cyan)); }
+
+/* ============================================================================
+   .cf — the reusable PILOT COMMS-FRAME (driver-ID / dog-tag). ONE language for
+   the garage dossier (.cf--hero), the pre-race intro card (.cf--intro) and the
+   future in-race banter chip (.cf--chip/.cf--comms). Everything scales from two
+   knobs: --pa (per-pilot accent) and --u (size). Extends THE BAY verbatim.
+   ============================================================================ */
+.cf {
+  --u: 1; --pa: var(--cyan);
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(9px * var(--u)); color: #fff;
+  font-family: 'Rajdhani', sans-serif;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012)), #0a0714;
+  border: 1px solid var(--pa, var(--cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px * var(--u)), calc(100% - 12px * var(--u)) 100%, 0 100%);
+  box-shadow: 0 0 calc(26px * var(--u)) -8px var(--pa, var(--cyan)), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+.cf::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(3px * var(--u)); background: var(--pa, var(--cyan)); box-shadow: 0 0 calc(9px * var(--u)) var(--pa, var(--cyan)); }
+
+/* the ID window: portrait / video, 2:3, corner ticks */
+.cf__win { position: relative; margin: calc(9px * var(--u)) calc(9px * var(--u)) 0; aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--pa, var(--cyan)); background: rgba(120, 150, 200, 0.06); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px * var(--u)), calc(100% - 9px * var(--u)) 100%, 0 100%); }
+.cf__face, .cf__poster { position: absolute; inset: 0; }
+.cf__face img, .cf__poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.cf__face .face-init { font-size: calc(38px * var(--u)); }
+
+.cf__ticks { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.cf__ticks i { position: absolute; width: calc(9px * var(--u)); height: calc(9px * var(--u)); border: 1px solid var(--pa, var(--cyan)); opacity: 0.8; }
+.cf__ticks i:nth-child(1) { top: 5px; left: 5px; border-right: 0; border-bottom: 0; }
+.cf__ticks i:nth-child(2) { top: 5px; right: 5px; border-left: 0; border-bottom: 0; }
+.cf__ticks i:nth-child(3) { bottom: 5px; left: 5px; border-right: 0; border-top: 0; }
+.cf__ticks i:nth-child(4) { bottom: 5px; right: 5px; border-left: 0; border-top: 0; }
+
+.cf__stamp { position: absolute; z-index: 3; top: 7px; left: 7px; padding: 2px 6px; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: calc(9px * var(--u)); letter-spacing: 0.18em; color: #05040c; background: var(--pa, var(--cyan)); clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%); }
+.cf__serial { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 7px; padding: 4px 8px; font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: calc(8px * var(--u)); letter-spacing: 0.1em; white-space: nowrap; color: rgba(233, 239, 255, 0.82); background: linear-gradient(0deg, rgba(6, 4, 14, 0.9), transparent); }
+.cf__serial > span { overflow: hidden; text-overflow: ellipsis; }
+.cf__sig { margin-left: auto; color: var(--pa, var(--cyan)); flex: none; }
+.cf__led { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pa, var(--cyan)); box-shadow: 0 0 8px var(--pa, var(--cyan)); animation: cfLed 1.6s ease-in-out infinite; }
+
+/* the data spine: name plate, team, bio/stats */
+.cf__spine { padding: 0 calc(11px * var(--u)) calc(11px * var(--u)); display: grid; gap: 6px; }
+.cf__plate { display: flex; align-items: baseline; gap: 8px; }
+.cf__call { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: calc(16px * var(--u)); letter-spacing: 0.03em; color: #fff; text-shadow: 0 0 calc(14px * var(--u)) rgba(0, 0, 0, 0.35); }
+.cf__you, .cf__tag { font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: calc(9px * var(--u)); letter-spacing: 0.18em; color: var(--pa, var(--cyan)); padding: 1px 5px; border: 1px solid var(--pa, var(--cyan)); }
+.cf__team { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: calc(10px * var(--u)); letter-spacing: 0.16em; color: rgba(255, 255, 255, 0.5); }
+.cf__bio { font-weight: 500; font-size: calc(13px * var(--u)); line-height: 1.4; color: rgba(228, 234, 255, 0.86); margin: 0; }
+/* GRAND CHAMPION — prestige flourish for Overdrive-cup winners. Gold, so it
+   reads as a title/reward WITHOUT touching the pilot's signature livery. */
+.cf__champ { display: flex; align-items: center; gap: 6px; font-family: 'Rajdhani', sans-serif; font-weight: 800; font-size: calc(10px * var(--u)); letter-spacing: 0.2em; color: #ffd23f; text-shadow: 0 0 10px rgba(255, 210, 63, 0.5); }
+.cf__champ span { color: #ffd23f; }
+
+/* HERO variant — the garage dossier, portrait-forward, fills the column.
+   Portrait is width-driven (2:3) but capped in vh so it never crowds the spine
+   or the teammate chip on shorter screens (object-fit cover takes the crop). */
+.cf--hero { width: 100%; }
+.cf--hero .cf__win { max-height: 46vh; }
+.cf--hero .cf__call { font-size: 17px; }
+.cf--hero .cf__face .face-init { font-size: 46px; }
+.cf--hero .cf__bio { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cf__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 8px; margin-top: 2px; }
+.cf__stat { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.cf__stat label { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.45); }
+/* compact stat cells (the big 16px cells are for the left column) — scoped under
+   #overlay to beat the `#overlay .bar i` id-specificity, recoloured to --pa. */
+#overlay .cf__stat .bar { flex: none; gap: 2px; }
+#overlay .cf__stat .bar i { width: 6px; height: 6px; }
+#overlay .cf__stat .bar i.on { background: var(--pa, var(--cyan)); box-shadow: 0 0 6px -1px var(--pa, var(--cyan)); }
+
+/* CHIP variant — teammate now, banter feed later: same frame, half scale, one row */
+.cf--chip { --u: 0.5; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 6px; background: linear-gradient(100deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01)), #0a0714; transition: border-color 140ms, box-shadow 140ms; }
+.cf--chip .cf__win { margin: 0; width: 44px; aspect-ratio: 1 / 1; }
+.cf--chip .cf__ticks, .cf--chip .cf__stamp, .cf--chip .cf__serial { display: none; }
+.cf--chip .cf__spine { padding: 0; gap: 1px; }
+.cf__swap { flex: none; align-self: center; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.12em; color: var(--pa, var(--cyan)); }
+.cf--mate { margin-top: 10px; cursor: pointer; text-align: left; }
+.cf--mate .cf__call { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: none; }
+.cf--mate:hover, .cf--mate:focus-visible { border-color: var(--pa, var(--cyan)); box-shadow: 0 0 20px -8px var(--pa, var(--cyan)); outline: none; }
+
+/* INTRO variant — the SAME frame, blown up + centred, video in the window.
+   Portrait (per the intro-video aspect), no catchphrase text overlay. */
+.cf--intro { --u: 1.5; width: min(360px, 84vw); animation: cfSlam 260ms cubic-bezier(0.2, 0.9, 0.2, 1) both; }
+.cf--intro .cf__call { font-size: 26px; }
+.cf__vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; z-index: 2; background: #0a0714; }
+.cf__vid.is-dead { display: none; }
+.cf__poster { z-index: 1; }
+
+/* full-bleed transmitted backdrop for the intro; z ABOVE podium(60) at 62 */
+.pilot-intro { position: fixed; inset: 0; z-index: 62; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 220ms; background: radial-gradient(120% 80% at 50% 40%, rgba(7, 6, 15, 0.55), #07060f 82%); }
+.pilot-intro.show { opacity: 1; pointer-events: auto; }
+.pi__scan { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: 0.5; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px); }
+.pi__skip { position: absolute; bottom: 30px; right: 34px; display: flex; align-items: center; gap: 8px; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.16em; color: rgba(223, 230, 255, 0.72); animation: cfBlink 1.6s ease-in-out infinite; }
+.pi__skip .kbtn { color: var(--pa, var(--cyan)); }
+
+@keyframes cfSlam { from { opacity: 0; transform: translateY(-14px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes cfBlink { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes cfLed { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+body.reduced-motion .cf--intro, body.reduced-motion .cf__led, body.reduced-motion .pi__skip { animation: none; }
 
 /* ---- "your entry" loadout confirmation on race-setup screens ---- */
 .entry-card { display: flex; align-items: stretch; gap: 11px; padding: 9px 11px; margin: 4px 0; border: 1px solid rgba(255, 255, 255, 0.12); border-left: 2px solid var(--hot); background: linear-gradient(100deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)); }

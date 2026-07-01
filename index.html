@@ -6,7 +6,7 @@
   <title>SLIPSTREAM VECTOR</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./styles/main.css" />
 </head>
 <body>
@@ -41,6 +41,7 @@
 
   <div class="hud hidden" id="center-msg"></div>
   <div class="hud hidden" id="countdown"><span id="cd-digit"></span></div>
+  <div class="hud hidden pilot-intro" id="pilot-intro"></div>
   <div class="hud hidden" id="center-sub"></div>
   <div class="hud" id="stats"></div>
 
@@ -148,6 +149,7 @@
             <div class="opt-grp">DISPLAY</div>
             <div class="ctl-row" data-row="fullscreen"><label>FULLSCREEN</label><span class="arrow l">&#9664;</span><span class="value" id="opt-fs"></span><span class="arrow r">&#9654;</span></div>
             <div class="ctl-row" data-row="motion"><label>MOTION FX</label><span class="arrow l">&#9664;</span><span class="value" id="opt-motion"></span><span class="arrow r">&#9654;</span></div>
+            <div class="ctl-row" data-row="pilotintro"><label>PILOT INTRO</label><span class="arrow l">&#9664;</span><span class="value" id="opt-pilotintro"></span><span class="arrow r">&#9654;</span></div>
           </div>
           <div class="col right"><div class="vp-frame"><div class="legend" id="opt-legend"></div></div><div class="vp-note" id="opt-gp">GAMEPAD: <span id="opt-gp-state">—</span></div></div>
         </section>

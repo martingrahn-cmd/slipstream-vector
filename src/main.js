@@ -471,23 +471,39 @@ function updateMenu() {
   const lvCur = liveryOf(team, selection.pilot);
   setHTML('menu-livery', `<span class="swatch-pair sel"><i style="background:#${hex(lvCur.hull)}"></i><i style="background:#${hex(lvCur.accent)}"></i></span>`);
   setTxt('menu-pilot', team.pilots[selection.pilot] || team.pilots[0]);
-  // Driver dossier: a big hero portrait of the driver you ARE, plus a compact
-  // teammate card that switches you to the other seat when clicked (reusing the
-  // PILOT row's arrow so keyboard/gamepad/click all share one code path).
+  // Driver dossier: the pilot comms-frame "at rest" — a big driver-ID card for
+  // the pilot you ARE (portrait + name plate + team + bio + accent stat bars),
+  // plus the SAME frame at chip scale for the teammate (click = switch seat,
+  // reusing the PILOT row's arrow so keyboard/gamepad/click share one path).
   const me = selection.pilot, mate = me === 0 ? 1 : 0;
   const heroName = team.pilots[me], mateName = team.pilots[mate];
   const heroAcc = `#${hex(team.liveries[me].accent)}`, mateAcc = `#${hex(team.liveries[mate].accent)}`;
+  const sn = `SV-${team.name.slice(0, 3).toUpperCase()}-0${me + 1}`;
   setHTML('pilot-roster',
-    `<div class="pilot-hero" style="--pa:${heroAcc}">`
-      + `<div class="hero-face">${pilotFaceInner(heroName)}</div>`
-      + `<div class="hero-name">${heroName} <b>YOU</b></div>`
-      + `<div class="pilot-bio">${PILOT_BIOS[heroName] || ''}</div>`
+    `<div class="cf cf--hero" style="--pa:${heroAcc}">`
+      + `<div class="cf__win">`
+        + `<div class="cf__ticks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`
+        + `<div class="cf__face">${pilotFaceInner(heroName)}</div>`
+        + `<div class="cf__stamp">ACTIVE PILOT</div>`
+        + `<div class="cf__serial"><span class="cf__led"></span><span>${sn}</span><span class="cf__sig">LIVE</span></div>`
+      + `</div>`
+      + `<div class="cf__spine">`
+        + `<div class="cf__plate"><span class="cf__call">${heroName}</span><span class="cf__you">YOU</span></div>`
+        + (championUnlocked() ? `<div class="cf__champ"><span>&#9670;</span> GRAND CHAMPION</div>` : '')
+        + `<div class="cf__team">${team.fullName.toUpperCase()} &#9670; ${team.name}</div>`
+        + `<p class="cf__bio">${PILOT_BIOS[heroName] || ''}</p>`
+        + `<div class="cf__stats">`
+          + `<div class="cf__stat"><label>SPD</label>${bar(team.bars.speed)}</div>`
+          + `<div class="cf__stat"><label>THR</label>${bar(team.bars.thrust)}</div>`
+          + `<div class="cf__stat"><label>HND</label>${bar(team.bars.handling)}</div>`
+        + `</div>`
+      + `</div>`
     + `</div>`
-    + `<button class="pilot-mate" style="--pa:${mateAcc}" title="Switch to ${mateName}"`
+    + `<button class="cf cf--chip cf--mate" style="--pa:${mateAcc}" title="Switch to ${mateName}"`
       + ` onclick="document.querySelector('.section.garage [data-row=pilot] .arrow.r').click()">`
-      + `<div class="mate-face">${pilotFaceInner(mateName)}</div>`
-      + `<div class="mate-meta"><span class="mate-tag">TEAMMATE</span><span class="mate-name">${mateName}</span></div>`
-      + `<span class="mate-swap">SWITCH &#9656;</span>`
+      + `<div class="cf__win"><div class="cf__face">${pilotFaceInner(mateName)}</div></div>`
+      + `<div class="cf__spine"><span class="cf__tag">TEAMMATE</span><span class="cf__call">${mateName}</span></div>`
+      + `<span class="cf__swap">SWITCH &#9656;</span>`
     + `</button>`);
 
   setHTML('opt-music', volBar(audio.musicVolume));
@@ -497,6 +513,7 @@ function updateMenu() {
   setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
   setTxt('opt-fs', document.fullscreenElement ? 'ON' : 'OFF');
   setTxt('opt-motion', document.body.classList.contains('reduced-motion') ? 'REDUCED' : 'FULL');
+  setTxt('opt-pilotintro', INTRO_LABEL[introMode]);
   setTxt('opt-gp-state', input.gamepadActive ? 'CONNECTED' : 'NONE');
   const legend = document.getElementById('opt-legend');
   if (legend && !legend.dataset.filled) { legend.dataset.filled = '1'; legend.innerHTML = CONTROLS_LEGEND; }
@@ -807,7 +824,94 @@ let onboarding = localStorage.getItem('sv-onboarded') !== '1';
 let onbThisRace = false;   // true only during the genuine first race
 let onbBoostShown = false; // the boost-pad tip fires once, on the first pad
 
+// --- pre-race pilot intro card ------------------------------------------
+// The chosen pilot "hails" you in the comms-frame before the countdown. Gated
+// inside startCountdown() so every call site (start / resume / restart) is
+// covered; dismissed by the video ending, any confirm/skip button, or a
+// backstop timeout, then it re-enters startCountdown() for the real sweep.
+const INTRO_MODES = ['first', 'always', 'off'];
+const INTRO_LABEL = { first: 'FIRST RACE', always: 'ALWAYS', off: 'OFF' };
+let introMode = INTRO_MODES.includes(localStorage.getItem('sv-intro')) ? localStorage.getItem('sv-intro') : 'first';
+let introArmed = true;    // whether the NEXT startCountdown should hail (per introMode)
+let introActive = false;  // the card is up (swallows input, gates the countdown)
+let _introTO = 0;         // backstop auto-advance handle
+let _introDuck = null;    // saved music-bus gain while ducked
+
+function showIntro() {
+  const team = TEAMS[selection.team];
+  const name = team.pilots[selection.pilot] || team.pilots[0];
+  const acc = `#${hex(liveryOf(team, selection.pilot).accent)}`;
+  const slug = pilotSlug(name);
+  const posterExt = slug === 'juno-vex' ? 'png' : 'jpg'; // Juno is the lone .png portrait
+  const el = document.getElementById('pilot-intro');
+  el.innerHTML =
+    `<div class="pi__scan" aria-hidden="true"></div>`
+    + `<div class="cf cf--intro" style="--pa:${acc}">`
+      + `<div class="cf__win">`
+        + `<div class="cf__ticks" aria-hidden="true"><i></i><i></i><i></i><i></i></div>`
+        + `<div class="cf__face">`
+          + `<video class="cf__vid" playsinline preload="auto" poster="assets/pilots/${slug}.${posterExt}"`
+            + ` onerror="this.classList.add('is-dead')">`
+            + `<source src="assets/pilots/${slug}.mp4" type="video/mp4">`
+            + `<source src="assets/pilots/${slug}.webm" type="video/webm">`
+          + `</video>`
+          + `<div class="cf__poster">${pilotFaceInner(name)}</div>`
+        + `</div>`
+        + `<div class="cf__stamp">INCOMING TRANSMISSION</div>`
+        + `<div class="cf__serial"><span class="cf__led"></span><span>${team.name.slice(0, 3).toUpperCase()} UPLINK</span><span class="cf__sig">ON AIR</span></div>`
+      + `</div>`
+      + `<div class="cf__spine">`
+        + `<div class="cf__plate"><span class="cf__call">${name}</span><span class="cf__you">YOU</span></div>`
+        + `<div class="cf__team">${team.fullName.toUpperCase()}</div>`
+      + `</div>`
+    + `</div>`
+    + `<div class="pi__skip">${glyph('confirm')} <span>SKIP</span></div>`;
+  el.classList.remove('hidden');
+  requestAnimationFrame(() => el.classList.add('show'));
+  introActive = true;
+  input.clearPressed();
+
+  // Duck the (menu) music so the pilot's line carries. Non-persisting: we poke
+  // the bus gain directly, NOT setMusicVolume (which would save the ducked value).
+  if (audio.musicBus) { _introDuck = audio.musicBus.gain.value; audio.musicBus.gain.value = _introDuck * 0.14; }
+
+  // Play WITH sound — GO was a user gesture, so autoplay-with-audio is allowed.
+  const vid = el.querySelector('.cf__vid');
+  clearTimeout(_introTO);
+  _introTO = setTimeout(dismissIntro, 4200); // backstop if the file is missing/blocked
+  if (vid) {
+    vid.muted = false; vid.volume = 1;
+    vid.addEventListener('ended', dismissIntro, { once: true });
+    vid.addEventListener('loadedmetadata', () => {
+      if (isFinite(vid.duration) && vid.duration > 0.4) { clearTimeout(_introTO); _introTO = setTimeout(dismissIntro, vid.duration * 1000 + 500); }
+    });
+    const p = vid.play();
+    if (p && p.catch) p.catch(() => { /* blocked or no file — poster shows, backstop advances */ });
+  }
+}
+
+function dismissIntro() {
+  if (!introActive) return;
+  introActive = false;
+  clearTimeout(_introTO);
+  const el = document.getElementById('pilot-intro');
+  const vid = el.querySelector('.cf__vid'); if (vid) { try { vid.pause(); } catch (e) { /* ignore */ } }
+  el.classList.remove('show');
+  setTimeout(() => { el.classList.add('hidden'); el.innerHTML = ''; }, 240);
+  if (audio.musicBus && _introDuck != null) { audio.musicBus.gain.value = _introDuck; _introDuck = null; }
+  input.clearPressed();
+  startCountdown(); // introArmed already consumed → falls through to the real sweep
+}
+
 function startCountdown() {
+  // Pilot intro card gates the countdown once (per introMode); dismissIntro()
+  // re-enters here and falls through to the real sweep.
+  if (introArmed && introMode !== 'off' && !document.body.classList.contains('reduced-motion')) {
+    introArmed = false;
+    showIntro();
+    return;
+  }
+  introArmed = introMode === 'always'; // re-arm so ALWAYS hails before every race
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
   ship.lap = 1;
   rig.reset(ship);
@@ -1210,6 +1314,9 @@ function editRow(row, dir) {
     toggleFullscreen();
   } else if (row === 'motion') {
     applyReducedMotion(true);
+  } else if (row === 'pilotintro') {
+    introMode = INTRO_MODES[n(INTRO_MODES.length, INTRO_MODES.indexOf(introMode), dir)];
+    localStorage.setItem('sv-intro', introMode);
   } else if (row === 'tier') {
     trophyTier = TROPHY_FILTERS[n(TROPHY_FILTERS.length, TROPHY_FILTERS.indexOf(trophyTier), dir)];
   }
@@ -1430,6 +1537,14 @@ function handleKeys() {
     return;
   }
 
+  // Pre-race pilot intro card: any confirm/skip button dismisses it; swallow
+  // everything else so the menu/pause behind it can't react while it's up.
+  if (introActive) {
+    if (input.consume('Enter') || input.consume('Space') || input.consume('Backspace')
+      || input.consumeAction('confirm') || input.consumeAction('pause')) dismissIntro();
+    return;
+  }
+
   // The pause menu owns all input while open; otherwise P (or gamepad Start) opens
   // it mid-race. NOT Escape — the browser steals it to leave fullscreen.
   if (paused) { applyPauseKeys(); return; }
@@ -1577,6 +1692,7 @@ function backToMenu() {
   }
   rig.reset(ship);
   input.clearPressed();
+  introArmed = true; // a fresh race sequence hails again
   // Land on the console-menu nav rail (DEPTH 0), not deep in a section on the
   // GO row — otherwise the next ENTER re-activates GO and relaunches the race.
   menu.toNav();
@@ -1747,7 +1863,7 @@ window.__game = {
   },
   champ,
   selection,
-  start: () => { hud.setCenter(null); startCountdown(); state = 'race'; },
+  start: () => { introArmed = false; hud.setCenter(null); startCountdown(); state = 'race'; },
   setTrack: (i) => {
     trackIndex = ((i % TRACKS.length) + TRACKS.length) % TRACKS.length;
     buildWorld(trackIndex);

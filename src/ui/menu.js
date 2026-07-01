@@ -10,7 +10,7 @@ const STAGE = {
   single: ['track', 'class', 'difficulty', 'tweak', 'go'],
   time: ['track', 'class', 'tweak', 'go'],
   garage: ['team', 'pilot'],
-  options: ['music', 'sfx', 'deadzone', 'rumble', 'fullscreen', 'motion'],
+  options: ['music', 'sfx', 'deadzone', 'rumble', 'fullscreen', 'motion', 'pilotintro'],
   controls: ['ctllist'],
   records: ['reclist'],
   trophies: ['tier'],
