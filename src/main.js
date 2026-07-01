@@ -886,7 +886,9 @@ function showIntro() {
       if (isFinite(vid.duration) && vid.duration > 0.4) { clearTimeout(_introTO); _introTO = setTimeout(dismissIntro, vid.duration * 1000 + 500); }
     });
     const p = vid.play();
-    if (p && p.catch) p.catch(() => { /* blocked or no file — poster shows, backstop advances */ });
+    // If autoplay-WITH-sound is blocked (rare after the GO gesture), retry muted
+    // so the clip still plays visually rather than freezing on the poster.
+    if (p && p.catch) p.catch(() => { vid.muted = true; vid.play().catch(() => { /* no file/codec — poster + underlay show, backstop advances */ }); });
   }
 }
 
