@@ -885,10 +885,18 @@ function showIntro() {
     vid.addEventListener('loadedmetadata', () => {
       if (isFinite(vid.duration) && vid.duration > 0.4) { clearTimeout(_introTO); _introTO = setTimeout(dismissIntro, vid.duration * 1000 + 500); }
     });
+    // Source failures fire on the LAST <source> child (not the <video>) — when it
+    // fires, hide the video so the static-portrait underlay shows (Safari would
+    // otherwise leave a black/empty box instead of painting the poster).
+    const lastSrc = vid.querySelector('source:last-of-type');
+    if (lastSrc) lastSrc.addEventListener('error', () => vid.classList.add('is-dead'), { once: true });
     const p = vid.play();
     // If autoplay-WITH-sound is blocked (rare after the GO gesture), retry muted
     // so the clip still plays visually rather than freezing on the poster.
-    if (p && p.catch) p.catch(() => { vid.muted = true; vid.play().catch(() => { /* no file/codec — poster + underlay show, backstop advances */ }); });
+    if (p && p.catch) p.catch(() => {
+      vid.muted = true;
+      vid.play().catch(() => { if (vid.networkState === 3) vid.classList.add('is-dead'); /* NO_SOURCE — underlay shows, backstop advances */ });
+    });
   }
 }
 

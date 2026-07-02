@@ -1088,7 +1088,9 @@ body.reduced-motion .kb-row.binding .kb-key, body.reduced-motion .kb-row.binding
    Portrait (per the intro-video aspect), no catchphrase text overlay. */
 .cf--intro { --u: 1.5; width: min(360px, 84vw); animation: cfSlam 260ms cubic-bezier(0.2, 0.9, 0.2, 1) both; }
 .cf--intro .cf__call { font-size: 26px; }
-.cf__vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; z-index: 2; background: #0a0714; }
+/* Transparent background: if the browser doesn't paint the poster (Safari with a
+   dead source), the static-portrait underlay must show through — never a black box. */
+.cf__vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; z-index: 2; }
 .cf__vid.is-dead { display: none; }
 .cf__poster { z-index: 1; }
 
