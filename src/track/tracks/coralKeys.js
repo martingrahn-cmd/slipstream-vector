@@ -48,6 +48,14 @@ export const CORAL_KEYS = {
     { cp: 16.5, d: 0 },  // ridge esses exit
     { cp: 21.2, d: 0 },  // west hairpin exit
   ],
+  // Weapon pickups (gold): straights, offset from the boost lines.
+  weaponPads: [
+    { cp: 5.2, d: -3 },
+    { cp: 9.6, d: -3 },
+    { cp: 11.2, d: 3 },
+    { cp: 17.2, d: -3 },
+    { cp: 20.4, d: 3 },
+  ],
   // Route forks: a raised island splits the road into two committed lanes over
   // [from,to] (cp indices, same space as boostPads). `gap` is the island
   // half-width; `fast` is the side (+1 right / -1 left) that's shorter and

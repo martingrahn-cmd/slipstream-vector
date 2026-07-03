@@ -10,6 +10,7 @@ import { buildTrackMesh } from './track/trackMesh.js';
 import { buildScenery } from './track/scenery.js';
 import { ShipPhysics } from './ship/shipPhysics.js';
 import { ShipVisual } from './ship/shipVisual.js';
+import { WeaponSystem } from './weapons/weaponSystem.js';
 import { AiDriver } from './ship/aiDriver.js';
 import { CameraRig } from './fx/cameraRig.js';
 import { Juice } from './fx/juice.js';
@@ -135,6 +136,7 @@ const TROPHY_FILTERS = ['all', 'bronze', 'silver', 'gold', 'platinum'];
 let trophyTier = 'all';
 trackIndex = ((trackIndex % TRACKS.length) + TRACKS.length) % TRACKS.length;
 let trackDef, theme, spline, track, scenery, ship, shipVisual, rig, minimap, race, ghost;
+let weapons = null; // WeaponSystem — rebuilt with the field; inactive in Time Trial
 let TOTAL_LAPS = 3;
 
 // The player's seat: mode, team, livery and callsign. Persisted.
@@ -309,6 +311,12 @@ function buildField() {
     TOTAL_LAPS, juice, selectionInfo(),
     selection.mode === 2 /* time trial: empty track */, cls);
   race.grid();
+  // Weapons: combat only where there are rivals — Championship + Single, never TT.
+  weapons = new WeaponSystem(spline, race, ship, juice, {
+    active: selection.mode !== 2,
+    seed: 1009 + trackIndex * 97 + selection.classIdx * 7,
+  });
+  hud.setWeapon(null);
   ship.reset(12);
   podium.setShip(variant);
   localStorage.setItem('sv-team', String(selection.team));
@@ -743,6 +751,13 @@ juice.on('wallHit', ({ side, severity }) => {
 });
 let scrapeAcc = 0;
 juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
+// Weapon armed (from the WeaponSystem pickup roll): HUD badge + chirp for the
+// player; AI pickups are silent — you learn they are armed when they fire.
+juice.on('weaponArmed', ({ type, isPlayer }) => {
+  if (!isPlayer) return;
+  hud.setWeapon(type);
+  if (type && state === 'race') { audio.weaponPickup(); input.rumble(0.25, 120); }
+});
 const _boostColA = new THREE.Color(T.COL.ENGINE);
 const _boostColB = new THREE.Color(0xffffff);
 juice.on('boost', ({ pad } = {}) => {
@@ -930,6 +945,7 @@ function startCountdown() {
   const introDur = document.body.classList.contains('reduced-motion') ? 0 : 2.8;
   rig.playIntro(ship, introDur);
   race.grid();
+  if (weapons) weapons.reset();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
   countdownT = 3.2;
@@ -1174,6 +1190,7 @@ function tick(now) {
       ship.step(FIXED_DT, simInput);
       race.stepFixed(FIXED_DT, state === 'race' || state === 'finished');
       race.interact(ship, FIXED_DT);
+      if (weapons) weapons.stepFixed(FIXED_DT, state === 'race' || state === 'finished');
       accumulator -= FIXED_DT;
     }
   }

@@ -36,6 +36,14 @@ export const ORBITAL_RING = {
     { cp: 8.5, d: 0 },   // inner cut entry
     { cp: 10.5, d: 0 },  // cut exit
   ],
+  // Weapon pickups (gold): straights, offset from the boost lines.
+  weaponPads: [
+    { cp: 0.9, d: -3 },
+    { cp: 2.5, d: -3 },
+    { cp: 4, d: -4 },
+    { cp: 7.8, d: 3 },
+    { cp: 9.5, d: -3 },
+  ],
   // Route forks: a raised island splits the road into two committed lanes over
   // [from,to] (cp indices). `gap` is the island half-width; `fast` is the side
   // (+1 right / -1 left) that's shorter and carries the pad chain — the brave

@@ -1,6 +1,7 @@
 // DOM HUD: speed, lap counter/times, boost meter with afterimage drain,
 // countdown and event pops. All styling lives in index.html CSS.
 import { TUNING as T } from '../config.js';
+import { WEAPON_ICONS } from '../weapons/icons.js';
 
 export class Hud {
   constructor(juice) {
@@ -19,6 +20,7 @@ export class Hud {
       center: document.getElementById('center-msg'),
       overlay: document.getElementById('overlay'),
       stats: document.getElementById('stats'),
+      weaponSlot: document.getElementById('weapon-slot'),
     };
     this.ghost = 0;
     this.lastSpeed = 0;
@@ -28,6 +30,15 @@ export class Hud {
     juice.on('lap', ({ time, best }) => {
       this.flashCenter(time === best ? `BEST LAP ${fmt(time)}` : `LAP ${fmt(time)}`, 1400);
     });
+  }
+
+  // Weapon slot: shows the held weapon icon (null hides it).
+  setWeapon(type) {
+    const el = this.el.weaponSlot; if (!el) return;
+    if (!type) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    el.innerHTML = WEAPON_ICONS[type] || '';
+    el.classList.remove('hidden');
+    this.pop(el, 'weapon-pop');
   }
 
   pop(el, cls) {

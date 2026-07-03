@@ -105,6 +105,26 @@ export const TUNING = {
   HITSTOP_SCALE: 0.3,
   HITSTOP_TIME: 0.045,
 
+  // ---- Weapons (Pass 3) ----
+  // Every value identical for player and AI — weapons are combat, never catch-up.
+  WEAPON_DISABLE_TIME: 1.7,  // s of cut thrust + mushy steering on hit (coast, not dead stop)
+  WEAPON_TRAUMA: 0.55,       // one hard spike at impact — decay does the rest (no sustained shake)
+  WEAPON_FLASH: 0.14,
+  WEAPON_HITSTOP: 0.06,
+  MISSILE_SPEED_REL: 25,     // m/s over the shooter's speed at launch
+  MISSILE_LIFE: 5,           // s until despawn
+  MISSILE_HIT_DS: 4.0,       // hit window along the track (m)
+  MISSILE_HIT_DD: 2.2,       // hit window laterally (m)
+  MISSILE_COOLDOWN: 0.25,    // s between shots of a salvo
+  HOMING_RANGE: 90,          // lock range ahead (m)
+  HOMING_D_RATE: 6,          // lateral tracking speed (m/s)
+  HOMING_LIFE: 7,
+  MINE_ARM: 0.5,             // s before a dropped mine is live
+  MINE_LIFE: 25,
+  MINE_TRIGGER_DS: 3.2,
+  MINE_TRIGGER_DD: 2.2,
+  WEAPON_BOOST_TIME: 1.6,    // rides the normal boostTimer pipeline
+
   // ---- Boost envelope ----
   BOOST_ATTACK: 12.0,     // boostFactor per second
   BOOST_RELEASE: 3.0,
@@ -174,6 +194,10 @@ export const TUNING = {
     WALL: 0x0d0820,
     PAD_CHEVRON: 0x7df9ff,
     PAD_BASE: 0x0033aa,
+    // Weapon pads: fixed GOLD/AMBER — gameplay language like the boost-pad blue,
+    // never theme-tinted, and clearly distinct from edge cyan/magenta.
+    WEAPON_PAD_BASE: 0x7a3c00,
+    WEAPON_PAD_GLOW: 0xffb13d,
     SHIP_HULL: 0xe8e4f0,
     SHIP_ACCENT: 0xff2e88,
     SHIP_CANOPY: 0x1a0b3d,

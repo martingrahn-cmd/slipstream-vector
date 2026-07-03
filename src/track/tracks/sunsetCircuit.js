@@ -54,6 +54,14 @@ export const SUNSET_CIRCUIT = {
     { cp: 22.3, d: 0 },  // esses exit
     { cp: 25.2, d: 3 },  // south edge, near the right wall
   ],
+  // Weapon pickups (gold): straights, offset from the boost lines.
+  weaponPads: [
+    { cp: 3.2, d: 3 },
+    { cp: 9.3, d: -3 },
+    { cp: 13, d: 3 },
+    { cp: 18.6, d: -3 },
+    { cp: 23.3, d: -3 },
+  ],
   // Route forks: a raised island splits the road into two committed lanes over
   // [from,to] (cp indices). `gap` is the island half-width; `fast` is the side
   // (+1 right / -1 left) that's shorter and carries the pad chain — the brave

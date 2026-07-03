@@ -52,6 +52,14 @@ export const SKYLINE_RUSH = {
     { cp: 22.6, d: 8 },
     { cp: 23.4, d: 0 },  // final corner exit
   ],
+  // Weapon pickups (gold): straights, offset from the boost lines.
+  weaponPads: [
+    { cp: 4.6, d: 3 },
+    { cp: 13.4, d: 3 },
+    { cp: 17.5, d: -3 },
+    { cp: 19.9, d: 3 },
+    { cp: 24.2, d: -3 },
+  ],
   // Route forks: a raised island splits the road into two committed lanes over
   // [from,to] (cp indices). `gap` is the island half-width; `fast` is the side
   // (+1 right / -1 left) that's shorter and carries the pad chain — the brave

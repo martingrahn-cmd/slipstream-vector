@@ -15,6 +15,8 @@ export function buildTrackMesh(spline, theme) {
   group.add(buildGlowRibbons(spline));
   const pads = buildBoostPads(spline);
   group.add(pads.mesh);
+  const wpads = spline.weaponPads && spline.weaponPads.length ? buildWeaponPads(spline) : null;
+  if (wpads) group.add(wpads.mesh);
   group.matrixAutoUpdate = false;
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
   return {
@@ -22,6 +24,7 @@ export function buildTrackMesh(spline, theme) {
     update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
+      if (wpads) wpads.update(t);
     },
   };
 }
@@ -558,6 +561,91 @@ function buildBoostPads(spline) {
         float pulse = 0.6 + 0.4 * sin(4.0 * time - vPhase);
         float edge = smoothstep(1.0, 0.85, abs(x));
         vec3 col = baseCol + chevCol * chev * pulse * 1.6;
+        gl_FragColor = vec4(col * edge, 1.0);
+      }
+    `,
+    fog: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return { mesh, update: (t) => { mat.uniforms.time.value = t; } };
+}
+
+// ----------------------------------------------------------- weapon pads
+// Gold pickup decals — gameplay language, never theme-tinted, and visually a
+// different VERB from boost: a pulsing diamond reticle you "collect", not
+// chevrons you "ride". Same merged-geometry pattern: one draw call total.
+function buildWeaponPads(spline) {
+  const C = TUNING.COL;
+  const f = makeFrame();
+  const v = new THREE.Vector3();
+  const positions = [], locals = [], phases = [], idx = [];
+  const LEN = 6, HW = 2, SLICES = 6;
+
+  for (const pad of spline.weaponPads) {
+    const base = positions.length / 3;
+    for (let i = 0; i <= SLICES; i++) {
+      const s = pad.s - LEN / 2 + (i / SLICES) * LEN;
+      spline.frameAt(s, f);
+      for (let e = 0; e < 2; e++) {
+        const x = pad.d + (e ? HW : -HW);
+        const crownH = Math.max(0, 1 - Math.abs(x) / f.width) * TUNING.CROWN * f.width;
+        v.copy(f.pos).addScaledVector(f.R, x).addScaledVector(f.U, crownH + 0.05);
+        positions.push(v.x, v.y, v.z);
+        locals.push(e ? 1 : 0, i / SLICES);
+        phases.push(pad.s * 0.5);
+      }
+    }
+    for (let i = 0; i < SLICES; i++) {
+      const a = base + i * 2, b = a + 2;
+      idx.push(a, a + 1, b, a + 1, b + 1, b); // CCW from above
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geom.setAttribute('aLocal', new THREE.BufferAttribute(new Float32Array(locals), 2));
+  geom.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(phases), 1));
+  geom.setIndex(idx);
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: { value: 0 },
+      baseCol: { value: new THREE.Color(C.WEAPON_PAD_BASE) },
+      glowCol: { value: new THREE.Color(C.WEAPON_PAD_GLOW) },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec2 aLocal;
+      attribute float aPhase;
+      varying vec2 vLocal;
+      varying float vPhase;
+      void main() {
+        vLocal = aLocal; vPhase = aPhase;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float time;
+      uniform vec3 baseCol, glowCol;
+      varying vec2 vLocal;
+      varying float vPhase;
+      void main() {
+        // Centered coords: x -1..1 across, y -1..1 along the 6m decal.
+        float x = vLocal.x * 2.0 - 1.0;
+        float y = vLocal.y * 2.0 - 1.0;
+        // Diamond reticle: a ring at |x|+|y| = r, breathing outward, over a
+        // constant gold wash so the pad reads clearly at distance.
+        float dia = abs(x) + abs(y) * 1.15;
+        float breathe = 0.55 + 0.18 * sin(3.2 * time - vPhase);
+        float ring = smoothstep(0.2, 0.06, abs(dia - breathe));
+        float core = smoothstep(0.3, 0.0, dia) * (0.7 + 0.3 * sin(6.0 * time - vPhase));
+        float frame = smoothstep(0.12, 0.02, abs(max(abs(x), abs(y)) - 0.92)); // thin outer border
+        float edge = smoothstep(1.0, 0.85, abs(x));
+        vec3 col = baseCol * 1.5 + glowCol * (0.22 + ring * 1.7 + core * 1.2 + frame * 0.8);
         gl_FragColor = vec4(col * edge, 1.0);
       }
     `,

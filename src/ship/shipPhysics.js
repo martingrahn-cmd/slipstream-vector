@@ -42,6 +42,11 @@ export class ShipPhysics {
     this.scraping = false;
     this.splitLane = 0;    // 0 = not in a split; ±1 = the lane committed to
     this.activePad = -1;
+    // ---- weapons (identical fields for player and AI — never position-aware)
+    this.heldWeapon = null;      // 'homing'|'missiles'|'boost'|'shield'|'mine'
+    this.disabledT = 0;          // s left of the hit penalty (cut thrust, mushy steer)
+    this.shielded = false;       // absorb the next hit
+    this.activeWeaponPad = -1;   // latch so a pad arms once per crossing
     this.lap = 0;
     this.lapTime = 0;
     this.lastLap = 0;
@@ -244,6 +249,16 @@ export class ShipPhysics {
       this.events.emit('boost', { pad: onPad });
     }
     this.activePad = onPad;
+
+    // ---- weapon pads (same latch pattern — arm once per crossing; the
+    // WeaponSystem watches activeWeaponPad transitions and does the roll) ----
+    let onWPad = -1;
+    for (const pad of tr.weaponPads) {
+      const ds = sdist(this.s, pad.s, tr.length);
+      if (Math.abs(ds) < 3.5 && Math.abs(this.d - pad.d) < 2.4) { onWPad = pad.id; break; }
+    }
+    if (onWPad >= 0 && onWPad !== this.activeWeaponPad) this.events.emit('weaponPad', { pad: onWPad });
+    this.activeWeaponPad = onWPad;
 
     // ---- lap timing ----
     this.lapTime += dt;

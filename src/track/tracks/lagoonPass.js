@@ -44,6 +44,14 @@ export const LAGOON_PASS = {
     { cp: 18.4, d: 0 },  // final climb chain
     { cp: 18.8, d: 0 },
   ],
+  // Weapon pickups (gold): straights, offset from the boost lines.
+  weaponPads: [
+    { cp: 2.2, d: 3 },
+    { cp: 5.2, d: -3 },
+    { cp: 10.2, d: 3 },
+    { cp: 16.4, d: -3 },
+    { cp: 19.3, d: 3 },
+  ],
   // Route forks: a raised island splits the road into two committed lanes over
   // [from,to] (cp indices). `gap` is the island half-width; `fast` is the side
   // (+1 right / -1 left) that's shorter and carries the pad chain — the brave

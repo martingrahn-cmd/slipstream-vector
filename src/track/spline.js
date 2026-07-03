@@ -36,7 +36,8 @@ export class TrackSpline {
     this._buildStunts(ex); // corkscrew bank overrides + jump gaps
     this._applyBank();
 
-    this.pads = this._buildPads(ex);
+    this.pads = this._padList(ex.points.length, ex.boostPads);
+    this.weaponPads = this._padList(ex.points.length, ex.weaponPads);
     this.splits = this._buildSplits(ex);
   }
 
@@ -83,7 +84,7 @@ export class TrackSpline {
     const loops = (td.features || []).filter((f) => f.type === 'loop');
     const others = (td.features || []).filter((f) => f.type !== 'loop');
     if (!loops.length) {
-      return { points: td.points, boostPads: td.boostPads || [], features: others, splits: td.splits || [] };
+      return { points: td.points, boostPads: td.boostPads || [], weaponPads: td.weaponPads || [], features: others, splits: td.splits || [] };
     }
     const anchors = loops.map((l) => Math.round(l.cp)).sort((a, b) => a - b);
     const points = [];
@@ -95,13 +96,14 @@ export class TrackSpline {
     // Any cp reference past an anchor shifts by +6 per loop inserted before it.
     const remap = (r) => r + 6 * anchors.filter((k) => k < r).length;
     const boostPads = (td.boostPads || []).map((p) => ({ ...p, cp: remap(p.cp) }));
+    const weaponPads = (td.weaponPads || []).map((p) => ({ ...p, cp: remap(p.cp) }));
     const features = others.map((f) =>
       f.from !== undefined
         ? { ...f, from: remap(f.from), to: remap(f.to) }
         : { ...f, cp: remap(f.cp) },
     );
     const splits = (td.splits || []).map((s) => ({ ...s, from: remap(s.from), to: remap(s.to) }));
-    return { points, boostPads, features, splits };
+    return { points, boostPads, weaponPads, features, splits };
   }
 
   // The 6 control points after the loop's anchor (the anchor itself is the
@@ -303,10 +305,9 @@ export class TrackSpline {
     }
   }
 
-  // Convert {cp: float control-point index, d} pads to {s, d}.
-  _buildPads(trackData) {
-    const m = trackData.points.length;
-    return (trackData.boostPads || []).map((p, idx) => {
+  // Convert {cp: float control-point index, d} pads to {s, d} (boost + weapon).
+  _padList(m, list) {
+    return (list || []).map((p, idx) => {
       const j = Math.floor(p.cp) % m;
       const f = p.cp - Math.floor(p.cp);
       const s = this._sAtCP[j] * (1 - f) + this._sAtCP[j + 1] * f;

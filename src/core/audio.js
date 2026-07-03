@@ -232,6 +232,12 @@ export class AudioEngine {
     src.stop(t0 + dur + 0.02);
   }
 
+  weaponPickup() {
+    // rising two-note arm chirp — distinct from the boost whoosh family
+    this.blip(620, 0.09, { type: 'square', gain: 0.09 });
+    this.blip(930, 0.15, { type: 'square', gain: 0.11, delay: 0.07 });
+  }
+
   boostWhoosh(amount) {
     this.blip(170, 0.5 * amount + 0.15, { type: 'sawtooth', gain: 0.1 * amount, slideTo: 950 });
     this.burst(1100, 0.45 * amount + 0.1, 0.16 * amount, 'bandpass', 0.8);
