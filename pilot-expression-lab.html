@@ -1,0 +1,428 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>PILOT EXPRESSIONS — banter face lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  :root { --cyan: #7df9ff; }
+  html, body { margin: 0; background: #07060f; color: #dfe6ff; font-family: 'Rajdhani', system-ui, sans-serif; }
+  #wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 90px; }
+  h1 { font-family: 'Orbitron', sans-serif; font-size: 17px; letter-spacing: 0.22em; color: var(--cyan); margin: 2px 0 3px; }
+  .sub { font-size: 13px; letter-spacing: 0.05em; color: #8a93b8; margin-bottom: 16px; max-width: 780px; line-height: 1.5; }
+  .sub b { color: #c8d0ee; font-weight: 700; }
+  .buckets-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .blg { display: flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid #241a3a; background: #0a0714; font-size: 12px; letter-spacing: 0.04em; }
+  .blg .em { font-size: 17px; }
+  .blg b { font-family: 'Orbitron'; font-size: 10px; letter-spacing: 0.14em; }
+  .blg span { color: #8a93b8; }
+  h2 { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 0.2em; color: #fff; margin: 30px 0 10px; }
+  h2 small { font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.05em; color: #6a6a8f; font-size: 12px; margin-left: 8px; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 16px; border: 1px solid #241a3a; background: #0a0714; margin-bottom: 18px;
+         clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+  .grp { display: flex; align-items: center; gap: 8px; }
+  .grp > span { font-size: 10px; letter-spacing: 0.18em; color: #6a6a8f; }
+  .seg { display: flex; border: 1px solid #2a2050; }
+  .seg button { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.1em; font-size: 11px; padding: 6px 12px; background: #14102a; color: #8a93b8; border: 0; cursor: pointer; }
+  .seg button + button { border-left: 1px solid #2a2050; }
+  .seg button.on { background: var(--cyan); color: #05040c; }
+
+  .stage { position: relative; height: 340px; border: 1px solid #241a3a; overflow: hidden;
+           background: radial-gradient(130% 90% at 50% 8%, #3a1b6b 0%, #1a0b3d 42%, #07060f 82%); }
+  .stage .road { position: absolute; left: 50%; bottom: -6%; width: 60%; height: 74%; transform: translateX(-50%) perspective(320px) rotateX(58deg);
+                 background: repeating-linear-gradient(90deg, #14102a 0 46%, #ff2ec8 46% 47%, #14102a 47% 53%, #00f0ff 53% 54%, #14102a 54% 100%),
+                             linear-gradient(#1b1038, #2a1a55); opacity: 0.5; }
+  .stage .road::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 26px, rgba(255,255,255,0.5) 26px 44px); width: 3px; left: 50%; transform: translateX(-50%); }
+  .stage .hud-pos { position: absolute; top: 12px; left: 16px; font-family: 'Orbitron'; font-weight: 800; font-size: 22px; color: var(--cyan); text-shadow: 0 0 12px rgba(125,249,255,0.5); letter-spacing: 0.05em; }
+  .stage .hud-pos small { font-size: 12px; color: #b9c4e8; }
+  .stage .hud-speed { position: absolute; bottom: 14px; right: 20px; font-family: 'Orbitron'; font-weight: 800; font-size: 40px; color: #fff; opacity: 0.9; }
+  .stage .hud-speed span { display: block; font-size: 11px; letter-spacing: 0.3em; color: var(--cyan); text-align: right; }
+
+  #feed { position: absolute; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; width: 342px; }
+
+  .chip { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 9px; padding: 7px; padding-left: 11px;
+          background: linear-gradient(100deg, rgba(255,255,255,0.05), rgba(255,255,255,0.008)), #0a0714;
+          border: 1px solid var(--pa); box-shadow: 0 0 22px -12px var(--pa);
+          clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+          animation: chipIn 240ms cubic-bezier(0.2,0.9,0.2,1) both; transform-origin: left bottom; }
+  .chip.out { animation: chipOut 300ms ease forwards; }
+  .chip::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pa); box-shadow: 0 0 10px var(--pa); }
+  .chip .face { position: relative; width: 52px; height: 52px; flex: none; border: 1px solid var(--pa); overflow: hidden; background: rgba(120,150,200,0.08);
+                clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%); }
+  .chip .face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .chip .face .emoji { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; line-height: 1; }
+  .chip .face .badge { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; display: grid; place-items: center; font-size: 15px;
+                       background: #05040c; border: 1px solid var(--pa); border-radius: 50%; box-shadow: 0 0 8px -1px var(--pa); }
+  .chip.emojiOnly .face img { display: none; }
+  .chip .spine { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding-right: 4px; }
+  .chip .top { display: flex; align-items: center; gap: 7px; }
+  .chip .name { font-family: 'Orbitron'; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .tag { font-family: 'Rajdhani'; font-weight: 700; font-size: 8px; letter-spacing: 0.16em; color: var(--pa); border: 1px solid var(--pa); padding: 0 4px; flex: none; }
+  .chip .mood { font-family: 'Rajdhani'; font-weight: 700; font-size: 8px; letter-spacing: 0.14em; color: #6a6a8f; flex: none; margin-left: auto; }
+  .chip .line { font-family: 'Rajdhani'; font-weight: 600; font-size: 16px; line-height: 1.15; color: #eef1ff; }
+  .chip .led { position: absolute; top: 7px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--pa); box-shadow: 0 0 8px var(--pa); animation: led 1.5s ease-in-out infinite; }
+
+  .fx-shake { animation: chipIn 240ms cubic-bezier(0.2,0.9,0.2,1) both, shake 320ms 240ms 2; }
+  .fx-lean .face { animation: lean 600ms ease 1; }
+
+  @keyframes chipIn { from { opacity: 0; transform: translateX(-16px) scale(0.96); } to { opacity: 1; transform: none; } }
+  @keyframes chipOut { to { opacity: 0; transform: translateX(-10px) scale(0.94); margin-top: -60px; } }
+  @keyframes led { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+  @keyframes lean { 0% { transform: rotate(0); } 40% { transform: rotate(-2.5deg); } 100% { transform: rotate(0); } }
+
+  .triggers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+  .tcol { border: 1px solid #241a3a; background: #0a0714; padding: 12px; }
+  .tcol h3 { font-family: 'Orbitron'; font-size: 10px; letter-spacing: 0.2em; margin: 0 0 10px; }
+  .tcol.you h3 { color: #7df9ff; }
+  .tcol.them h3 { color: #ff6ade; }
+  .tcol.race h3 { color: #ffcf2a; }
+  .ev { display: block; width: 100%; text-align: left; font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.06em; font-size: 12.5px;
+        padding: 8px 11px; margin-bottom: 7px; background: #14102a; color: #c8d0ee; border: 1px solid #2a2050; cursor: pointer; transition: border-color 120ms, background 120ms; }
+  .ev:hover { border-color: #4a3f78; background: #1a1436; }
+  .ev:last-child { margin-bottom: 0; }
+  .ev .k { font-size: 9px; letter-spacing: 0.1em; float: right; margin-top: 2px; }
+  .ev .k.glad { color: #ffcf2a; } .ev .k.arg { color: #ff6a5a; } .ev .k.neutral { color: #8a93b8; }
+
+  .pilots-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 2px; }
+  .pbtn { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; border: 1px solid #241a3a; background: #0a0714; cursor: pointer; }
+  .pbtn.on { border-color: var(--pa); box-shadow: 0 0 14px -6px var(--pa); }
+  .pbtn img, .pbtn .rnd { width: 30px; height: 30px; object-fit: cover; object-position: top center; border: 1px solid var(--pa); flex: none; }
+  .pbtn .rnd { display: grid; place-items: center; font-size: 15px; color: var(--pa); }
+  .pbtn b { font-family: 'Rajdhani'; font-weight: 700; font-size: 11px; letter-spacing: 0.06em; color: #c8d0ee; }
+
+  .matrix { overflow-x: auto; border: 1px solid #241a3a; background: #0a0714; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px; text-align: center; border: 1px solid #16112b; }
+  thead th { background: #0d0a1c; }
+  .xh { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .xh .em { font-size: 22px; }
+  .xh .lb { font-family: 'Orbitron'; font-weight: 700; font-size: 9px; letter-spacing: 0.12em; }
+  .xh .gen { font-family: 'Rajdhani'; font-weight: 700; font-size: 8px; letter-spacing: 0.1em; padding: 1px 5px; margin-top: 1px; }
+  .xh .gen.new { color: #ffcf2a; border: 1px solid #6a5410; } .xh .gen.reuse { color: #6fd6a0; border: 1px solid #234a37; }
+  .rowh { text-align: left; white-space: nowrap; }
+  .rowh .pr { display: flex; align-items: center; gap: 7px; }
+  .rowh img { width: 32px; height: 32px; object-fit: cover; object-position: top center; border: 1px solid var(--pa); flex: none; }
+  .rowh b { font-family: 'Rajdhani'; font-weight: 700; font-size: 11px; letter-spacing: 0.05em; color: #c8d0ee; }
+  .cell { position: relative; width: 96px; height: 78px; margin: 0 auto; cursor: pointer; }
+  .cell .pf { position: absolute; left: 50%; transform: translateX(-50%); top: 4px; width: 58px; height: 58px; overflow: hidden; border: 1px solid var(--pa); background: rgba(120,150,200,0.06);
+              clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%); }
+  .cell .pf img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .cell .em { position: absolute; right: 14px; top: 44px; font-size: 18px; text-shadow: 0 0 4px #000, 0 1px 2px #000; }
+  .cell .cnt { position: absolute; left: 0; right: 0; bottom: -2px; font-family: 'Rajdhani'; font-weight: 700; font-size: 9px; letter-spacing: 0.08em; color: #8a93b8; }
+  .cell .tick { position: absolute; right: 12px; top: 44px; width: 18px; height: 18px; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #05040c; background: #6fd6a0; border-radius: 50%; box-shadow: 0 0 8px -1px #6fd6a0; }
+  .cell.done .pf { box-shadow: 0 0 12px -4px #6fd6a0; border-color: #6fd6a0; }
+  .cell:hover .pf { box-shadow: 0 0 14px -4px var(--pa); }
+  .note { font-size: 12px; color: #6a6a8f; margin: 8px 2px 0; letter-spacing: 0.03em; line-height: 1.5; }
+  .note b { color: #c8d0ee; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>PILOT EXPRESSIONS</h1>
+  <div class="sub">
+    The in-race <b>banter comms-chip</b>. <b>3 buckets</b> — every line drops into one. Generated faces now show
+    <b>live where they exist</b> (Juno Vex is done — glad + arg); everyone else falls back to the <b>emoji placeholder</b>
+    on the profile portrait until you generate theirs. <b>NEUTRAL reuses the profile portrait</b> (no new art), so it's
+    just <b>2 faces per driver = 16 total</b>. Toggle <b>EMOJI ONLY</b> to A/B the placeholder against the real art.
+  </div>
+  <div class="buckets-legend">
+    <div class="blg"><span class="em">😏</span><b style="color:#ffcf2a">GLAD</b><span>gloat — they hit/pass you, they win</span></div>
+    <div class="blg"><span class="em">😠</span><b style="color:#ff6a5a">ARG</b><span>angry — you hit/pass them, they're disabled</span></div>
+    <div class="blg"><span class="em">😐</span><b style="color:#b9c4e8">NEUTRAL</b><span>ambient — near-miss, filler (profile pic)</span></div>
+  </div>
+
+  <div class="bar">
+    <div class="grp"><span>FACE</span>
+      <div class="seg" id="seg-face">
+        <button data-v="both" class="on">PORTRAIT + EMOJI</button>
+        <button data-v="emoji">EMOJI ONLY</button>
+      </div>
+    </div>
+    <div class="grp"><span>TREATMENT</span>
+      <div class="seg" id="seg-fx">
+        <button data-v="on" class="on">ON</button>
+        <button data-v="off">OFF</button>
+      </div>
+    </div>
+    <div class="grp"><span>AUTO</span>
+      <div class="seg" id="seg-auto">
+        <button data-v="off" class="on">OFF</button>
+        <button data-v="on">PLAY</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="road"></div>
+    <div class="hud-pos">P4<small>/8</small></div>
+    <div class="hud-speed">312<span>KM/H</span></div>
+    <div id="feed"></div>
+  </div>
+
+  <div class="triggers">
+    <div class="tcol you">
+      <h3>YOU → THEM</h3>
+      <button class="ev" data-ev="you_hit_them">You hit them<span class="k arg">ARG</span></button>
+      <button class="ev" data-ev="you_pass_them">You passed them<span class="k arg">ARG</span></button>
+      <button class="ev" data-ev="grazed_them">You grazed them<span class="k neutral">NEUTRAL</span></button>
+    </div>
+    <div class="tcol them">
+      <h3>THEM → YOU</h3>
+      <button class="ev" data-ev="they_hit_you">They hit you<span class="k glad">GLAD</span></button>
+      <button class="ev" data-ev="they_pass_you">They passed you<span class="k glad">GLAD</span></button>
+      <button class="ev" data-ev="shield_bounce">Shield bounce<span class="k glad">GLAD</span></button>
+    </div>
+    <div class="tcol race">
+      <h3>RACE</h3>
+      <button class="ev" data-ev="disabled">Someone disabled<span class="k arg">ARG</span></button>
+      <button class="ev" data-ev="ai_vs_ai">AI vs AI<span class="k glad">GLAD</span></button>
+      <button class="ev" data-ev="they_won">They took P1<span class="k glad">GLAD</span></button>
+      <button class="ev" data-ev="ambient">Ambient chatter<span class="k neutral">NEUTRAL</span></button>
+    </div>
+  </div>
+
+  <h2>SPEAKER <small>who talks — RANDOM picks any driver</small></h2>
+  <div class="pilots-row" id="pilots-row"></div>
+
+  <h2>ART SCOPE <small>8 drivers × 3 buckets — click a cell to preview it live · <b id="progress" style="color:#6fd6a0">probing…</b></small></h2>
+  <div class="matrix"><table id="matrix"></table></div>
+  <div class="note">
+    <b>GLAD</b> + <b>ARG</b> = the only faces to generate (16). <b>NEUTRAL</b> reuses the existing profile portrait — zero new art.
+    Numbers are how many lines back each bucket right now — all expandable; a driver can have as many comments as you like.
+  </div>
+</div>
+
+<script>
+const PILOTS = [
+  { name: 'JUNO VEX',      slug: 'juno-vex',      ext: 'png', team: 'VEKTOR',    pa: '#ff7ab0' },
+  { name: 'KAIDE SORO',    slug: 'kaide-soro',    ext: 'jpg', team: 'VEKTOR',    pa: '#b14dff' },
+  { name: 'MERIDIAN BLUE', slug: 'meridian-blue', ext: 'jpg', team: 'HALCYON',   pa: '#4da3ff' },
+  { name: 'SOL ANARA',     slug: 'sol-anara',     ext: 'jpg', team: 'HALCYON',   pa: '#33e3b0' },
+  { name: 'VOSS KRAIT',    slug: 'voss-krait',    ext: 'jpg', team: 'RAZORBACK', pa: '#ff3a1f' },
+  { name: 'KIRA NOX',      slug: 'kira-nox',      ext: 'jpg', team: 'RAZORBACK', pa: '#ffa030' },
+  { name: 'LYRA STORM',    slug: 'lyra-storm',    ext: 'jpg', team: 'NOVASURGE', pa: '#ffcf2a' },
+  { name: 'ECHO TANE',     slug: 'echo-tane',     ext: 'jpg', team: 'NOVASURGE', pa: '#6fd624' },
+];
+const portrait = (p) => `assets/pilots/${p.slug}.${p.ext}`;
+
+// THREE buckets — every line lives in one. neutral reuses the profile portrait.
+const BUCKETS = ['glad', 'arg', 'neutral'];
+const EXPR = {
+  glad:    { emoji: '😏', label: 'GLAD',    tint: '#ffcf2a', fx: 'fx-lean',  gen: 'new' },
+  arg:     { emoji: '😠', label: 'ARG',     tint: '#ff2a1c', fx: 'fx-shake', gen: 'new' },
+  neutral: { emoji: '😐', label: 'NEUTRAL', tint: null,      fx: '',         gen: 'reuse' },
+};
+
+// Event -> comms tag + which bucket the reaction falls into.
+const EVENTS = {
+  they_hit_you:  { tag: 'HIT',       bucket: 'glad' },
+  they_pass_you: { tag: 'OVERTAKE',  bucket: 'glad' },
+  shield_bounce: { tag: 'BLOCKED',   bucket: 'glad' },
+  they_won:      { tag: 'P1',        bucket: 'glad' },
+  ai_vs_ai:      { tag: 'CROSSFIRE', bucket: 'glad' },
+  you_hit_them:  { tag: 'INCOMING',  bucket: 'arg' },
+  you_pass_them: { tag: 'PASSED',    bucket: 'arg' },
+  disabled:      { tag: 'DISABLED',  bucket: 'arg' },
+  grazed_them:   { tag: 'NEAR MISS', bucket: 'neutral' },
+  ambient:       { tag: 'COMMS',     bucket: 'neutral' },
+};
+
+// The line bank — per driver, per bucket. MANY lines each, distinct voices.
+// This is the seed for the real banter table; expand freely.
+const LINES = {
+  'JUNO VEX': {
+    glad: ["Rookie? Watch again.", "First blood to the kid.", "Blink and you missed it.", "Sheet music, remember?", "Golden. Every time.", "Was that your best line?", "The prodigy has teeth."],
+    arg: ["That the best you've got?", "Cheap. I'll answer it.", "You woke the rookie up.", "Mistake. Yours.", "I don't blink — you will.", "Noted. And returned."],
+    neutral: ["Reading the line...", "Smooth. Keep it smooth.", "Plenty of race left.", "I'm watching you.", "Hold the apex."],
+  },
+  'KAIDE SORO': {
+    glad: ["Efficient.", "Down. Predictable.", "Calm hands win.", "No wasted motion.", "That's the difference.", "Rebuilt for exactly this."],
+    arg: ["Unnecessary.", "I felt nothing.", "You'll want that back.", "Recorded.", "Patience. Then payback.", "A poor decision."],
+    neutral: ["Steady.", "Systems nominal.", "Holding the line.", "The Sprawl was worse.", "..."],
+  },
+  'MERIDIAN BLUE': {
+    glad: ["Calculated.", "The math was against you.", "Predictable trajectory.", "Probability favored me.", "Simple geometry.", "Optimal, as modeled."],
+    arg: ["That wasn't in the model.", "Statistical anomaly.", "Recalculating. You still lose.", "An error — I correct errors.", "Variance. Temporary."],
+    neutral: ["Computing the apex.", "Within tolerance.", "Line: optimal.", "The numbers hold.", "Margin acceptable."],
+  },
+  'SOL ANARA': {
+    glad: ["Gracefully done.", "A pleasure, as always.", "Grace wins races.", "After you — no, after me.", "Three titles for a reason.", "Watch the line, darling."],
+    arg: ["...how rude.", "Apologies. This ends now.", "You'll regret the discourtesy.", "Composure, Sol.", "That was beneath you."],
+    neutral: ["Ah, the old rhythm.", "For the love of it.", "Elegant, isn't it?", "Breathe. Flow.", "Still have it."],
+  },
+  'VOSS KRAIT': {
+    glad: ["Prey.", "Taste the asphalt.", "Down you go.", "I was already past you.", "The hunt's over.", "Marked. Hunted. Finished.", "You slowed. Fatal."],
+    arg: ["...you'll bleed for that.", "Now it's personal.", "The hunter turns.", "Run. It won't help.", "I don't forget prey."],
+    neutral: ["Tracking.", "Brake markers are for prey.", "Patient. So patient.", "I smell fear.", "Closing in."],
+  },
+  'KIRA NOX': {
+    glad: ["Target neutralized.", "Probability: you lose.", "Overtake logged.", "You are inefficient.", "Zero lap-time wasted.", "Outcome: expected."],
+    arg: ["Anomaly detected.", "That won't compute twice.", "Err—err—rebooting.", "Recalculating your defeat.", "Threat logged."],
+    neutral: ["Scanning.", "Optimal line acquired.", "No fear. No mercy.", "Processing race state.", "Systems nominal."],
+  },
+  'LYRA STORM': {
+    glad: ["HAH! Gotcha!", "Wheee — down you go!", "Love this thing!", "Catch me, slowpoke!", "That boost pad's MINE!", "Sent it! No regrets!"],
+    arg: ["Aw, come ON—", "Okay okay, now I'm mad!", "You'll pay for that! ...eventually!", "Rude! Fun, but rude!", "Game ON, jerk!"],
+    neutral: ["One pad ahead of disaster!", "Wheeee!", "This is the BEST part!", "Full send, always!", "Grinning the whole way!"],
+  },
+  'ECHO TANE': {
+    glad: ["Saw it coming.", "Read and struck.", "From above.", "Mapped this hours ago.", "Predicted. Executed.", "The launch was always mine."],
+    arg: ["Didn't see that. Won't happen twice.", "Adjusting the map.", "Noted. Recalculated.", "A variable — I hate variables.", "You'll be predictable soon."],
+    neutral: ["Reading the circuit.", "It's all patterns.", "I see the whole board.", "Waiting for the launch.", "Everything's foretold."],
+  },
+};
+
+let faceMode = 'both';
+let treatment = true;
+let forced = null;
+let autoTimer = null;
+const EVENT_KEYS = Object.keys(EVENTS);
+
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+function lineFor(pilot, bucket) {
+  const bank = LINES[pilot.name] && LINES[pilot.name][bucket];
+  return bank && bank.length ? pick(bank) : '...';
+}
+
+// Generated expression faces live at assets/pilots/<slug>-<bucket>.(png|jpg).
+// Probed once at load; VARIANTS[slug-bucket] = url or undefined. Neutral always
+// resolves to the profile portrait (no new art).
+const VARIANTS = {};
+function variantURL(pilot, bucket) {
+  if (bucket === 'neutral') return portrait(pilot);
+  return VARIANTS[pilot.slug + '-' + bucket]; // url or undefined (placeholder)
+}
+function head(url) {
+  return fetch(url, { method: 'HEAD' }).then((r) => r.ok).catch(() => false);
+}
+async function probeVariants() {
+  for (const p of PILOTS) {
+    for (const b of ['glad', 'arg']) {
+      for (const ext of ['png', 'jpg']) {
+        const url = `assets/pilots/${p.slug}-${b}.${ext}`;
+        if (await head(url)) { VARIANTS[p.slug + '-' + b] = url; break; }
+      }
+    }
+  }
+}
+
+// The face block: a REAL generated expression face when one exists (drops the
+// emoji), else the profile portrait + emoji badge as the placeholder.
+function faceHTML(pilot, bucket) {
+  const ex = EXPR[bucket];
+  const real = variantURL(pilot, bucket);
+  const isGenerated = bucket !== 'neutral' && !!real;
+  if (faceMode === 'emoji') return `<div class="emoji">${ex.emoji}</div>`;
+  const src = real || portrait(pilot);
+  return `<img src="${src}" alt="" onerror="this.style.display='none'">`
+    + (isGenerated ? '' : `<div class="badge">${ex.emoji}</div>`);
+}
+
+const feed = document.getElementById('feed');
+function fireBucket(pilot, bucket, tag) {
+  const ex = EXPR[bucket];
+  const pa = treatment && ex.tint ? ex.tint : pilot.pa;
+  const chip = document.createElement('div');
+  chip.className = 'chip' + (faceMode === 'emoji' ? ' emojiOnly' : '') + (treatment && ex.fx ? ' ' + ex.fx : '');
+  chip.style.setProperty('--pa', pa);
+  chip.innerHTML = `
+    <div class="face">
+      ${faceHTML(pilot, bucket)}
+    </div>
+    <div class="spine">
+      <div class="top">
+        <span class="name">${pilot.name}</span>
+        <span class="tag">${tag}</span>
+        <span class="mood">${ex.label}</span>
+      </div>
+      <div class="line">${lineFor(pilot, bucket)}</div>
+    </div>
+    <div class="led"></div>`;
+  feed.appendChild(chip);
+  while (feed.children.length > 3) feed.removeChild(feed.firstChild);
+  setTimeout(() => { chip.classList.add('out'); setTimeout(() => chip.remove(), 300); }, 3400);
+}
+function fire(evKey) {
+  const ev = EVENTS[evKey];
+  const pilot = forced ? PILOTS.find((p) => p.name === forced) : pick(PILOTS);
+  fireBucket(pilot, ev.bucket, ev.tag);
+}
+
+function seg(id, fn) {
+  const box = document.getElementById(id);
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...box.children].forEach((x) => x.classList.toggle('on', x === b));
+    fn(b.dataset.v);
+  });
+}
+seg('seg-face', (v) => { faceMode = v; });
+seg('seg-fx', (v) => { treatment = v === 'on'; });
+seg('seg-auto', (v) => {
+  clearInterval(autoTimer); autoTimer = null;
+  if (v === 'on') autoTimer = setInterval(() => fire(pick(EVENT_KEYS)), 1700);
+});
+document.querySelectorAll('.ev').forEach((b) => b.addEventListener('click', () => fire(b.dataset.ev)));
+
+const prow = document.getElementById('pilots-row');
+function renderPilots() {
+  prow.innerHTML = '';
+  const mk = (html, name, pa) => {
+    const el = document.createElement('button');
+    el.className = 'pbtn' + ((forced === name) ? ' on' : '');
+    el.style.setProperty('--pa', pa || '#7df9ff');
+    el.innerHTML = html;
+    el.onclick = () => { forced = name; renderPilots(); };
+    prow.appendChild(el);
+  };
+  mk(`<span class="rnd">🎲</span><b>RANDOM</b>`, null, '#7df9ff');
+  PILOTS.forEach((p) => mk(`<img src="${portrait(p)}" onerror="this.style.visibility='hidden'"><b>${p.name}</b>`, p.name, p.pa));
+}
+
+const mtable = document.getElementById('matrix');
+function buildMatrix() {
+  const heads = ['<th></th>'].concat(BUCKETS.map((k) => {
+    const e = EXPR[k];
+    const genLabel = e.gen === 'new' ? 'GENERATE' : 'PROFILE';
+    return `<th><div class="xh"><span class="em">${e.emoji}</span><span class="lb" style="color:${e.tint || '#b9c4e8'}">${e.label}</span><span class="gen ${e.gen}">${genLabel}</span></div></th>`;
+  }));
+  let html = `<thead><tr>${heads.join('')}</tr></thead><tbody>`;
+  PILOTS.forEach((p) => {
+    let row = `<td class="rowh" style="--pa:${p.pa}"><div class="pr"><img src="${portrait(p)}" onerror="this.style.visibility='hidden'"><b>${p.name}</b></div></td>`;
+    BUCKETS.forEach((k) => {
+      const e = EXPR[k];
+      const n = (LINES[p.name] && LINES[p.name][k] || []).length;
+      const real = variantURL(p, k);
+      const done = k !== 'neutral' && !!real;
+      const src = real || portrait(p);
+      row += `<td><div class="cell${done ? ' done' : ''}" style="--pa:${p.pa}" data-p="${p.name}" data-b="${k}">`
+        + `<div class="pf"><img src="${src}" onerror="this.style.opacity='0'"></div>`
+        + (done ? `<span class="tick">✓</span>` : `<span class="em">${e.emoji}</span>`)
+        + `<span class="cnt">${n} lines</span></div></td>`;
+    });
+    html += `<tr>${row}</tr>`;
+  });
+  mtable.innerHTML = html + '</tbody>';
+  mtable.querySelectorAll('.cell').forEach((c) => c.addEventListener('click', () => {
+    fireBucket(PILOTS.find((p) => p.name === c.dataset.p), c.dataset.b, EXPR[c.dataset.b].label);
+    document.querySelector('.stage').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }));
+  const done = Object.keys(VARIANTS).length, total = PILOTS.length * 2;
+  const pr = document.getElementById('progress');
+  if (pr) pr.textContent = `${done} / ${total} generated`;
+}
+
+(async function init() {
+  await probeVariants();
+  buildMatrix();
+  renderPilots();
+  fire('they_hit_you');
+})();
+</script>
+</body>
+</html>
