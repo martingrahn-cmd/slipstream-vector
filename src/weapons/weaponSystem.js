@@ -22,9 +22,9 @@ const MISSILE_AMMO = 3;
 
 // Per-type look: glow tint + trail tint + billboard size.
 const PROJ_LOOK = {
-  missiles: { col: 0xffb13d, trail: 0xffb13d, size: 1.0, h: 1.0 },
-  homing: { col: 0xff2ec8, trail: 0xff2ec8, size: 1.15, h: 1.0 },
-  mine: { col: 0xff5a30, trail: null, size: 0.85, h: 0.45 },
+  missiles: { col: 0xffc86a, trail: 0xffb13d, size: 1.35, h: 1.0 },
+  homing: { col: 0xff6ade, trail: 0xff2ec8, size: 1.45, h: 1.0 },
+  mine: { col: 0xff5a30, trail: null, size: 1.3, h: 0.55 },
 };
 
 // Small seeded PRNG (mulberry32) — the sim path never touches Math.random().
@@ -67,8 +67,8 @@ function glowTexture() {
 class ProjTrails {
   constructor(scene, slots) {
     this.slots = slots;
-    this.maxAge = 0.22;
-    this.maxPoints = 16;
+    this.maxAge = 0.35;
+    this.maxPoints = 22;
     this.tracks = Array.from({ length: slots }, () => ({ points: [], col: new THREE.Color(0xffb13d) }));
     const vertCount = 2 * this.maxPoints * slots;
     this.positions = new Float32Array(vertCount * 3);
@@ -110,7 +110,7 @@ class ProjTrails {
   }
 
   update(dt, camera) {
-    const width = 0.16;
+    const width = 0.34;
     for (let trIdx = 0; trIdx < this.slots; trIdx++) {
       const tr = this.tracks[trIdx];
       const base = trIdx * this.maxPoints * 2;
@@ -133,11 +133,16 @@ class ProjTrails {
         this.positions[k + 3] = p.pos.x - this._side.x * w;
         this.positions[k + 4] = p.pos.y - this._side.y * w;
         this.positions[k + 5] = p.pos.z - this._side.z * w;
-        const a = fade * fade * 0.75;
+        const a = fade * fade;
+        // white-hot at the head, cooling to the weapon colour down the streak
+        const heat = 1 - Math.min(1, p.t / 0.09);
+        const r = tr.col.r + (1 - tr.col.r) * heat;
+        const gc = tr.col.g + (1 - tr.col.g) * heat;
+        const b = tr.col.b + (1 - tr.col.b) * heat;
         for (let e = 0; e < 2; e++) {
-          this.colors[k4 + e * 4] = tr.col.r;
-          this.colors[k4 + e * 4 + 1] = tr.col.g;
-          this.colors[k4 + e * 4 + 2] = tr.col.b;
+          this.colors[k4 + e * 4] = r;
+          this.colors[k4 + e * 4 + 1] = gc;
+          this.colors[k4 + e * 4 + 2] = b;
           this.colors[k4 + e * 4 + 3] = a;
         }
       }
@@ -189,9 +194,23 @@ export class WeaponSystem {
       const zero = new THREE.Matrix4().makeScale(0, 0, 0);
       for (let i = 0; i < MAX_PROJ; i++) this.glows.setMatrixAt(i, zero);
       scene.add(this.glows);
+      // Mines get a solid spinning body under the glow — a dropped OBJECT on the
+      // road, not just a light. One instanced mesh, zero-scaled for non-mines.
+      this.mineCores = new THREE.InstancedMesh(
+        new THREE.OctahedronGeometry(0.42, 0),
+        new THREE.MeshBasicMaterial({ color: 0xc2461f, fog: true }),
+        MAX_PROJ,
+      );
+      this.mineCores.frustumCulled = false;
+      this.mineCores.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      for (let i = 0; i < MAX_PROJ; i++) this.mineCores.setMatrixAt(i, zero);
+      scene.add(this.mineCores);
+      this._q = new THREE.Quaternion();
+      this._axis = new THREE.Vector3(0, 1, 0);
       this.trails = new ProjTrails(scene, MAX_PROJ);
     } else {
       this.glows = null;
+      this.mineCores = null;
       this.trails = null;
     }
   }
@@ -222,6 +241,7 @@ export class WeaponSystem {
     this._freeSlots.push(p.slot);
     if (this.trails) this.trails.clearSlot(p.slot);
     if (this.glows) { this._m.makeScale(0, 0, 0); this.glows.setMatrixAt(p.slot, this._m); this.glows.instanceMatrix.needsUpdate = true; }
+    if (this.mineCores) { this._m.makeScale(0, 0, 0); this.mineCores.setMatrixAt(p.slot, this._m); this.mineCores.instanceMatrix.needsUpdate = true; }
   }
 
   // Fire the held weapon. Identical rules for player and AI.
@@ -327,10 +347,17 @@ export class WeaponSystem {
       this._m.compose(this._v, camera.quaternion, this._sc);
       this.glows.setMatrixAt(p.slot, this._m);
       this.glows.setColorAt(p.slot, this._c.setHex(look.col));
+      if (p.type === 'mine' && this.mineCores) {
+        this._q.setFromAxisAngle(this._axis, performance.now() / 400);
+        this._sc.setScalar(p.armT > 0 ? 0.7 : 1);
+        this._m.compose(this._v, this._q, this._sc);
+        this.mineCores.setMatrixAt(p.slot, this._m);
+      }
       if (this.trails && look.trail != null) this.trails.push(p.slot, this._v);
     }
     this.glows.instanceMatrix.needsUpdate = true;
     if (this.glows.instanceColor) this.glows.instanceColor.needsUpdate = true;
+    if (this.mineCores) this.mineCores.instanceMatrix.needsUpdate = true;
     if (this.trails) this.trails.update(dt, camera);
   }
 
@@ -356,6 +383,12 @@ export class WeaponSystem {
       this.glows.material.map && this.glows.material.map.dispose();
       this.glows.material.dispose();
       this.glows = null;
+    }
+    if (this.mineCores) {
+      this.scene.remove(this.mineCores);
+      this.mineCores.geometry.dispose();
+      this.mineCores.material.dispose();
+      this.mineCores = null;
     }
     if (this.trails) { this.trails.dispose(this.scene); this.trails = null; }
   }

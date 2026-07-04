@@ -755,11 +755,21 @@ let scrapeAcc = 0;
 juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
 // Weapon armed (from the WeaponSystem pickup roll): HUD badge + chirp for the
 // player; AI pickups are silent — you learn they are armed when they fire.
+const _muzzleA = new THREE.Color(0xffc86a);
+const _muzzleB = new THREE.Color(0xffffff);
 juice.on('weaponFire', ({ type, isPlayer, remaining }) => {
   if (!isPlayer) return;
   hud.setWeapon(remaining > 0 ? type : null, remaining);
   audio.weaponFire(type);
   input.rumble(type === 'missiles' || type === 'homing' ? 0.4 : 0.25, 140);
+  // Muzzle punch: a burst of hot sparks so the launch/drop reads on screen.
+  if (type === 'missiles' || type === 'homing' || type === 'mine') {
+    spline.frameAt(ship.s, _f);
+    const back = type === 'mine' ? -3 : 3;
+    _v.copy(_f.pos).addScaledVector(_f.T, back).addScaledVector(_f.R, ship.d).addScaledVector(_f.U, 1.0);
+    _vel.copy(_f.T).multiplyScalar(type === 'mine' ? -6 : ship.v + 20);
+    sparks.spawn(_v, _vel, 10, 16, _muzzleA, _muzzleB, undefined, _f.pos.y);
+  }
 });
 juice.on('weaponArmed', ({ type, isPlayer }) => {
   if (!isPlayer) return;
