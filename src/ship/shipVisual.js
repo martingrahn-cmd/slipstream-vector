@@ -85,6 +85,32 @@ export class ShipVisual {
       }
     }
 
+    // Weapon-state FX (every ship): blue electric arcs crawling the hull while
+    // disabled (weapon hit), and a soft shield bubble while shielded. Both are
+    // invisible (and cost nothing) until the state flips on.
+    const ARC_SEGS = 12; // 4 bolts x 3 jagged segments
+    this._arcPos = new Float32Array(ARC_SEGS * 2 * 3);
+    const arcGeo = new THREE.BufferGeometry();
+    arcGeo.setAttribute('position', new THREE.BufferAttribute(this._arcPos, 3));
+    this.arcs = new THREE.LineSegments(arcGeo, new THREE.LineBasicMaterial({
+      color: 0x66aaff, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    this.arcs.visible = false;
+    this.arcs.frustumCulled = false;
+    this._arcT = 0;
+    this.lean.add(this.arcs);
+    this.shieldBubble = new THREE.Mesh(
+      new THREE.SphereGeometry(2.35, 18, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0x66d8ff, transparent: true, opacity: 0.13,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }),
+    );
+    this.shieldBubble.visible = false;
+    this.shieldBubble.position.set(0, 0.2, 0.2);
+    this.lean.add(this.shieldBubble);
+
     // Blob shadow on the track surface.
     this.shadow = new THREE.Mesh(
       new THREE.CircleGeometry(1.6, 20),
@@ -214,6 +240,35 @@ export class ShipVisual {
     // the road instead of clipping through the asphalt in hard corners.
     this.lean.position.y = bob + Math.abs(Math.sin(this.roll)) * T.SHIP_LEAN_LIFT;
     this.lean.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ');
+
+    // Weapon-state FX: jittering arcs while disabled, breathing bubble while
+    // shielded. Render-path randomness only — never touches the sim.
+    if (ship.disabledT > 0) {
+      this._arcT -= dt;
+      if (this._arcT <= 0) {
+        this._arcT = 0.05;
+        const P = this._arcPos;
+        let k = 0;
+        for (let b = 0; b < 4; b++) {
+          let x = (Math.random() - 0.5) * 2.4, y = Math.random() * 0.7, z = (Math.random() - 0.5) * 3.6;
+          for (let seg = 0; seg < 3; seg++) {
+            const nx = x + (Math.random() - 0.5) * 1.1, ny = y + (Math.random() - 0.5) * 0.7, nz = z + (Math.random() - 0.5) * 1.1;
+            P[k++] = x; P[k++] = y; P[k++] = z;
+            P[k++] = nx; P[k++] = ny; P[k++] = nz;
+            x = nx; y = ny; z = nz;
+          }
+        }
+        this.arcs.geometry.attributes.position.needsUpdate = true;
+      }
+      this.arcs.visible = Math.random() > 0.15; // crackle flicker
+    } else if (this.arcs.visible) {
+      this.arcs.visible = false;
+    }
+    this.shieldBubble.visible = !!ship.shielded;
+    if (ship.shielded) {
+      this.shieldBubble.material.opacity = 0.1 + 0.05 * Math.sin(this.time * 7);
+      this.shieldBubble.scale.setScalar(1 + 0.025 * Math.sin(this.time * 11));
+    }
 
     // Engine: cyan -> white while boosting, flicker at ~30Hz.
     const throttleAmt = input.throttle;

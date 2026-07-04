@@ -8,6 +8,9 @@
 // land, shortfall, lap.
 import { TUNING as T } from '../config.js';
 
+// Scratch input for the weapon-hit disable (reused — no per-step allocation).
+const _DISABLED = { throttle: 0, brake: 0, steer: 0, airbrake: false };
+
 export class ShipPhysics {
   // stats: WipEout-style ship character — {vmax, accel, steer} multipliers.
   // Applied identically whether a player or an AI drives this hull.
@@ -67,6 +70,17 @@ export class ShipPhysics {
 
   // One fixed step. input: {steer (-1..1, smoothed), throttle, brake, airbrake}.
   step(dt, input) {
+    // Weapon-hit disable: cut thrust and make steering mushy for the duration —
+    // the ship COASTS on drag (momentum stays honest, never a dead stop).
+    // Clamp the input BEFORE the physics consumes it; brake/airbrake stay live.
+    if (this.disabledT > 0) {
+      this.disabledT -= dt;
+      _DISABLED.throttle = 0;
+      _DISABLED.brake = input.brake;
+      _DISABLED.steer = input.steer * 0.2;
+      _DISABLED.airbrake = input.airbrake;
+      input = _DISABLED;
+    }
     const tr = this.track;
     const sc = tr.scalarsAt(this.s, this.scalars);
     const drifting = input.airbrake && this.v > 5;

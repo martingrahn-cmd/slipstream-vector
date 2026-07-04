@@ -216,9 +216,13 @@ export class WeaponSystem {
   }
 
   _ships() {
-    const list = [this.player];
-    if (this.race && this.race.racers) for (const r of this.race.racers) list.push(r.phys);
-    return list;
+    // Roster is fixed for the life of a race — build once (the fixed step runs
+    // at 120Hz; no per-step allocation).
+    if (!this._shipList) {
+      this._shipList = [this.player];
+      if (this.race && this.race.racers) for (const r of this.race.racers) this._shipList.push(r.phys);
+    }
+    return this._shipList;
   }
 
   _roll() {
@@ -230,7 +234,7 @@ export class WeaponSystem {
   _spawn(type, s, d, v, owner, life, target = null) {
     if (!this._freeSlots.length) return null; // cap reached — refuse, don't grow
     const slot = this._freeSlots.pop();
-    const p = { slot, type, s: wrap(s, this.spline.length), d, v, owner, life, armT: type === 'mine' ? T.MINE_ARM : 0, target };
+    const p = { slot, type, s: wrap(s, this.spline.length), d, v, owner, life, armT: type === 'mine' ? T.MINE_ARM : 0, graceT: type === 'mine' ? 1.5 : 0, target };
     this.projectiles.push(p);
     if (this.trails && PROJ_LOOK[type].trail != null) this.trails.start(slot, PROJ_LOOK[type].trail);
     return p;
@@ -321,6 +325,7 @@ export class WeaponSystem {
       const p = this.projectiles[i];
       p.life -= dt;
       if (p.armT > 0) p.armT -= dt;
+      if (p.graceT > 0) p.graceT -= dt;
       if (p.type !== 'mine') {
         p.s = wrap(p.s + p.v * dt, L);
         if (p.type === 'homing' && p.target) {
@@ -329,10 +334,43 @@ export class WeaponSystem {
           p.d += Math.abs(dd) < step ? dd : Math.sign(dd) * step;
         }
       }
-      if (p.life <= 0) this._despawn(p);
+      if (p.life <= 0) { this._despawn(p); continue; }
+
+      // ---- hit detection: pure Δs/Δd geometry, identical for every ship.
+      // Mines arm after MINE_ARM and spare their OWNER only during a short
+      // grace window — after that they hit whoever crosses them, dropper too.
+      if (p.type === 'mine' && p.armT > 0) continue;
+      const dsWin = p.type === 'mine' ? T.MINE_TRIGGER_DS : T.MISSILE_HIT_DS;
+      const ddWin = p.type === 'mine' ? T.MINE_TRIGGER_DD : T.MISSILE_HIT_DD;
+      for (const victim of this._ships()) {
+        if (victim === p.owner && (p.type !== 'mine' || p.graceT > 0)) continue;
+        if (Math.abs(sdist(p.s, victim.s, L)) >= dsWin || Math.abs(p.d - victim.d) >= ddWin) continue;
+        this._hit(p, victim);
+        break; // one victim per projectile
+      }
     }
 
-    // (stage 3: hit detection · stage 4: AI fire policy)
+    // (stage 4: AI fire policy)
+  }
+
+  // A projectile connected. Shield eats the hit; otherwise the victim is
+  // disabled for WEAPON_DISABLE_TIME (thrust cut in ShipPhysics.step).
+  _hit(p, victim) {
+    const isPlayer = victim === this.player;
+    if (victim.shielded) {
+      victim.shielded = false;
+      this.juice.emit('shieldSave', {
+        type: p.type, victimIsPlayer: isPlayer,
+        shooterIsPlayer: p.owner === this.player, victim, shooter: p.owner,
+      });
+    } else {
+      victim.disabledT = T.WEAPON_DISABLE_TIME;
+      this.juice.emit('weaponHit', {
+        type: p.type, victimIsPlayer: isPlayer,
+        shooterIsPlayer: p.owner === this.player, victim, shooter: p.owner,
+      });
+    }
+    this._despawn(p);
   }
 
   // Render-path visuals only — never simulation.

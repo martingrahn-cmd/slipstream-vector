@@ -757,6 +757,30 @@ juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
 // player; AI pickups are silent — you learn they are armed when they fire.
 const _muzzleA = new THREE.Color(0xffc86a);
 const _muzzleB = new THREE.Color(0xffffff);
+const _explCore = new THREE.Color(0xffffff);
+const _explHot = new THREE.Color(0xffb13d);
+const _explTail = new THREE.Color(0xff477e);
+// Weapon hit: an AAA two-stage explosion at the victim — a white-hot core burst
+// + a slower gold/rose bloom — governed by distance to the camera (the
+// fill-bound rule: far hits spawn smaller, cheaper bursts).
+juice.on('weaponHit', ({ victim, victimIsPlayer }) => {
+  spline.frameAt(victim.s, _f);
+  _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.0);
+  const k = Math.max(0.25, Math.min(1, 70 / Math.max(camera.position.distanceTo(_v), 1)));
+  _vel.copy(_f.T).multiplyScalar(victim.v * 0.35);
+  sparks.spawn(_v, _vel, 20, Math.round(30 * k), _explCore, _explHot, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 9, Math.round(20 * k), _explHot, _explTail, undefined, _f.pos.y);
+  audio.weaponImpact(victimIsPlayer ? 1 : 0.4 + 0.6 * k);
+  if (victimIsPlayer && state === 'race') input.rumble(1, 420);
+});
+juice.on('shieldSave', ({ victim, victimIsPlayer }) => {
+  spline.frameAt(victim.s, _f);
+  _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.2);
+  _vel.copy(_f.T).multiplyScalar(victim.v * 0.3);
+  sparks.spawn(_v, _vel, 12, 14, _muzzleB, _explHot, undefined, _f.pos.y);
+  audio.shieldBounce();
+  if (victimIsPlayer && state === 'race') input.rumble(0.5, 180);
+});
 juice.on('weaponFire', ({ type, isPlayer, remaining }) => {
   if (!isPlayer) return;
   hud.setWeapon(remaining > 0 ? type : null, remaining);

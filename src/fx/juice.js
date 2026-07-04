@@ -56,6 +56,21 @@ export class Juice {
       this.setFlash(T.FLASH_HIT);
       this.hitstopT = T.HITSTOP_TIME;
     });
+    // Weapon hit: ONE hard spike exactly at impact + a hitstop tick — the decay
+    // does the rest (no sustained shake through the disable, per the less-shake
+    // rule). Watching someone else eat a missile is a faint thud.
+    this.on('weaponHit', ({ victimIsPlayer }) => {
+      if (victimIsPlayer) {
+        this.addTrauma(T.WEAPON_TRAUMA);
+        this.setFlash(T.WEAPON_FLASH);
+        this.hitstopT = T.WEAPON_HITSTOP;
+      } else {
+        this.addTrauma(0.15);
+      }
+    });
+    this.on('shieldSave', ({ victimIsPlayer }) => {
+      if (victimIsPlayer) this.addTrauma(0.2); // a knock, not a punishment
+    });
   }
 
   on(name, fn) {

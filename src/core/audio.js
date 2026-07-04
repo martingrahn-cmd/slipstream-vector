@@ -232,6 +232,18 @@ export class AudioEngine {
     src.stop(t0 + dur + 0.02);
   }
 
+  weaponImpact(amount = 1) {
+    // heavy two-layer boom: low body + a bright crack on top
+    this.burst(240, 0.5, 0.3 * amount, 'lowpass', 0.7);
+    this.burst(2400, 0.2, 0.13 * amount, 'bandpass', 1.2);
+    this.blip(110, 0.45, { type: 'sawtooth', gain: 0.15 * amount, slideTo: 38 });
+  }
+
+  shieldBounce() {
+    this.blip(920, 0.16, { type: 'triangle', gain: 0.12, slideTo: 300 });
+    this.burst(1500, 0.12, 0.08, 'bandpass', 1.4);
+  }
+
   weaponFire(type) {
     if (type === 'missiles' || type === 'homing') {
       // sharp launch: falling saw + a hiss of exhaust
