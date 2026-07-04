@@ -23,6 +23,8 @@ export class AiDriver {
     // Pad decisions are made once per approach, not re-rolled every step.
     this.padTargetId = -1;
     this.padRolledId = -1;
+    this.wpadTargetId = -1;  // weapon-pad seek (only while the hands are empty)
+    this.wpadRolledId = -1;
     this.wobbleT = this.rng() * 100;
     // Route-fork temperament: brave drivers take the fast (pad) inside lane.
     this.takesFastLane = this.rng() < 0.25 + skill.boost * 0.6;
@@ -55,6 +57,23 @@ export class AiDriver {
         }
         if (this.padTargetId === pad.id) { dT = pad.d; chasing = true; }
         break;
+      }
+    }
+
+    // Weapon-pad seeking: same approach logic as boost pads, but only when
+    // this driver holds nothing — and the boost line keeps priority.
+    if (!chasing && ship.heldWeapon === null) {
+      for (const pad of sp.weaponPads) {
+        const ds = sdist(ship.s, pad.s, sp.length);
+        if (ds > 8 && ds < 70 + v * 0.5) {
+          if (this.wpadRolledId !== pad.id) {
+            this.wpadRolledId = pad.id;
+            this.wpadTargetId = (this.rng() < 0.5 + sk.boost * 0.45
+              && Math.abs(pad.d - dT) < 5.5) ? pad.id : -1;
+          }
+          if (this.wpadTargetId === pad.id) dT = pad.d;
+          break;
+        }
       }
     }
 

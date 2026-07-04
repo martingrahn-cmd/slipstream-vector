@@ -33,7 +33,7 @@ export class Race {
     this.racers = seats.map((seat, i) => {
       const sk = seat.team.skill;
       const skill = {
-        corner: Math.min(1.1, base + sk.corner + (i % 2) * 0.02),
+        corner: Math.min(1.14, base + sk.corner + (i % 2) * 0.02), // 1.14: headroom for APEX (1.1 saturated at ACE)
         line: Math.max(0.1, Math.min(1, 0.45 + aiLevel * 0.09 + sk.line * 4)),
         boost: Math.max(0, Math.min(1, 0.3 + aiLevel * 0.12 + sk.boost * 3)),
       };

@@ -170,6 +170,8 @@ export class WeaponSystem {
     this._prevPad = new Map();   // phys -> activeWeaponPad last step (arm on transition)
     this._ammo = new Map();      // phys -> missiles left in the salvo
     this._cool = new Map();      // phys -> fire cooldown (s)
+    this._aiDelay = new Map();   // phys -> hold-fire countdown (reaction time)
+    this._kap = { kappa: 0, bank: 0, width: 8, slope: 0, splitHalf: 0 }; // scalarsAt scratch
     this.projectiles = [];       // {slot, type, s, d, v, owner, life, armT, target}
     this._freeSlots = Array.from({ length: MAX_PROJ }, (_, i) => MAX_PROJ - 1 - i);
 
@@ -320,6 +322,45 @@ export class WeaponSystem {
     // ---- player fire intent (edge, once per frame)
     if (playerFire) this._tryFire(this.player, true);
 
+    // ---- AI fire policy: state-driven, seeded, gated by SKILL only — never
+    // by race position or gap-to-anyone. Every tier fires; low skill just
+    // reacts slower (gate accuracy, not existence).
+    if (this.race && this.race.racers) {
+      for (const r of this.race.racers) {
+        const phys = r.phys;
+        if (!phys.heldWeapon || phys.disabledT > 0) { this._aiDelay.delete(phys); continue; }
+        if ((this._cool.get(phys) || 0) > 0) continue;
+        const type = phys.heldWeapon;
+        let want = false;
+        if (type === 'shield') {
+          want = true; // armor up as soon as you have it
+        } else if (type === 'boost') {
+          const sc = this.spline.scalarsAt(phys.s, this._kap);
+          want = Math.abs(sc.kappa) < 0.006 && phys.v > 20; // spend it on a straight
+        } else if (type === 'missiles' || type === 'homing') {
+          const range = type === 'homing' ? T.HOMING_RANGE : 60;
+          const dd = type === 'homing' ? 6 : 3;
+          for (const other of this._ships()) {
+            if (other === phys) continue;
+            const ds = sdist(phys.s, other.s, L);
+            if (ds > 4 && ds < range && Math.abs(other.d - phys.d) < dd) { want = true; break; }
+          }
+        } else if (type === 'mine') {
+          for (const other of this._ships()) {
+            if (other === phys) continue;
+            const ds = sdist(phys.s, other.s, L);
+            if (ds < -3 && ds > -18) { want = true; break; } // someone on my tail
+          }
+        }
+        if (!want) { this._aiDelay.delete(phys); continue; }
+        let hold = this._aiDelay.get(phys);
+        if (hold == null) hold = 0.35 + (1 - Math.min(1, r.driver.skill.corner)) * 0.9 + r.driver.rng() * 0.3;
+        hold -= dt;
+        if (hold <= 0) { this._aiDelay.delete(phys); this._tryFire(phys, false); }
+        else this._aiDelay.set(phys, hold);
+      }
+    }
+
     // ---- projectile sim (spline domain)
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
@@ -404,6 +445,7 @@ export class WeaponSystem {
     this._prevPad.clear();
     this._ammo.clear();
     this._cool.clear();
+    this._aiDelay.clear();
     while (this.projectiles.length) this._despawn(this.projectiles[0]);
     for (const phys of this._ships()) {
       phys.heldWeapon = null;

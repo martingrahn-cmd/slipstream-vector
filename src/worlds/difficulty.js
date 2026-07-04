@@ -14,13 +14,18 @@ export const DIFFICULTIES = [
     blurb: 'A patient field. Room to learn the lines.',
   },
   {
-    id: 'pro', name: 'PRO', level: 2.8,
+    id: 'pro', name: 'PRO', level: 3.1,
     tag: 'TOUGH', color: 0xffd23f,
     blurb: 'A real fight. Mistakes hand them the place.',
   },
   {
-    id: 'ace', name: 'ACE', level: 5.0,
+    id: 'ace', name: 'ACE', level: 5.4,
     tag: 'BRUTAL', color: 0xff3b3b,
     blurb: 'Ruthless lines, late brakes. No mercy.',
+  },
+  {
+    id: 'apex', name: 'APEX', level: 6.5,
+    tag: 'MERCILESS', color: 0xb14dff,
+    blurb: 'The field races like it hates you.',
   },
 ];
