@@ -232,6 +232,21 @@ export class AudioEngine {
     src.stop(t0 + dur + 0.02);
   }
 
+  weaponFire(type) {
+    if (type === 'missiles' || type === 'homing') {
+      // sharp launch: falling saw + a hiss of exhaust
+      this.blip(300, 0.28, { type: 'sawtooth', gain: 0.13, slideTo: 70 });
+      this.burst(2200, 0.22, 0.12, 'bandpass', 0.9);
+    } else if (type === 'mine') {
+      this.blip(190, 0.1, { type: 'square', gain: 0.1 });
+      this.blip(120, 0.12, { type: 'square', gain: 0.09, delay: 0.07 });
+    } else if (type === 'shield') {
+      this.blip(520, 0.3, { type: 'sine', gain: 0.09, slideTo: 1050 });
+    } else if (type === 'boost') {
+      this.boostWhoosh(0.9);
+    }
+  }
+
   weaponPickup() {
     // rising two-note arm chirp — distinct from the boost whoosh family
     this.blip(620, 0.09, { type: 'square', gain: 0.09 });

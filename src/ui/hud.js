@@ -32,11 +32,13 @@ export class Hud {
     });
   }
 
-  // Weapon slot: shows the held weapon icon (null hides it).
-  setWeapon(type) {
+  // Weapon slot: shows the held weapon icon (null hides it). count: salvo
+  // rounds left (missiles) — shown as a small xN tag.
+  setWeapon(type, count) {
     const el = this.el.weaponSlot; if (!el) return;
     if (!type) { el.classList.add('hidden'); el.innerHTML = ''; return; }
-    el.innerHTML = WEAPON_ICONS[type] || '';
+    el.innerHTML = (WEAPON_ICONS[type] || '')
+      + (count > 1 ? '<span class="wcount">' + count + '</span>' : '');
     el.classList.remove('hidden');
     this.pop(el, 'weapon-pop');
   }

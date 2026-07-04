@@ -16,6 +16,7 @@ export const REBINDABLE = [
   { id: 'thrust',     label: 'ACCELERATE',  group: 'DRIVING' },
   { id: 'brake',      label: 'BRAKE',       group: 'DRIVING' },
   { id: 'airbrake',   label: 'AIRBRAKE',    group: 'DRIVING' },
+  { id: 'fire',       label: 'FIRE WEAPON', group: 'ACTIONS' },
   { id: 'respawn',    label: 'RESPAWN',     group: 'ACTIONS' },
   { id: 'pause',      label: 'PAUSE',       group: 'ACTIONS' },
 ];
@@ -29,7 +30,7 @@ export const PAD_MENU = [
 const DEFAULT_BINDINGS = {
   steerLeft: ['ArrowLeft', 'KeyA'], steerRight: ['ArrowRight', 'KeyD'],
   thrust: ['ArrowUp', 'KeyW'], brake: ['ArrowDown', 'KeyS'],
-  airbrake: ['ShiftLeft', 'ShiftRight'], respawn: ['KeyR'], pause: ['KeyP'],
+  airbrake: ['ShiftLeft', 'ShiftRight'], fire: ['Space'], respawn: ['KeyR'], pause: ['KeyP'],
 };
 // Gamepad bindings mirror the keyboard model: each action holds an ARRAY of
 // input descriptors, so the defaults replicate the W3C "standard" mapping
@@ -43,6 +44,7 @@ const DEFAULT_PAD = {
   thrust:     [{ t: 7 }, { b: 0 }, { a: 1, d: -1 }],
   brake:      [{ t: 6 }, { b: 13 }, { a: 1, d: 1 }],
   airbrake:   [{ b: 4 }, { b: 5 }],
+  fire:       [{ b: 3 }],
   respawn:    [{ b: 2 }],
   pause:      [{ b: 9 }, { b: 8 }],
   confirm:    [{ b: 0 }],
@@ -51,10 +53,10 @@ const DEFAULT_PAD = {
 // Edge actions synthesized from the pad each frame -> the codes the keyboard
 // emits. respawn/pause use Pad: tokens (no keyboard can make them) so they
 // survive key rebinding; confirm/back reuse Enter/Backspace.
-const PAD_EDGE = [['confirm', 'Enter'], ['back', 'Backspace'], ['pause', 'Pad:pause'], ['respawn', 'Pad:respawn']];
+const PAD_EDGE = [['confirm', 'Enter'], ['back', 'Backspace'], ['pause', 'Pad:pause'], ['respawn', 'Pad:respawn'], ['fire', 'Pad:fire']];
 // Synthetic codes the gamepad emits for respawn/pause (never producible by a
 // keyboard) so the pad keeps working even after those keys are remapped.
-const PAD_CODE = { respawn: 'Pad:respawn', pause: 'Pad:pause' };
+const PAD_CODE = { respawn: 'Pad:respawn', pause: 'Pad:pause', fire: 'Pad:fire' };
 // Codes that run the menu/system itself — refused as a new binding.
 const RESERVED_CODES = new Set(['Enter', 'Escape', 'Backspace', 'Tab']);
 

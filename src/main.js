@@ -312,7 +312,8 @@ function buildField() {
     selection.mode === 2 /* time trial: empty track */, cls);
   race.grid();
   // Weapons: combat only where there are rivals — Championship + Single, never TT.
-  weapons = new WeaponSystem(spline, race, ship, juice, {
+  if (weapons) weapons.dispose();
+  weapons = new WeaponSystem(spline, scene, race, ship, juice, {
     active: selection.mode !== 2,
     seed: 1009 + trackIndex * 97 + selection.classIdx * 7,
   });
@@ -331,6 +332,7 @@ const CONTROLS_LEGEND = '<div class="lg-row"><span>STEER</span><b>&larr; &rarr; 
   + '<div class="lg-row"><span>THROTTLE</span><b>&uarr; / W / RT</b></div>'
   + '<div class="lg-row"><span>BRAKE</span><b>&darr; / S / LT</b></div>'
   + '<div class="lg-row"><span>AIRBRAKE</span><b>SHIFT / LB RB</b></div>'
+  + '<div class="lg-row"><span>FIRE</span><b>SPACE / Y</b></div>'
   + '<div class="lg-row"><span>RESPAWN</span><b>R / X</b></div>'
   + '<div class="lg-row"><span>PAUSE</span><b>P / START</b></div>';
 
@@ -753,6 +755,12 @@ let scrapeAcc = 0;
 juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
 // Weapon armed (from the WeaponSystem pickup roll): HUD badge + chirp for the
 // player; AI pickups are silent — you learn they are armed when they fire.
+juice.on('weaponFire', ({ type, isPlayer, remaining }) => {
+  if (!isPlayer) return;
+  hud.setWeapon(remaining > 0 ? type : null, remaining);
+  audio.weaponFire(type);
+  input.rumble(type === 'missiles' || type === 'homing' ? 0.4 : 0.25, 140);
+});
 juice.on('weaponArmed', ({ type, isPlayer }) => {
   if (!isPlayer) return;
   hud.setWeapon(type);
@@ -1185,12 +1193,13 @@ function tick(now) {
   if (state !== 'attract') {
     accumulator += dt;
     let guard = 8;
+    let firePending = state === 'race' && input.consumeAction('fire');
     while (accumulator >= FIXED_DT && guard-- > 0) {
       race.computeDraft(ship); // slipstream targets from current positions
       ship.step(FIXED_DT, simInput);
       race.stepFixed(FIXED_DT, state === 'race' || state === 'finished');
       race.interact(ship, FIXED_DT);
-      if (weapons) weapons.stepFixed(FIXED_DT, state === 'race' || state === 'finished');
+      if (weapons) { weapons.stepFixed(FIXED_DT, state === 'race' || state === 'finished', firePending); firePending = false; }
       accumulator -= FIXED_DT;
     }
   }
@@ -1219,6 +1228,7 @@ function tick(now) {
     hud.setGhostDelta(ghosting ? ghost.deltaAt(ship.s, ship.lapTime) : null);
   }
   race.updateVisuals(dt, camera);
+  if (weapons) weapons.updateVisuals(dt, camera);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
   // (Ground dust removed — it read as ugly golden cube/squares behind the ship.)
@@ -1854,6 +1864,7 @@ window.__game = {
   get podiumScene() { return podiumScene; },
   get menuPodium() { return podium; },
   get pauseMenu() { return pauseMenu; },
+  get weapons() { return weapons; },
   openPause: () => openPause(),
   resumeRace: () => resumeRace(),
   juice, input, audio, hud, achievements,

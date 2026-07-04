@@ -248,6 +248,7 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
   filter: drop-shadow(0 0 9px rgba(255, 177, 61, 0.65));
 }
 #weapon-slot svg { width: 100%; height: 100%; display: block; }
+#weapon-slot .wcount { position: absolute; right: -8px; bottom: -4px; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 14px; color: #ffb13d; text-shadow: 0 0 8px rgba(255, 177, 61, 0.8); }
 #weapon-slot.weapon-pop { animation: weaponPop 340ms cubic-bezier(0.2, 1.6, 0.4, 1); }
 @keyframes weaponPop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
 
