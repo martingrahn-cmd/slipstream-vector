@@ -252,6 +252,31 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
 #weapon-slot.weapon-pop { animation: weaponPop 340ms cubic-bezier(0.2, 1.6, 0.4, 1); }
 @keyframes weaponPop { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.18); } 100% { transform: scale(1); opacity: 1; } }
 
+/* Rival banter comms-feed: bottom-left corner stack, newest at the bottom,
+   grows upward. Reuses the .cf visual language (accent rail + cut corner). */
+#comms-feed { left: 22px; bottom: 92px; display: flex; flex-direction: column; gap: 8px; width: 340px; pointer-events: none; z-index: 12; }
+.banter-chip { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 9px; padding: 7px 7px 7px 11px;
+  background: linear-gradient(100deg, rgba(255,255,255,0.05), rgba(255,255,255,0.008)), rgba(10, 7, 20, 0.92);
+  border: 1px solid var(--pa, var(--cyan)); box-shadow: 0 0 22px -12px var(--pa, var(--cyan));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+  animation: bcIn 240ms cubic-bezier(0.2, 0.9, 0.2, 1) both; transform-origin: left bottom; }
+.banter-chip.leaving { animation: bcOut 300ms ease forwards; }
+.banter-chip::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pa, var(--cyan)); box-shadow: 0 0 10px var(--pa, var(--cyan)); }
+.bc-face { position: relative; width: 50px; height: 50px; flex: none; border: 1px solid var(--pa, var(--cyan)); overflow: hidden; background: rgba(120, 150, 200, 0.08);
+  clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%); }
+.bc-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.bc-spine { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding-right: 4px; }
+.bc-top { display: flex; align-items: center; gap: 7px; }
+.bc-name { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-tag { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 8px; letter-spacing: 0.16em; color: var(--pa, var(--cyan)); border: 1px solid var(--pa, var(--cyan)); padding: 0 4px; flex: none; }
+/* The trash-talk line: NOT scaled by --u — must stay legible at speed. */
+.bc-line { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 16px; line-height: 1.15; color: #eef1ff; }
+.bc-led { position: absolute; top: 7px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--pa, var(--cyan)); box-shadow: 0 0 8px var(--pa, var(--cyan)); animation: cfLed 1.5s ease-in-out infinite; }
+@keyframes bcIn { from { opacity: 0; transform: translateX(-16px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes bcOut { to { opacity: 0; transform: translateX(-10px) scale(0.94); } }
+body.reduced-motion .banter-chip { animation: none; }
+body.reduced-motion .banter-chip.leaving { animation: none; opacity: 0; }
+
 #boost-meter {
   left: 50%; bottom: 34px;
   width: 280px; height: 12px;
@@ -677,6 +702,7 @@ body.in-menu #lap-block,
 body.in-menu #speed-block,
 body.in-menu #boost-meter,
 body.in-menu #weapon-slot,
+body.in-menu #comms-feed,
 body.in-menu #minimap { display: none !important; }
 /* Spectating the finish: hide the driving instruments, keep lap + minimap. */
 body.spectating #speed-block, body.spectating #boost-meter, body.spectating #weapon-slot { display: none !important; }

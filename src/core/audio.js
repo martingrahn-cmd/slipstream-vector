@@ -259,6 +259,12 @@ export class AudioEngine {
     }
   }
 
+  commsBlip() {
+    // short radio-chatter chirp — two quick square blips, quiet
+    this.blip(1180, 0.05, { type: 'square', gain: 0.05 });
+    this.blip(1480, 0.06, { type: 'square', gain: 0.045, delay: 0.045 });
+  }
+
   weaponPickup() {
     // rising two-note arm chirp — distinct from the boost whoosh family
     this.blip(620, 0.09, { type: 'square', gain: 0.09 });

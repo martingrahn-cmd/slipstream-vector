@@ -18,6 +18,7 @@ import { Sparks, ExhaustTrails } from './fx/particles.js';
 import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
 import { Hud, fmt } from './ui/hud.js';
+import { BanterFeed } from './ui/banter.js';
 import { Minimap } from './ui/minimap.js';
 import { Input, NULL_INPUT, REBINDABLE, PAD_MENU, keyLabel, padLabel } from './core/input.js';
 
@@ -69,6 +70,9 @@ const sparks = new Sparks(scene);
 const trails = new ExhaustTrails(scene);
 const input = new Input();
 const hud = new Hud(juice);
+let banterOn = localStorage.getItem('sv-banter') !== 'off';
+const banter = new BanterFeed(document.getElementById('comms-feed'), audio);
+banter.setEnabled(banterOn);
 const menu = new Menu();
 const pauseMenu = new PauseMenu();
 const achievements = new Achievements(audio);
@@ -318,6 +322,7 @@ function buildField() {
     seed: 1009 + trackIndex * 97 + selection.classIdx * 7,
   });
   hud.setWeapon(null);
+  banter.configure(race, ship);
   ship.reset(12);
   podium.setShip(variant);
   localStorage.setItem('sv-team', String(selection.team));
@@ -525,6 +530,7 @@ function updateMenu() {
   setTxt('opt-fs', document.fullscreenElement ? 'ON' : 'OFF');
   setTxt('opt-motion', document.body.classList.contains('reduced-motion') ? 'REDUCED' : 'FULL');
   setTxt('opt-pilotintro', INTRO_LABEL[introMode]);
+  setTxt('opt-banter', banterOn ? 'ON' : 'OFF');
   setTxt('opt-gp-state', input.gamepadActive ? 'CONNECTED' : 'NONE');
   const legend = document.getElementById('opt-legend');
   if (legend && !legend.dataset.filled) { legend.dataset.filled = '1'; legend.innerHTML = CONTROLS_LEGEND; }
@@ -781,6 +787,8 @@ juice.on('shieldSave', ({ victim, victimIsPlayer }) => {
   audio.shieldBounce();
   if (victimIsPlayer && state === 'race') input.rumble(0.5, 180);
 });
+juice.on('weaponHit', (e) => { if (state === 'race' || state === 'finished') banter.weaponHit(e); });
+juice.on('shieldSave', (e) => { if (state === 'race' || state === 'finished') banter.shieldSave(e); });
 juice.on('weaponFire', ({ type, isPlayer, remaining }) => {
   if (!isPlayer) return;
   hud.setWeapon(remaining > 0 ? type : null, remaining);
@@ -800,6 +808,30 @@ juice.on('weaponArmed', ({ type, isPlayer }) => {
   hud.setWeapon(type);
   if (type && state === 'race') { audio.weaponPickup(); input.rumble(0.25, 120); }
 });
+
+// Overtake banter: compare each rival's progress to the player's with a small
+// hysteresis margin, and fire a line when the ordering flips. Throttled to 4Hz.
+// Position-independent — it only reports who passed whom, never rubber-bands.
+const _otAhead = new Map(); // racer -> committed side: +1 ahead of player, -1 behind
+let _otAccum = 0;
+function updateBanter(dt) {
+  if (state === 'race' && race && race.racers && race.racers.length) {
+    _otAccum += dt;
+    if (_otAccum >= 0.25) {
+      _otAccum = 0;
+      const pp = race.progressOf(ship);
+      for (const r of race.racers) {
+        const d = race.progressOf(r.phys) - pp;
+        const prev = _otAhead.get(r) || 0;
+        let now = prev;
+        if (d > 2) now = 1; else if (d < -2) now = -1;
+        if (prev !== 0 && now !== prev) banter.overtake(r.phys, now === 1);
+        _otAhead.set(r, now);
+      }
+    }
+  }
+  banter.update(dt);
+}
 const _boostColA = new THREE.Color(T.COL.ENGINE);
 const _boostColB = new THREE.Color(0xffffff);
 juice.on('boost', ({ pad } = {}) => {
@@ -988,6 +1020,8 @@ function startCountdown() {
   rig.playIntro(ship, introDur);
   race.grid();
   if (weapons) weapons.reset();
+  banter.reset();
+  _otAhead.clear();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
   countdownT = 3.2;
@@ -1263,6 +1297,7 @@ function tick(now) {
   }
   race.updateVisuals(dt, camera);
   if (weapons) weapons.updateVisuals(dt, camera);
+  updateBanter(dt);
   trails.push(0, shipVisual.getNozzleWorld(0, _v));
   trails.push(1, shipVisual.getNozzleWorld(1, _v));
   // (Ground dust removed — it read as ugly golden cube/squares behind the ship.)
@@ -1388,6 +1423,9 @@ function editRow(row, dir) {
   } else if (row === 'pilotintro') {
     introMode = INTRO_MODES[n(INTRO_MODES.length, INTRO_MODES.indexOf(introMode), dir)];
     localStorage.setItem('sv-intro', introMode);
+  } else if (row === 'banter') {
+    banterOn = !banterOn; banter.setEnabled(banterOn);
+    localStorage.setItem('sv-banter', banterOn ? 'on' : 'off');
   } else if (row === 'tier') {
     trophyTier = TROPHY_FILTERS[n(TROPHY_FILTERS.length, TROPHY_FILTERS.indexOf(trophyTier), dir)];
   }
