@@ -232,6 +232,60 @@ export class AudioEngine {
     src.stop(t0 + dur + 0.02);
   }
 
+  // The PLAYER takes a hit — a fat, close, three-layer BANG (sub thump + sharp
+  // crack + debris tail), then the paralysis hum kicks in.
+  playerHitBang() {
+    if (!this.ctx) return;
+    this.burst(90, 0.7, 0.42, 'lowpass', 0.6);     // deep sub body
+    this.burst(3200, 0.09, 0.24, 'highpass', 0.9); // sharp crack transient
+    this.burst(700, 0.4, 0.2, 'bandpass', 0.7);    // mid debris
+    this.blip(70, 0.6, { type: 'sawtooth', gain: 0.24, slideTo: 30 });
+    this.disableHum(true);
+  }
+
+  // Sustained buzzing/paralysis drone while disabled. Idempotent — call
+  // disableHum(true) on the hit and disableHum(false) when the disable ends.
+  disableHum(on) {
+    if (!this.ctx) return;
+    if (on) {
+      if (this._humOn) return;
+      this._humOn = true;
+      const t0 = this.ctx.currentTime;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(0.06, t0 + 0.04);
+      const o1 = this.ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 74;
+      const o2 = this.ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 78;
+      const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 320; f.Q.value = 3;
+      const lfo = this.ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 11;
+      const lfoG = this.ctx.createGain(); lfoG.gain.value = 90;
+      lfo.connect(lfoG); lfoG.connect(f.frequency);
+      o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.sfx);
+      o1.start(t0); o2.start(t0); lfo.start(t0);
+      this._hum = { g, nodes: [o1, o2, lfo] };
+    } else {
+      if (!this._humOn) return;
+      this._humOn = false;
+      const h = this._hum; this._hum = null;
+      if (!h) return;
+      const t0 = this.ctx.currentTime;
+      h.g.gain.cancelScheduledValues(t0);
+      h.g.gain.setValueAtTime(h.g.gain.value, t0);
+      h.g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      for (const n of h.nodes) n.stop(t0 + 0.15);
+    }
+  }
+
+  // Self-boost pickup — a heavy nitrous kick: sub thump + rising pressurised
+  // hiss + a low swelling saw. Beefier than the pad boostWhoosh.
+  nitroKick() {
+    if (!this.ctx) return;
+    this.blip(48, 0.5, { type: 'sine', gain: 0.32, slideTo: 30 });
+    this.blip(120, 0.55, { type: 'sawtooth', gain: 0.16, slideTo: 520 });
+    this.burst(600, 0.6, 0.2, 'bandpass', 0.5);
+    this.burst(3000, 0.35, 0.12, 'highpass', 0.8);
+  }
+
   weaponImpact(amount = 1) {
     // heavy two-layer boom: low body + a bright crack on top
     this.burst(240, 0.5, 0.3 * amount, 'lowpass', 0.7);
@@ -253,9 +307,12 @@ export class AudioEngine {
       this.blip(190, 0.1, { type: 'square', gain: 0.1 });
       this.blip(120, 0.12, { type: 'square', gain: 0.09, delay: 0.07 });
     } else if (type === 'shield') {
-      this.blip(520, 0.3, { type: 'sine', gain: 0.09, slideTo: 1050 });
+      // power-up shimmer: rising sine + a soft filtered swell
+      this.blip(360, 0.32, { type: 'sine', gain: 0.12, slideTo: 1200 });
+      this.blip(540, 0.3, { type: 'triangle', gain: 0.07, slideTo: 1500, delay: 0.04 });
+      this.burst(1800, 0.3, 0.06, 'bandpass', 1.5);
     } else if (type === 'boost') {
-      this.boostWhoosh(0.9);
+      this.nitroKick();
     }
   }
 

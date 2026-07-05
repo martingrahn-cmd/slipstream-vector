@@ -22,8 +22,8 @@ const MISSILE_AMMO = 3;
 
 // Per-type look: glow tint + trail tint + billboard size.
 const PROJ_LOOK = {
-  missiles: { col: 0xffc86a, trail: 0xffb13d, size: 1.35, h: 1.0 },
-  homing: { col: 0xff6ade, trail: 0xff2ec8, size: 1.45, h: 1.0 },
+  missiles: { col: 0xffc86a, trail: 0xffb13d, size: 1.6, h: 1.0 },
+  homing: { col: 0xff6ade, trail: 0xff2ec8, size: 1.7, h: 1.0 },
   mine: { col: 0xff5a30, trail: null, size: 1.3, h: 0.55 },
 };
 
@@ -110,7 +110,7 @@ class ProjTrails {
   }
 
   update(dt, camera) {
-    const width = 0.34;
+    const width = 0.55;
     for (let trIdx = 0; trIdx < this.slots; trIdx++) {
       const tr = this.tracks[trIdx];
       const base = trIdx * this.maxPoints * 2;

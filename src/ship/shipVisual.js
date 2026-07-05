@@ -100,15 +100,56 @@ export class ShipVisual {
     this.arcs.frustumCulled = false;
     this._arcT = 0;
     this.lean.add(this.arcs);
-    this.shieldBubble = new THREE.Mesh(
-      new THREE.SphereGeometry(2.35, 18, 12),
-      new THREE.MeshBasicMaterial({
-        color: 0x66d8ff, transparent: true, opacity: 0.13,
-        blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
-      }),
-    );
+    // AAA energy shield: a fresnel-rimmed icosphere with a scrolling hex energy
+    // lattice, an activation flash and a hit ripple. Additive, no depth write.
+    this._shieldMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uCol: { value: new THREE.Color(0x74e0ff) },
+        uHot: { value: new THREE.Color(0xdcffff) },
+        uAppear: { value: 0 }, // 0..1 activation ramp (drives a bright flash)
+        uHit: { value: 0 },     // 0..1 ripple spike on absorb
+      },
+      transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, fog: false, side: THREE.DoubleSide,
+      vertexShader: /* glsl */`
+        varying vec3 vN; varying vec3 vView; varying vec3 vPos;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vN = normalize(mat3(modelMatrix) * normal);
+          vView = normalize(cameraPosition - wp.xyz);
+          vPos = position;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: /* glsl */`
+        uniform float uTime; uniform vec3 uCol; uniform vec3 uHot;
+        uniform float uAppear; uniform float uHit;
+        varying vec3 vN; varying vec3 vView; varying vec3 vPos;
+        // hex-ish lattice from three interfering wave sets over the sphere
+        float lattice(vec3 p, float t) {
+          float a = sin(p.x * 5.0 + t) * sin(p.y * 5.0 - t) * sin(p.z * 5.0 + t * 0.7);
+          float b = sin((p.x + p.y) * 4.0 - t * 1.3) + sin((p.y + p.z) * 4.0 + t);
+          return smoothstep(0.55, 0.98, abs(a)) + smoothstep(1.4, 1.9, abs(b)) * 0.5;
+        }
+        void main() {
+          float fres = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 3.0);
+          float cells = lattice(normalize(vPos), uTime * 1.6);
+          // a scanning band sweeping vertically for that energised look
+          float scan = smoothstep(0.02, 0.0, abs(fract(vPos.y * 0.35 - uTime * 0.35) - 0.5) - 0.46);
+          float ripple = uHit * (0.4 + 0.6 * sin(length(vPos) * 14.0 - uTime * 26.0));
+          float body = fres * 1.7 + cells * 0.35 + scan * 0.5 + 0.05 + uAppear * 1.4 + ripple;
+          vec3 col = mix(uCol, uHot, min(1.0, fres * 0.7 + uAppear + ripple));
+          float a = body * (0.6 + 0.4 * uAppear);
+          gl_FragColor = vec4(col * body, a);
+        }`,
+    });
+    this.shieldBubble = new THREE.Mesh(new THREE.IcosahedronGeometry(2.5, 3), this._shieldMat);
     this.shieldBubble.visible = false;
+    this.shieldBubble.frustumCulled = false;
     this.shieldBubble.position.set(0, 0.2, 0.2);
+    this._shieldOn = 0; // eased 0..1 presence for the pop-in
+    this._ICE = new THREE.Color(0x74e0ff);
+    this._engCol = new THREE.Color(); // scratch: engBase (a hex) -> Color each frame
     this.lean.add(this.shieldBubble);
 
     // Blob shadow on the track surface.
@@ -196,6 +237,9 @@ export class ShipVisual {
   }
 
   // ship: ShipPhysics. input: smoothed axes. boostFactor: juice envelope 0..1.
+  // A shot was absorbed — pulse the shield's ripple as it flashes off.
+  flashShieldHit() { if (this._shieldMat) this._shieldMat.uniforms.uHit.value = 1; }
+
   update(dt, ship, input, boostFactor) {
     this.time += dt;
     const f = this.spline.frameAt(ship.s, this.frame);
@@ -264,10 +308,23 @@ export class ShipVisual {
     } else if (this.arcs.visible) {
       this.arcs.visible = false;
     }
-    this.shieldBubble.visible = !!ship.shielded;
-    if (ship.shielded) {
-      this.shieldBubble.material.opacity = 0.1 + 0.05 * Math.sin(this.time * 7);
-      this.shieldBubble.scale.setScalar(1 + 0.025 * Math.sin(this.time * 11));
+    // Shield: pop-in on activation, slow spin + breathe while up, fade the flash.
+    const wantShield = !!ship.shielded;
+    this._shieldOn += ((wantShield ? 1 : 0) - this._shieldOn) * Math.min(1, 12 * dt);
+    if (wantShield || this._shieldOn > 0.02) {
+      this.shieldBubble.visible = true;
+      const u = this._shieldMat.uniforms;
+      u.uTime.value = this.time;
+      u.uAppear.value = Math.max(0, this._shieldOn < 0.999 && wantShield ? 1 - this._shieldOn : 0); // bright while ramping up
+      u.uHit.value = Math.max(0, (u.uHit.value || 0) - dt * 4);
+      // tint the rim toward this ship's glow so the shield still reads as theirs
+      u.uCol.value.copy(this._ICE).lerp(this._engCol.setHex(this.engBase), 0.35);
+      this.shieldBubble.rotation.y += dt * 0.6;
+      this.shieldBubble.rotation.x += dt * 0.25;
+      const breathe = 1 + 0.03 * Math.sin(this.time * 5);
+      this.shieldBubble.scale.setScalar((0.55 + 0.45 * this._shieldOn) * breathe); // pop-in from small
+    } else {
+      this.shieldBubble.visible = false;
     }
 
     // Engine: cyan -> white while boosting, flicker at ~30Hz.
@@ -446,6 +503,8 @@ export class EngineFXBatch {
   dispose(scene) {
     for (const im of [this.flames, this.cores, this.glows]) { scene.remove(im); im.geometry.dispose(); im.material.dispose(); im.dispose(); }
     this.glowTex.dispose();
+    this.shieldBubble.geometry.dispose(); this._shieldMat.dispose();
+    this.arcs.geometry.dispose(); this.arcs.material.dispose();
   }
 }
 

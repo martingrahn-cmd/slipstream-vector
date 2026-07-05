@@ -745,6 +745,41 @@ function exitPodium() {
 const _f = makeFrame();
 const _v = new THREE.Vector3();
 const _vel = new THREE.Vector3();
+
+// AAA impact shockwave — a small pool of camera-facing rings that snap out and
+// fade on weapon hits. Cheap: 5 additive rings, only active during an impact.
+const _shock = (() => {
+  const rings = [];
+  const geo = new THREE.RingGeometry(0.72, 1.0, 40);
+  for (let i = 0; i < 5; i++) {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+      depthWrite: false, fog: false, side: THREE.DoubleSide,
+    }));
+    m.visible = false; m.frustumCulled = false; scene.add(m);
+    rings.push({ m, t: -1, scale: 1 });
+  }
+  const LIFE = 0.34;
+  return {
+    burst(pos, colHex, scale) {
+      const r = rings.find((x) => x.t < 0) || rings[0];
+      r.t = 0; r.scale = scale; r.m.visible = true;
+      r.m.position.copy(pos); r.m.material.color.setHex(colHex);
+    },
+    update(dt, camera) {
+      for (const r of rings) {
+        if (r.t < 0) continue;
+        r.t += dt;
+        const u = r.t / LIFE;
+        if (u >= 1) { r.t = -1; r.m.visible = false; continue; }
+        r.m.quaternion.copy(camera.quaternion);
+        const s = (0.5 + u * 6.0) * r.scale;
+        r.m.scale.set(s, s, s);
+        r.m.material.opacity = (1 - u) * (1 - u) * 0.9;
+      }
+    },
+  };
+})();
 const _dots = [];
 const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
 const _dustB = new THREE.Color(0x33271a);
@@ -774,16 +809,26 @@ juice.on('weaponHit', ({ victim, victimIsPlayer }) => {
   _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.0);
   const k = Math.max(0.25, Math.min(1, 70 / Math.max(camera.position.distanceTo(_v), 1)));
   _vel.copy(_f.T).multiplyScalar(victim.v * 0.35);
-  sparks.spawn(_v, _vel, 20, Math.round(30 * k), _explCore, _explHot, undefined, _f.pos.y);
-  sparks.spawn(_v, _vel, 9, Math.round(20 * k), _explHot, _explTail, undefined, _f.pos.y);
-  audio.weaponImpact(victimIsPlayer ? 1 : 0.4 + 0.6 * k);
-  if (victimIsPlayer && state === 'race') input.rumble(1, 420);
+  // Bigger, hotter burst + a snapping shockwave ring = real impact weight.
+  sparks.spawn(_v, _vel, 27, Math.round(48 * k), _explCore, _explHot, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 13, Math.round(30 * k), _explHot, _explTail, undefined, _f.pos.y);
+  _shock.burst(_v, victimIsPlayer ? 0xffffff : 0xffdca0, 1 + k * 0.7);
+  if (victimIsPlayer && state === 'race') {
+    audio.playerHitBang();                                   // fat close BANG + paralysis hum
+    juice.fovSpike = Math.max(juice.fovSpike, 0.55);         // a lens punch on top of the trauma spike
+    input.rumble(1, 460);
+  } else {
+    audio.weaponImpact(0.4 + 0.6 * k);
+  }
 });
 juice.on('shieldSave', ({ victim, victimIsPlayer }) => {
   spline.frameAt(victim.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.2);
   _vel.copy(_f.T).multiplyScalar(victim.v * 0.3);
-  sparks.spawn(_v, _vel, 12, 14, _muzzleB, _explHot, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 14, 18, _muzzleB, _explHot, undefined, _f.pos.y);
+  _shock.burst(_v, 0x9ff0ff, 0.8);                           // a cyan shield ripple ring
+  const vis = victimIsPlayer ? shipVisual : (race.racers.find((r) => r.phys === victim) || {}).vis;
+  if (vis) vis.flashShieldHit();
   audio.shieldBounce();
   if (victimIsPlayer && state === 'race') input.rumble(0.5, 180);
 });
@@ -1021,6 +1066,7 @@ function startCountdown() {
   race.grid();
   if (weapons) weapons.reset();
   banter.reset();
+  audio.disableHum(false); // never inherit a stuck paralysis buzz into a new race
   _otAhead.clear();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
@@ -1323,6 +1369,8 @@ function tick(now) {
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();
   sparks.update(dt);
+  _shock.update(dt, camera);
+  audio.disableHum(state === 'race' && ship.disabledT > 0); // paralysis buzz while you're hit
   trails.update(dt, camera, juice.boostFactor, sn);
   // Engine light-pool on the road behind the ship (throttle + boost, cyan->white).
   const poolGlow = (state === 'race' || state === 'countdown')

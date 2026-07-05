@@ -108,8 +108,8 @@ export const TUNING = {
   // ---- Weapons (Pass 3) ----
   // Every value identical for player and AI — weapons are combat, never catch-up.
   WEAPON_DISABLE_TIME: 1.7,  // s of cut thrust + mushy steering on hit (coast, not dead stop)
-  WEAPON_TRAUMA: 0.55,       // one hard spike at impact — decay does the rest (no sustained shake)
-  WEAPON_FLASH: 0.14,
+  WEAPON_TRAUMA: 0.62,       // one hard spike at impact — decay does the rest (no sustained shake)
+  WEAPON_FLASH: 0.22,
   WEAPON_HITSTOP: 0.06,
   MISSILE_SPEED_REL: 25,     // m/s over the shooter's speed at launch
   MISSILE_LIFE: 5,           // s until despawn
