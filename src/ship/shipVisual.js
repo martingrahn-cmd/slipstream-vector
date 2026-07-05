@@ -503,8 +503,6 @@ export class EngineFXBatch {
   dispose(scene) {
     for (const im of [this.flames, this.cores, this.glows]) { scene.remove(im); im.geometry.dispose(); im.material.dispose(); im.dispose(); }
     this.glowTex.dispose();
-    this.shieldBubble.geometry.dispose(); this._shieldMat.dispose();
-    this.arcs.geometry.dispose(); this.arcs.material.dispose();
   }
 }
 
