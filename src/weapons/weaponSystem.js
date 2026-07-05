@@ -265,6 +265,7 @@ export class WeaponSystem {
     }
     if (type === 'shield') {
       phys.shielded = true;
+      phys.shieldT = T.WEAPON_SHIELD_TIME; // drops on its own if no hit lands
       phys.heldWeapon = null;
       this.juice.emit('weaponFire', { type, isPlayer, remaining: 0 });
       return;
@@ -400,6 +401,7 @@ export class WeaponSystem {
     const isPlayer = victim === this.player;
     if (victim.shielded) {
       victim.shielded = false;
+      victim.shieldT = 0;
       this.juice.emit('shieldSave', {
         type: p.type, victimIsPlayer: isPlayer,
         shooterIsPlayer: p.owner === this.player, victim, shooter: p.owner,
@@ -451,6 +453,7 @@ export class WeaponSystem {
       phys.heldWeapon = null;
       phys.disabledT = 0;
       phys.shielded = false;
+      phys.shieldT = 0;
       phys.activeWeaponPad = -1;
     }
     if (this.active) this.juice.emit('weaponArmed', { type: null, isPlayer: true }); // clears the HUD slot

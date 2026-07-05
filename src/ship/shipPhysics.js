@@ -49,6 +49,7 @@ export class ShipPhysics {
     this.heldWeapon = null;      // 'homing'|'missiles'|'boost'|'shield'|'mine'
     this.disabledT = 0;          // s left of the hit penalty (cut thrust, mushy steer)
     this.shielded = false;       // absorb the next hit
+    this.shieldT = 0;            // s left before the shield drops on its own
     this.activeWeaponPad = -1;   // latch so a pad arms once per crossing
     this.lap = 0;
     this.lapTime = 0;
@@ -80,6 +81,11 @@ export class ShipPhysics {
       _DISABLED.steer = input.steer * 0.2;
       _DISABLED.airbrake = input.airbrake;
       input = _DISABLED;
+    }
+    // Shield decays on its own so nobody rides around permanently bubbled.
+    if (this.shieldT > 0) {
+      this.shieldT -= dt;
+      if (this.shieldT <= 0) { this.shieldT = 0; this.shielded = false; }
     }
     const tr = this.track;
     const sc = tr.scalarsAt(this.s, this.scalars);
