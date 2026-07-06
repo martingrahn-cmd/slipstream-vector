@@ -31,7 +31,10 @@ export const TEAMS = [
     name: 'HALCYON',
     fullName: 'Halcyon Raceworks',
     pilots: ['MERIDIAN BLUE', 'SOL ANARA'],
-    variant: { scaleX: 0.86, scaleZ: 1.12, finScale: 0.7, bellScale: 0.95, arch: 'manta' },
+    variant: { scaleX: 0.86, scaleZ: 1.12, finScale: 0.7, bellScale: 0.95, arch: 'manta',
+      // Manta build tuned in the ship editor (Martin, livery A) — applied
+      // team-wide so both Halcyon drivers share the same chassis.
+      tune: { bodyW: 1.12, tipSize: 1.33, tipRaise: 1.88, tipX: -0.26, tipZ: 0.17, engX: 0.62, engY: 0.1, engZ: 2.44, engR: 0.17, canY: 0.25, canZ: -0.19, canW: 0.29, canH: 0.26, canL: 0.68 } },
     skill: { corner: 0.01, line: 0.03, boost: -0.06 },
     stats: { vmax: 0.985, accel: 1.02, steer: 1.13 },
     bars: { speed: 2, thrust: 3, handling: 5 },
@@ -48,7 +51,10 @@ export const TEAMS = [
     name: 'RAZORBACK',
     fullName: 'Razorback Velocity',
     pilots: ['VOSS KRAIT', 'KIRA NOX'],
-    variant: { scaleX: 1.14, scaleZ: 0.92, finScale: 1.12, bellScale: 1.05, arch: 'delta' },
+    variant: { scaleX: 1.14, scaleZ: 0.92, finScale: 1.12, bellScale: 1.05, arch: 'delta',
+      // Delta build tuned in the ship editor (Martin, livery A) — applied
+      // team-wide so both Razorback drivers share the same chassis.
+      tune: { wingSpan: 0.82, wingLen: 0.89, engX: 0.72, engY: -0.15, engZ: 2.6, engR: 0.24, finH: 1.17, finZ: -0.23, finLen: 1.29, canY: 0.08, canZ: -0.69, canW: 0.24, canH: 0.15, canL: 0.9 } },
     skill: { corner: 0.035, line: -0.025, boost: 0.0 },
     stats: { vmax: 1.03, accel: 0.95, steer: 0.92 },
     bars: { speed: 5, thrust: 2, handling: 2 },
