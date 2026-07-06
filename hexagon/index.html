@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#07060f" />
+<title>VECTOR HEXAGON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #07060f; color: #eaf2ff;
+    font-family: 'Rajdhani', system-ui, sans-serif;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---- overlays ---- */
+  .overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 24px; pointer-events: none; z-index: 5;
+  }
+  .overlay.on { pointer-events: auto; }
+  .hidden { display: none !important; }
+
+  h1 {
+    font-family: 'Orbitron', sans-serif; font-weight: 900;
+    font-size: clamp(30px, 9vw, 74px); letter-spacing: 0.14em;
+    margin: 0 0 6px; line-height: 0.98;
+    color: #fff; text-shadow: 0 0 24px rgba(125,249,255,0.55);
+  }
+  h1 .a { color: #7df9ff; }
+  .tag {
+    font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.34em;
+    font-size: clamp(10px, 2.4vw, 14px); color: #8a93b8; margin-bottom: 30px;
+    text-transform: uppercase;
+  }
+
+  .diffs { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 26px; }
+  .diff {
+    font-family: 'Orbitron'; font-weight: 700; letter-spacing: 0.16em;
+    font-size: clamp(11px, 2.6vw, 14px); padding: 13px 20px; cursor: pointer;
+    background: #0c0a1a; color: #9aa3c8; border: 1px solid #241a3a;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+    transition: transform .08s, color .15s, border-color .15s, background .15s;
+  }
+  .diff .best { display: block; font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.08em; font-size: 12px; color: #5b6390; margin-top: 5px; }
+  .diff.sel { color: #07060f; border-color: transparent; transform: translateY(-2px); }
+  .diff.sel .best { color: rgba(7,6,15,0.7); }
+  .diff.d0.sel { background: #7df9ff; box-shadow: 0 0 26px rgba(125,249,255,0.5); }
+  .diff.d1.sel { background: #ffd166; box-shadow: 0 0 26px rgba(255,209,102,0.5); }
+  .diff.d2.sel { background: #ff5e8a; box-shadow: 0 0 26px rgba(255,94,138,0.5); }
+
+  .hint {
+    font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.06em;
+    font-size: clamp(12px, 3vw, 15px); color: #c8d0ee; line-height: 1.6; max-width: 460px;
+  }
+  .hint b { color: #7df9ff; font-weight: 700; }
+  .go {
+    margin-top: 22px; font-family: 'Orbitron'; font-weight: 800; letter-spacing: 0.2em;
+    font-size: clamp(13px, 3.4vw, 17px); color: #07060f; background: #7df9ff;
+    padding: 15px 34px; cursor: pointer; border: 0;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+    box-shadow: 0 0 30px rgba(125,249,255,0.45); animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.05);} }
+
+  /* ---- game-over card ---- */
+  #over h1 { font-size: clamp(26px, 8vw, 60px); }
+  .stat { font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.05em; color: #c8d0ee; font-size: clamp(14px, 3.6vw, 19px); margin: 2px 0; }
+  .stat .big { font-family: 'Orbitron'; font-weight: 800; color: #7df9ff; font-size: clamp(30px, 9vw, 56px); display: block; }
+  .newbest { font-family: 'Orbitron'; font-weight: 800; letter-spacing: 0.18em; color: #ffd166; font-size: clamp(13px, 3.4vw, 18px); margin: 8px 0; text-shadow: 0 0 18px rgba(255,209,102,0.55); }
+
+  /* ---- in-game HUD ---- */
+  #hud {
+    position: fixed; top: 14px; right: 16px; text-align: right; z-index: 4;
+    pointer-events: none; text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  }
+  #hud .lbl { font-family: 'Orbitron'; font-weight: 700; letter-spacing: 0.22em; font-size: 11px; color: #8a93b8; }
+  #hud .time { font-family: 'Orbitron'; font-weight: 900; font-size: clamp(26px, 7vw, 44px); color: #fff; line-height: 1; }
+  #hud .best { font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.06em; font-size: 13px; color: #7df9ff; margin-top: 3px; }
+
+  #sound {
+    position: fixed; bottom: 14px; left: 14px; z-index: 6; cursor: pointer;
+    font-family: 'Orbitron'; font-weight: 700; letter-spacing: 0.12em; font-size: 12px;
+    color: #9aa3c8; background: #0c0a1a; border: 1px solid #241a3a; padding: 8px 12px;
+  }
+  .credit { position: fixed; bottom: 12px; right: 14px; z-index: 4; font-size: 11px; letter-spacing: 0.14em; color: #3f4568; font-family: 'Orbitron'; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="c"></canvas></div>
+
+  <!-- START -->
+  <div class="overlay on" id="start">
+    <h1>VECTOR <span class="a">HEXAGON</span></h1>
+    <div class="tag">one hex · six lanes · don't touch the walls</div>
+    <div class="diffs" id="diffs"></div>
+    <div class="hint">
+      Steer with <b>← →</b> or <b>A / D</b> · on mobile, <b>tap &amp; hold</b> the left or right half.<br>
+      Slip your cursor into the gap before the wall reaches the core.
+    </div>
+    <button class="go" id="goBtn">BEGIN</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="overlay hidden" id="over">
+    <h1>GAME <span class="a">OVER</span></h1>
+    <div class="newbest hidden" id="newbest">◆ NEW BEST ◆</div>
+    <div class="stat"><span class="big" id="finalTime">0.00</span>SECONDS SURVIVED</div>
+    <div class="stat" id="overBest">BEST 0.00</div>
+    <button class="go" id="retryBtn">RETRY</button>
+    <div class="hint" style="margin-top:16px">press <b>SPACE</b> / tap to retry · <b>ESC</b> for menu</div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="lbl">TIME</div>
+    <div class="time" id="hudTime">0.00</div>
+    <div class="best" id="hudBest">BEST 0.00</div>
+  </div>
+
+  <div id="sound">♪ SOUND: ON</div>
+  <div class="credit">SLIPSTREAM</div>
+
+<script>
+"use strict";
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const TAU = Math.PI * 2, SIDES = 6, LANE = TAU / SIDES;
+
+  // ---------- difficulty presets ----------
+  const DIFFS = [
+    { key:'HEXAGON',    name:'HEXAGON',    base:170, ramp:5.0, spin:0.9, spacing:165, twist:8,  hueRate:26 },
+    { key:'HEXAGONER',  name:'HEXAGONER',  base:200, ramp:6.0, spin:1.15, spacing:150, twist:11, hueRate:20 },
+    { key:'HEXAGONEST', name:'HEXAGONEST', base:230, ramp:7.0, spin:1.45, spacing:138, twist:14, hueRate:15 },
+  ];
+  let diffIdx = 0;
+
+  // ---------- persistent bests ----------
+  const bestKey = i => 'vhex-best-' + DIFFS[i].key;
+  const getBest = i => parseFloat(localStorage.getItem(bestKey(i)) || '0') || 0;
+  const setBest = (i,v) => { try { localStorage.setItem(bestKey(i), String(v)); } catch(e){} };
+  const fmt = t => t.toFixed(2);
+
+  // ---------- viewport ----------
+  let W=0, H=0, cx=0, cy=0, scale=1, dpr=1;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W*dpr); canvas.height = Math.floor(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx = W/2; cy = H/2;
+    // fit the play-field: reference radius ~ 300 virtual units should sit within view
+    scale = Math.min(W,H) / 640;
+    scale = Math.max(scale, 0.42);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- game state ----------
+  const ST = { MENU:0, PLAY:1, OVER:2 };
+  let state = ST.MENU;
+
+  const HEX_BASE = 46;      // core hexagon radius (virtual units)
+  const ORBIT = 66;         // player orbit radius
+  const WALL_TH = 34;       // wall thickness
+  const SPAWN = 430;        // spawn distance (offscreen)
+  const PLAYER_ROT = 3.05 * Math.PI; // rad/sec
+
+  let player = 0;           // player angle (logical frame)
+  let walls = [];           // { dist, sides:[bool x6] }
+  let elapsed = 0;
+  let speed = 0;
+  let world = 0;            // visual field rotation
+  let spinDir = 1, spinSpeed = 0, spinTimer = 0;
+  let hue = 200, hueDir = 1;
+  let pulse = 0;            // 0..1 beat pulse
+  let beatClock = 0;
+  let distAccum = 0;
+  let pending = [];         // queued masks to spawn
+  let shake = 0;
+  let deathAt = 0;
+
+  const BPM = 152, BEAT = 60/BPM;
+
+  // ---------- patterns ----------
+  const rnd = n => Math.floor(Math.random()*n);
+  const openMask = gap => { const s=[true,true,true,true,true,true]; s[((gap%6)+6)%6]=false; return s; };
+  const twoGap = (g1,g2) => { const s=[true,true,true,true,true,true]; s[((g1%6)+6)%6]=false; s[((g2%6)+6)%6]=false; return s; };
+
+  // each pattern returns an array of masks (spawned in order, evenly spaced)
+  const PATTERNS = [
+    // straight tunnel — same gap for a few walls
+    () => { const g=rnd(6), n=2+rnd(3); return Array.from({length:n},()=>openMask(g)); },
+    // spiral — gap steps one lane each wall
+    () => { const g=rnd(6), d=Math.random()<0.5?1:-1, n=3+rnd(4); return Array.from({length:n},(_,i)=>openMask(g+d*i)); },
+    // zig-zag — alternate between two adjacent gaps
+    () => { const g=rnd(6), d=Math.random()<0.5?1:-1, n=4+rnd(3); return Array.from({length:n},(_,i)=>openMask(g+(i%2?d:0))); },
+    // single spike
+    () => [ openMask(rnd(6)) ],
+    // wide double-gap (breather)
+    () => { const g=rnd(6); return [ twoGap(g, g+3) ]; },
+    // C-shape — gap jumps across, forcing a long sweep
+    () => { const g=rnd(6); return [ openMask(g), openMask(g+3), openMask(g) ]; },
+  ];
+  // difficulty-weighted pattern pick
+  function nextPattern(){
+    const hard = diffIdx;
+    const pool = [0,1,1,2,3,4,5];
+    if (hard>=1) pool.push(1,2,5);
+    if (hard>=2) pool.push(2,2,5,1);
+    // early grace: only calm patterns in first 4s
+    if (elapsed < 4) return PATTERNS[3+rnd(2)]; // spike or breather
+    return PATTERNS[pool[rnd(pool.length)]];
+  }
+
+  // ---------- audio (procedural) ----------
+  let ac=null, master=null, soundOn=true, audioBeat=0;
+  const soundBtn = document.getElementById('sound');
+  function initAudio(){
+    if (ac) return;
+    try {
+      ac = new (window.AudioContext||window.webkitAudioContext)();
+      master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+    } catch(e){ ac=null; }
+  }
+  function tone(freq, t0, dur, type, gain, glideTo){
+    if (!ac) return;
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type=type||'sawtooth'; o.frequency.setValueAtTime(freq,t0);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, t0+dur);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(gain,t0+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.02);
+  }
+  function kick(t0){
+    if (!ac) return;
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(150,t0);
+    o.frequency.exponentialRampToValueAtTime(48,t0+0.12);
+    g.gain.setValueAtTime(0.9,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.18);
+    o.connect(g); g.connect(master); o.start(t0); o.stop(t0+0.2);
+  }
+  const BASS = [0,0,3,0, 5,5,3,2]; // semitone offsets over an 8-step bar
+  const ROOT = 55; // A1
+  let stepIdx = 0;
+  function scheduleAudio(){
+    if (!ac || !soundOn || state!==ST.PLAY) return;
+    const ahead = 0.15;
+    while (audioBeat < ac.currentTime + ahead){
+      const t = audioBeat;
+      const half = BEAT/2;
+      // kick on every beat, snare-ish tick on off-beat
+      kick(t);
+      tone(ROOT*Math.pow(2, BASS[stepIdx%8]/12), t, half*0.9, 'sawtooth', 0.16);
+      tone(ROOT*4*Math.pow(2, BASS[stepIdx%8]/12), t, 0.09, 'square', 0.05);
+      if (stepIdx%2===1) tone(900,t,0.03,'triangle',0.05); // hat
+      stepIdx++;
+      audioBeat += half; // two steps per beat -> 16th feel at half? keep it groovy
+    }
+  }
+  function deathSound(){
+    if (!ac||!soundOn) return;
+    const t=ac.currentTime;
+    tone(320,t,0.5,'sawtooth',0.25,60);
+    kick(t);
+  }
+  function blip(f){ if(!ac||!soundOn) return; tone(f||660, ac.currentTime, 0.06,'square',0.12); }
+  soundBtn.addEventListener('click', () => {
+    soundOn=!soundOn; soundBtn.textContent = '♪ SOUND: ' + (soundOn?'ON':'OFF');
+    if (master) master.gain.value = soundOn?0.5:0;
+  });
+
+  // ---------- input ----------
+  const keys = { left:false, right:false };
+  let touchDir = 0;
+  window.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    const k=e.key.toLowerCase();
+    if (k==='arrowleft'||k==='a') keys.left=true;
+    else if (k==='arrowright'||k==='d') keys.right=true;
+    else if (k===' '||k==='enter'){
+      if (state===ST.MENU) startGame();
+      else if (state===ST.OVER) startGame();
+      e.preventDefault();
+    } else if (k==='escape'){
+      if (state!==ST.MENU) toMenu();
+    } else if (k==='m'){ soundBtn.click(); }
+  });
+  window.addEventListener('keyup', e => {
+    const k=e.key.toLowerCase();
+    if (k==='arrowleft'||k==='a') keys.left=false;
+    else if (k==='arrowright'||k==='d') keys.right=false;
+  });
+  // touch — hold left/right half
+  function touchAt(x){ touchDir = x < W/2 ? -1 : 1; }
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); initAudio();
+    if (state===ST.MENU){ startGame(); return; }
+    if (state===ST.OVER){ startGame(); return; }
+    touchAt(e.touches[0].clientX);
+  }, {passive:false});
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if(e.touches[0]) touchAt(e.touches[0].clientX); }, {passive:false});
+  canvas.addEventListener('touchend', e => { e.preventDefault(); if(e.touches.length===0) touchDir=0; }, {passive:false});
+  // mouse hold for desktop testing / trackpads
+  let mouseDown=false;
+  canvas.addEventListener('mousedown', e => { if(state===ST.PLAY){ mouseDown=true; touchDir = e.clientX<W/2?-1:1; } });
+  window.addEventListener('mouseup', () => { mouseDown=false; if(!keys.left&&!keys.right) touchDir=0; });
+  canvas.addEventListener('mousemove', e => { if(mouseDown) touchDir = e.clientX<W/2?-1:1; });
+
+  // ---------- UI wiring ----------
+  const startEl = document.getElementById('start');
+  const overEl  = document.getElementById('over');
+  const hudEl   = document.getElementById('hud');
+  const diffsEl = document.getElementById('diffs');
+  const goBtn   = document.getElementById('goBtn');
+  const retryBtn= document.getElementById('retryBtn');
+
+  function buildDiffs(){
+    diffsEl.innerHTML='';
+    DIFFS.forEach((d,i) => {
+      const el=document.createElement('div');
+      el.className='diff d'+i+(i===diffIdx?' sel':'');
+      const b=getBest(i);
+      el.innerHTML = d.name + '<span class="best">'+(b>0?('BEST '+fmt(b)):'—')+'</span>';
+      el.addEventListener('click', () => { diffIdx=i; initAudio(); blip(560+i*80); buildDiffs(); });
+      diffsEl.appendChild(el);
+    });
+  }
+  goBtn.addEventListener('click', () => { initAudio(); startGame(); });
+  retryBtn.addEventListener('click', () => { initAudio(); startGame(); });
+
+  function toMenu(){
+    state=ST.MENU;
+    startEl.classList.remove('hidden'); startEl.classList.add('on');
+    overEl.classList.add('hidden'); overEl.classList.remove('on');
+    hudEl.classList.add('hidden');
+    buildDiffs();
+  }
+
+  function startGame(){
+    state=ST.PLAY;
+    startEl.classList.add('hidden'); startEl.classList.remove('on');
+    overEl.classList.add('hidden'); overEl.classList.remove('on');
+    hudEl.classList.remove('hidden');
+    // reset
+    const d=DIFFS[diffIdx];
+    player = LANE*0.5; walls.length=0; pending.length=0;
+    elapsed=0; speed=d.base; world=0; spinDir=1; spinSpeed=d.spin*0.6; spinTimer=2.5;
+    hue = [200,45,338][diffIdx]; hueDir=1; distAccum=0; shake=0; pulse=0; beatClock=0;
+    stepIdx=0; if (ac) audioBeat = ac.currentTime + 0.06;
+    if (ac && ac.state==='suspended') ac.resume();
+    document.getElementById('hudBest').textContent = 'BEST ' + fmt(getBest(diffIdx));
+    blip(720);
+  }
+
+  function gameOver(){
+    state=ST.OVER; deathSound(); shake = 1;
+    const b=getBest(diffIdx); let isNew=false;
+    if (elapsed > b){ setBest(diffIdx, elapsed); isNew=true; }
+    document.getElementById('finalTime').textContent = fmt(elapsed);
+    document.getElementById('overBest').textContent = 'BEST ' + fmt(getBest(diffIdx));
+    document.getElementById('newbest').classList.toggle('hidden', !isNew);
+    hudEl.classList.add('hidden');
+    setTimeout(() => {
+      if (state===ST.OVER){
+        overEl.classList.remove('hidden'); overEl.classList.add('on');
+      }
+    }, 550);
+  }
+
+  // ---------- spawning ----------
+  function furthest(){ let m=-Infinity; for (const w of walls) if (w.dist>m) m=w.dist; return m===-Infinity?0:m; }
+  function spawnStep(dt){
+    const d=DIFFS[diffIdx];
+    distAccum += speed*dt;
+    const spacing = d.spacing;
+    if (distAccum >= spacing){
+      distAccum -= spacing;
+      if (pending.length===0) pending = nextPattern()();
+      const sides = pending.shift();
+      walls.push({ dist: SPAWN, sides });
+    }
+  }
+
+  // ---------- update ----------
+  function update(dt){
+    const d=DIFFS[diffIdx];
+    elapsed += dt;
+    speed = Math.min(d.base + elapsed*d.ramp, d.base + 190);
+
+    // player movement
+    let dir=0;
+    if (keys.left) dir-=1; if (keys.right) dir+=1;
+    if (touchDir!==0 && dir===0) dir = touchDir;
+    player = (player + dir*PLAYER_ROT*dt) % TAU;
+    if (player<0) player+=TAU;
+
+    // world spin — occasionally flip direction / retarget speed
+    spinTimer -= dt;
+    if (spinTimer<=0){ spinTimer = 3.5 + Math.random()*4; spinDir *= (Math.random()<0.45?-1:1); }
+    const targetSpin = d.spin * spinDir * (0.7 + Math.min(elapsed/40,1)*0.7);
+    spinSpeed += (targetSpin - spinSpeed) * Math.min(dt*1.5,1);
+    world += spinSpeed * dt;
+
+    // colour drift
+    hue += hueDir * d.hueRate * dt;
+    if (hue>360) hue-=360; if (hue<0) hue+=360;
+
+    // beat pulse
+    beatClock += dt;
+    if (beatClock >= BEAT){ beatClock -= BEAT; pulse = 1; }
+    pulse *= Math.pow(0.001, dt); // fast decay
+
+    // walls
+    spawnStep(dt);
+    for (const w of walls) w.dist -= speed*dt;
+    walls = walls.filter(w => w.dist + WALL_TH > -20);
+
+    // collision — player centre lane
+    const lane = Math.floor(player / LANE) % SIDES;
+    for (const w of walls){
+      if (!w.sides[lane]) continue;
+      if (ORBIT >= w.dist && ORBIT <= w.dist + WALL_TH){ gameOver(); break; }
+    }
+
+    shake *= Math.pow(0.0005, dt);
+    scheduleAudio();
+  }
+
+  // ---------- colours ----------
+  function hsl(h,s,l,a){ return 'hsla('+((h%360+360)%360).toFixed(0)+','+s+'%,'+l+'%,'+(a==null?1:a)+')'; }
+
+  // ---------- render ----------
+  function polyPoint(ang, r){ return [Math.cos(ang)*r, Math.sin(ang)*r]; }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    // background flash
+    const bgL = 5 + pulse*3;
+    ctx.fillStyle = hsl(hue+180, 30, bgL);
+    ctx.fillRect(0,0,W,H);
+
+    ctx.save();
+    let ox=0, oy=0;
+    if (shake>0.02){ ox=(Math.random()*2-1)*shake*14; oy=(Math.random()*2-1)*shake*14; }
+    ctx.translate(cx+ox, cy+oy);
+    const beatScale = 1 + pulse*0.035;
+    ctx.scale(scale*beatScale, scale*beatScale);
+    ctx.rotate(world);
+
+    const R = 900; // big enough to cover screen in virtual units
+
+    // --- background pinwheel (6 alternating wedges) ---
+    for (let i=0;i<SIDES;i++){
+      const a0=i*LANE, a1=(i+1)*LANE;
+      const p0=polyPoint(a0,R), p1=polyPoint(a1,R);
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(p0[0],p0[1]); ctx.lineTo(p1[0],p1[1]); ctx.closePath();
+      const light = (i%2===0) ? 9 : 13;
+      ctx.fillStyle = hsl(hue, 42, light + pulse*2);
+      ctx.fill();
+    }
+
+    // --- walls ---
+    for (const w of walls){
+      const rIn = w.dist, rOut = w.dist + WALL_TH;
+      if (rOut < HEX_BASE*0.6) continue;
+      for (let i=0;i<SIDES;i++){
+        if (!w.sides[i]) continue;
+        const a0=i*LANE, a1=(i+1)*LANE;
+        const iA=polyPoint(a0,rIn), iB=polyPoint(a1,rIn);
+        const oA=polyPoint(a0,rOut), oB=polyPoint(a1,rOut);
+        ctx.beginPath(); ctx.moveTo(iA[0],iA[1]); ctx.lineTo(oA[0],oA[1]); ctx.lineTo(oB[0],oB[1]); ctx.lineTo(iB[0],iB[1]); ctx.closePath();
+        ctx.fillStyle = hsl(hue, 85, 62);
+        ctx.fill();
+      }
+    }
+
+    // --- core hexagon (pulsing) ---
+    const hexR = HEX_BASE * (1 + pulse*0.10);
+    ctx.beginPath();
+    for (let i=0;i<SIDES;i++){ const p=polyPoint(i*LANE,hexR); i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]); }
+    ctx.closePath();
+    ctx.fillStyle = hsl(hue+180, 30, 7);
+    ctx.fill();
+    ctx.lineWidth = 5; ctx.lineJoin='round';
+    ctx.strokeStyle = hsl(hue, 90, 66);
+    ctx.stroke();
+
+    // --- player cursor ---
+    if (state===ST.PLAY || state===ST.OVER){
+      const pr = ORBIT - 4;
+      const w0 = 0.16; // half-width in radians
+      const tip = polyPoint(player, pr+13);
+      const b1 = polyPoint(player - w0, pr);
+      const b2 = polyPoint(player + w0, pr);
+      ctx.beginPath(); ctx.moveTo(tip[0],tip[1]); ctx.lineTo(b1[0],b1[1]); ctx.lineTo(b2[0],b2[1]); ctx.closePath();
+      ctx.fillStyle = state===ST.OVER ? hsl(hue,90,80) : '#ffffff';
+      ctx.shadowColor = hsl(hue,90,70); ctx.shadowBlur=12;
+      ctx.fill(); ctx.shadowBlur=0;
+    }
+
+    ctx.restore();
+  }
+
+  // ---------- main loop ----------
+  let last = 0;
+  function frame(t){
+    const now=t/1000; let dt = last? now-last : 0; last=now;
+    if (dt>0.05) dt=0.05; // clamp
+    if (state===ST.PLAY){
+      // sub-step for stability at high speed
+      const steps = dt>0.02 ? 2 : 1;
+      for (let i=0;i<steps;i++) update(dt/steps);
+    } else if (state===ST.OVER){
+      shake *= Math.pow(0.0005, dt);
+      // gentle idle spin so the field keeps living
+      world += 0.15*dt; pulse *= Math.pow(0.001, dt);
+    }
+    // HUD
+    if (state===ST.PLAY){
+      document.getElementById('hudTime').textContent = fmt(elapsed);
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  buildDiffs();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
