@@ -172,6 +172,10 @@ export class WeaponSystem {
     this._cool = new Map();      // phys -> fire cooldown (s)
     this._aiDelay = new Map();   // phys -> hold-fire countdown (reaction time)
     this._kap = { kappa: 0, bank: 0, width: 8, slope: 0, splitHalf: 0 }; // scalarsAt scratch
+    // Per-pad cooldown, GLOBAL (once someone grabs pad i, it's spent for
+    // everyone until it recharges). Stored normalized 1..0 so the pad decal can
+    // dim by it directly.
+    this.padCd = new Float32Array((spline.weaponPads && spline.weaponPads.length) || 0);
     this.projectiles = [];       // {slot, type, s, d, v, owner, life, armT, target}
     this._freeSlots = Array.from({ length: MAX_PROJ }, (_, i) => MAX_PROJ - 1 - i);
 
@@ -307,18 +311,25 @@ export class WeaponSystem {
     if (!this.active || !racing) return;
     const L = this.spline.length;
 
-    // ---- pickups: arm on a fresh weapon-pad crossing (latch transition).
+    // ---- pickups: arm on a fresh weapon-pad crossing (latch transition), but
+    // only if the pad has recharged — a pad is spent (dimmed) for a few seconds
+    // after anyone grabs it, so the whole pack can't harvest the same one.
     for (const phys of this._ships()) {
       const prev = this._prevPad.get(phys) ?? -1;
       const cur = phys.activeWeaponPad;
-      if (cur >= 0 && cur !== prev && phys.heldWeapon === null) {
+      if (cur >= 0 && cur !== prev && phys.heldWeapon === null && !(this.padCd[cur] > 0)) {
         phys.heldWeapon = this._roll();
+        this.padCd[cur] = 1; // full charge spent — decays to 0 over the cooldown
         this.juice.emit('weaponArmed', { type: phys.heldWeapon, isPlayer: phys === this.player });
+        this.juice.emit('padTaken', { pad: cur, isPlayer: phys === this.player });
       }
       this._prevPad.set(phys, cur);
       const c = this._cool.get(phys);
       if (c > 0) this._cool.set(phys, c - dt);
     }
+    // recharge pads (normalized 1 -> 0 over WEAPON_PAD_COOLDOWN seconds)
+    const padDecay = dt / T.WEAPON_PAD_COOLDOWN;
+    for (let i = 0; i < this.padCd.length; i++) if (this.padCd[i] > 0) this.padCd[i] = Math.max(0, this.padCd[i] - padDecay);
 
     // ---- player fire intent (edge, once per frame)
     if (playerFire) this._tryFire(this.player, true);
@@ -448,6 +459,7 @@ export class WeaponSystem {
     this._ammo.clear();
     this._cool.clear();
     this._aiDelay.clear();
+    this.padCd.fill(0);
     while (this.projectiles.length) this._despawn(this.projectiles[0]);
     for (const phys of this._ships()) {
       phys.heldWeapon = null;

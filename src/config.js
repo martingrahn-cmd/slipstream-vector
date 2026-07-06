@@ -125,6 +125,7 @@ export const TUNING = {
   MINE_TRIGGER_DD: 2.2,
   WEAPON_BOOST_TIME: 1.6,    // rides the normal boostTimer pipeline
   WEAPON_SHIELD_TIME: 6.0,   // s a shield stays up before it drops on its own (or until it eats a hit)
+  WEAPON_PAD_COOLDOWN: 4.0,   // s a weapon pad is spent (dimmed, gives nothing) after someone grabs it
 
   // ---- Boost envelope ----
   BOOST_ATTACK: 12.0,     // boostFactor per second

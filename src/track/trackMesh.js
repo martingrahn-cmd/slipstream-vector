@@ -21,10 +21,10 @@ export function buildTrackMesh(spline, theme) {
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
   return {
     group,
-    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null) => {
+    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, weaponCd = null) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
-      if (wpads) wpads.update(t);
+      if (wpads) wpads.update(t, weaponCd);
     },
   };
 }
@@ -583,8 +583,9 @@ function buildWeaponPads(spline) {
   const C = TUNING.COL;
   const f = makeFrame();
   const v = new THREE.Vector3();
-  const positions = [], locals = [], phases = [], idx = [];
+  const positions = [], locals = [], phases = [], cds = [], idx = [];
   const LEN = 6, HW = 2, SLICES = 6;
+  const VPP = (SLICES + 1) * 2; // vertices per pad
 
   for (const pad of spline.weaponPads) {
     const base = positions.length / 3;
@@ -598,6 +599,7 @@ function buildWeaponPads(spline) {
         positions.push(v.x, v.y, v.z);
         locals.push(e ? 1 : 0, i / SLICES);
         phases.push(pad.s * 0.5);
+        cds.push(0); // per-vertex cooldown 0..1, written each frame from weapons.padCd
       }
     }
     for (let i = 0; i < SLICES; i++) {
@@ -610,6 +612,7 @@ function buildWeaponPads(spline) {
   geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
   geom.setAttribute('aLocal', new THREE.BufferAttribute(new Float32Array(locals), 2));
   geom.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(phases), 1));
+  geom.setAttribute('aCd', new THREE.BufferAttribute(new Float32Array(cds), 1));
   geom.setIndex(idx);
 
   const mat = new THREE.ShaderMaterial({
@@ -621,10 +624,12 @@ function buildWeaponPads(spline) {
     vertexShader: /* glsl */ `
       attribute vec2 aLocal;
       attribute float aPhase;
+      attribute float aCd;
       varying vec2 vLocal;
       varying float vPhase;
+      varying float vCd;
       void main() {
-        vLocal = aLocal; vPhase = aPhase;
+        vLocal = aLocal; vPhase = aPhase; vCd = aCd;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -633,6 +638,7 @@ function buildWeaponPads(spline) {
       uniform vec3 baseCol, glowCol;
       varying vec2 vLocal;
       varying float vPhase;
+      varying float vCd;
       void main() {
         // Centered coords: x -1..1 across, y -1..1 along the 6m decal.
         float x = vLocal.x * 2.0 - 1.0;
@@ -646,6 +652,9 @@ function buildWeaponPads(spline) {
         float frame = smoothstep(0.12, 0.02, abs(max(abs(x), abs(y)) - 0.92)); // thin outer border
         float edge = smoothstep(1.0, 0.85, abs(x));
         vec3 col = baseCol * 1.5 + glowCol * (0.22 + ring * 1.7 + core * 1.2 + frame * 0.8);
+        // Spent: kill the animated glow and drop to a dim ghost while recharging.
+        float live = 1.0 - vCd;
+        col = mix(baseCol * 0.35, col, live);
         gl_FragColor = vec4(col * edge, 1.0);
       }
     `,
@@ -657,5 +666,23 @@ function buildWeaponPads(spline) {
   const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  return { mesh, update: (t) => { mat.uniforms.time.value = t; } };
+  const aCd = geom.attributes.aCd;
+  let hadCd = false;
+  return {
+    mesh,
+    update: (t, cd) => {
+      mat.uniforms.time.value = t;
+      if (!cd) return;
+      let any = false;
+      for (let p = 0; p < spline.weaponPads.length; p++) if (cd[p] > 0) { any = true; break; }
+      if (!any && !hadCd) return; // nothing lit and nothing to clear — skip the upload
+      hadCd = any;
+      const arr = aCd.array;
+      for (let p = 0; p < spline.weaponPads.length; p++) {
+        const val = cd[p] || 0;
+        for (let k = 0; k < VPP; k++) arr[p * VPP + k] = val;
+      }
+      aCd.needsUpdate = true;
+    },
+  };
 }

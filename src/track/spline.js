@@ -37,7 +37,7 @@ export class TrackSpline {
     this._applyBank();
 
     this.pads = this._padList(ex.points.length, ex.boostPads);
-    this.weaponPads = this._padList(ex.points.length, ex.weaponPads);
+    this.weaponPads = this._padList(ex.points.length, ex.weaponPads, true); // clamp to keep the decal on-track
     this.splits = this._buildSplits(ex);
   }
 
@@ -306,12 +306,20 @@ export class TrackSpline {
   }
 
   // Convert {cp: float control-point index, d} pads to {s, d} (boost + weapon).
-  _padList(m, list) {
+  _padList(m, list, clampToFit) {
     return (list || []).map((p, idx) => {
       const j = Math.floor(p.cp) % m;
       const f = p.cp - Math.floor(p.cp);
-      const s = this._sAtCP[j] * (1 - f) + this._sAtCP[j + 1] * f;
-      return { id: idx, s: s % this.length, d: p.d ?? 0 };
+      const s = (this._sAtCP[j] * (1 - f) + this._sAtCP[j + 1] * f) % this.length;
+      let d = p.d ?? 0;
+      if (clampToFit) {
+        // Keep the whole 4m-wide decal inside the road at this s (width is HALF
+        // width; the decal reaches HW=2 either side of d, + a small margin).
+        const i = Math.min(this.n - 1, Math.max(0, Math.floor(s / this.step)));
+        const maxD = Math.max(0, this.width[i] - 2 - 0.4);
+        d = Math.max(-maxD, Math.min(maxD, d));
+      }
+      return { id: idx, s, d };
     });
   }
 

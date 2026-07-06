@@ -853,6 +853,16 @@ juice.on('weaponArmed', ({ type, isPlayer }) => {
   hud.setWeapon(type);
   if (type && state === 'race') { audio.weaponPickup(); input.rumble(0.25, 120); }
 });
+// A pad was grabbed (by anyone): a gold spark burst at the pad so the pickup
+// reads, governed by distance to camera (fill-budget).
+juice.on('padTaken', ({ pad }) => {
+  const wp = spline.weaponPads[pad]; if (!wp) return;
+  spline.frameAt(wp.s, _f);
+  _v.copy(_f.pos).addScaledVector(_f.R, wp.d).addScaledVector(_f.U, 0.5);
+  const k = Math.max(0.2, Math.min(1, 60 / Math.max(camera.position.distanceTo(_v), 1)));
+  _vel.set(0, 2.4, 0);
+  sparks.spawn(_v, _vel, 9, Math.round(18 * k), _muzzleA, _explHot, undefined, _f.pos.y);
+});
 
 // Overtake banter: compare each rival's progress to the player's with a small
 // hysteresis margin, and fire a line when the ordering flips. Throttled to 4Hz.
@@ -1377,7 +1387,7 @@ function tick(now) {
     ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
   _engPool.setHex(shipVisual ? shipVisual.engBase : T.COL.ENGINE).lerp(_WHITE_C, juice.boostFactor * 0.15); // road wake runs the ship's glow hue (hint hotter on boost)
   const nozOff = shipVisual && shipVisual.nozzles[0] ? Math.abs(shipVisual.nozzles[0].x) : 1.05;
-  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff);
+  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff, weapons ? weapons.padCd : null);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
