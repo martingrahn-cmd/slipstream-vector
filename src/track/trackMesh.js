@@ -21,10 +21,10 @@ export function buildTrackMesh(spline, theme) {
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
   return {
     group,
-    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, weaponCd = null) => {
+    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, weaponCd = null, playerFull = false) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
-      if (wpads) wpads.update(t, weaponCd);
+      if (wpads) wpads.update(t, weaponCd, playerFull);
     },
   };
 }
@@ -620,6 +620,7 @@ function buildWeaponPads(spline) {
       time: { value: 0 },
       baseCol: { value: new THREE.Color(C.WEAPON_PAD_BASE) },
       glowCol: { value: new THREE.Color(C.WEAPON_PAD_GLOW) },
+      uFull: { value: 0 }, // 0..1 = the PLAYER is holding a weapon (can't grab any) → dim them all
     },
     vertexShader: /* glsl */ `
       attribute vec2 aLocal;
@@ -636,6 +637,7 @@ function buildWeaponPads(spline) {
     fragmentShader: /* glsl */ `
       uniform float time;
       uniform vec3 baseCol, glowCol;
+      uniform float uFull;
       varying vec2 vLocal;
       varying float vPhase;
       varying float vCd;
@@ -652,8 +654,13 @@ function buildWeaponPads(spline) {
         float frame = smoothstep(0.12, 0.02, abs(max(abs(x), abs(y)) - 0.92)); // thin outer border
         float edge = smoothstep(1.0, 0.85, abs(x));
         vec3 col = baseCol * 1.5 + glowCol * (0.22 + ring * 1.7 + core * 1.2 + frame * 0.8);
-        // Spent: kill the animated glow and drop to a dim ghost while recharging.
-        float live = 1.0 - vCd;
+        // Dim to a ghost when you CAN'T grab it: while recharging (kept clearly
+        // dim until nearly ready, so a "lit" pad always means grabbable), or
+        // while the player already holds a weapon (uFull) — no free pad reads
+        // as available when it isn't.
+        float cdBlock = clamp(vCd * 12.0, 0.0, 1.0);
+        float block = max(cdBlock, uFull);
+        float live = 1.0 - block;
         col = mix(baseCol * 0.35, col, live);
         gl_FragColor = vec4(col * edge, 1.0);
       }
@@ -670,8 +677,11 @@ function buildWeaponPads(spline) {
   let hadCd = false;
   return {
     mesh,
-    update: (t, cd) => {
+    update: (t, cd, full) => {
       mat.uniforms.time.value = t;
+      // ease the "you're holding a weapon" dim (runs every frame, even when the
+      // per-pad cooldown state is unchanged)
+      mat.uniforms.uFull.value += ((full ? 1 : 0) - mat.uniforms.uFull.value) * 0.18;
       if (!cd) return;
       let any = false;
       for (let p = 0; p < spline.weaponPads.length; p++) if (cd[p] > 0) { any = true; break; }

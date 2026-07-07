@@ -1387,7 +1387,8 @@ function tick(now) {
     ? Math.min(1.1, input.throttle * 0.55 + juice.boostFactor * 0.95) : 0;
   _engPool.setHex(shipVisual ? shipVisual.engBase : T.COL.ENGINE).lerp(_WHITE_C, juice.boostFactor * 0.15); // road wake runs the ship's glow hue (hint hotter on boost)
   const nozOff = shipVisual && shipVisual.nozzles[0] ? Math.abs(shipVisual.nozzles[0].x) : 1.05;
-  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff, weapons ? weapons.padCd : null);
+  track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff,
+    weapons ? weapons.padCd : null, state === 'race' && ship.heldWeapon != null);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
