@@ -95,6 +95,8 @@ export function buildScenery(spline, scene, theme) {
   const ground = buildGround(groundY, cx, cz, theme);
   group.add(ground.mesh);
   group.add(buildFarMountains(rng, groundY, cx, cz, spline, CITY_ANG, theme));
+  const landmarks = buildLandmarks(rng, spline, groundY, cx, cz, theme);
+  if (landmarks) group.add(landmarks.group);
   group.add(buildMesas(rng, spline, groundY, theme));
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
@@ -147,6 +149,7 @@ export function buildScenery(spline, scene, theme) {
         if (ground.mat.uniforms.uCam) ground.mat.uniforms.uCam.value.copy(cameraPos);
       }
       if (lights) lights.update(t);
+      if (landmarks && landmarks.update) landmarks.update(t);
       if (canyon) canyon.update(t);
       if (traffic) traffic.update(t);
       if (drones) drones.update(t);
@@ -171,7 +174,7 @@ function buildSky(S) {
       sunCore: { value: new THREE.Color(S.sunCore) },
       sunStripe: { value: new THREE.Color(S.sunStripe) },
       cloud: { value: new THREE.Color(S.cloud) },
-      sunAzimuth: { value: new THREE.Vector3(-0.35, 0, -0.94).normalize() },
+      sunAzimuth: { value: new THREE.Vector3(S.sunAz ? S.sunAz[0] : -0.35, 0, S.sunAz ? S.sunAz[1] : -0.94).normalize() },
       sunSize: { value: S.sunSize },
       sunStripes: { value: S.sunStripes },
       starLevel: { value: S.starLevel },
@@ -406,6 +409,18 @@ function buildGround(groundY, cx, cz, theme) {
 function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) {
   const geoms = [];
   const count = theme.farCount ?? 30;
+  // Directed horizon: per-theme angular windows thin out or boost the rings
+  // (a mountain WALL on one side, open sky on another) instead of an even
+  // circle. Falls back to the old single skyline window.
+  const mask = theme.horizonMask
+    || (cityAng !== null ? [{ ang: cityAng, span: 0.42, density: 0 }] : []);
+  const maskAt = (ang) => {
+    for (const m of mask) {
+      const d = Math.abs(Math.atan2(Math.sin(ang - m.ang), Math.cos(ang - m.ang)));
+      if (d < m.span) return { density: m.density ?? 1, hScale: m.hScale ?? 1 };
+    }
+    return { density: 1, hScale: 1 };
+  };
   const lowWide = theme.id === 'tropic'; // distant isles, not a mountain wall
   // A mountain footprint may not reach the track: push it outward until the
   // base circle clears every track sample by a margin.
@@ -420,11 +435,10 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
   const towers = theme.mountainStyle === 'towers';
   for (let i = 0; i < count; i++) {
     const ang = (i / count) * Math.PI * 2 + rng() * 0.15;
-    // Leave a window for the city skyline.
-    if (cityAng !== null
-      && Math.abs(Math.atan2(Math.sin(ang - cityAng), Math.cos(ang - cityAng))) < 0.42) continue;
+    const mk = maskAt(ang);
+    if (mk.density <= 0 || rng() >= mk.density) continue;
     let r = 560 + rng() * 90;
-    const h = towers ? 90 + rng() * 160 : lowWide ? 35 + rng() * 60 : 70 + rng() * 130;
+    const h = (towers ? 90 + rng() * 160 : lowWide ? 35 + rng() * 60 : 70 + rng() * 130) * mk.hScale;
     const w = towers ? 35 + rng() * 55 : lowWide ? 90 + rng() * 130 : 60 + rng() * 90;
     let px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
     for (let push = 0; push < 8 && !clearOfTrack(px, pz, w); push++) {
@@ -447,10 +461,10 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
   const ringN = Math.round(count * 0.7);
   for (let i = 0; i < ringN; i++) {
     const ang = (i / ringN) * Math.PI * 2 + rng() * 0.3 + 0.2; // offset so it peeks between the near ridge
-    if (cityAng !== null
-      && Math.abs(Math.atan2(Math.sin(ang - cityAng), Math.cos(ang - cityAng))) < 0.5) continue;
+    const mk = maskAt(ang);
+    if (mk.density <= 0 || rng() >= mk.density) continue;
     const r = 920 + rng() * 170;
-    const h = (towers ? 80 + rng() * 140 : lowWide ? 30 + rng() * 50 : 60 + rng() * 110) * 0.7;
+    const h = (towers ? 80 + rng() * 140 : lowWide ? 30 + rng() * 50 : 60 + rng() * 110) * 0.7 * mk.hScale;
     const w = (towers ? 40 + rng() * 60 : lowWide ? 100 + rng() * 140 : 70 + rng() * 100) * 1.1;
     const px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
     const g = towers
@@ -465,6 +479,139 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
   return mesh;
+}
+
+// -------------------------------------------------------------- landmarks
+// One ICON per world (stage 1 of the world uplift): a single, unmistakable
+// object on a chosen azimuth from the track centroid — the thing your eye
+// travels to, and the answer to "which world am I in?". The city's icon (the
+// Spire) is built inside buildCity; this handles the wilderness worlds.
+function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
+  const lm = theme.landmark;
+  if (!lm || lm.type === 'spire') return null;
+
+  // Angle: explicit, or the sky's sun azimuth (the desert gate FRAMES the sun).
+  const sunAz = theme.sky.sunAz || [-0.35, -0.94];
+  const ang = lm.ang ?? Math.atan2(sunAz[1], sunAz[0]);
+  // Push outward until the footprint clears the track (buildFarMountains rule).
+  const clear = (px, pz, radius) => {
+    const need = (radius + 40) ** 2;
+    for (let i = 0; i < spline.n; i += 16) {
+      const dx = spline.pos[i * 3] - px, dz = spline.pos[i * 3 + 2] - pz;
+      if (dx * dx + dz * dz < need) return false;
+    }
+    return true;
+  };
+  let dist = lm.dist ?? 450;
+  let px = cx + Math.cos(ang) * dist, pz = cz + Math.sin(ang) * dist;
+  while (dist < 900 && !clear(px, pz, 120)) {
+    dist += 60;
+    px = cx + Math.cos(ang) * dist; pz = cz + Math.sin(ang) * dist;
+  }
+  // Face the track: the span axis is perpendicular to the sight line.
+  const perpX = -Math.sin(ang), perpZ = Math.cos(ang);
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+
+  if (lm.type === 'sunGate') {
+    // The Sun Gate: two colossal tapering rock pillars + a hanging lintel —
+    // the striped sun disc sits inside the opening for most of the lap.
+    const S = (lm.scale ?? 1) * (dist / 430); // keep apparent size if pushed out
+    const halfW = 52 * S, H = 165 * S;
+    const geoms = [];
+    const pillar = (side, h, lean) => {
+      const g = new THREE.CylinderGeometry(11 * S, 19 * S, h, 5, 1);
+      g.rotateY(rng() * Math.PI);
+      g.rotateZ(lean);
+      g.translate(px + perpX * halfW * side, groundY + h / 2 - 2, pz + perpZ * halfW * side);
+      return bakeFlatColors(g, theme.mesaShadow);
+    };
+    geoms.push(pillar(-1, H, 0.05), pillar(1, H * 0.94, -0.04));
+    // The lintel: a massive horizontal slab bridging the pillars, slightly tilted.
+    const lg = new THREE.BoxGeometry(halfW * 2 + 34 * S, 17 * S, 24 * S);
+    lg.rotateZ(0.02);
+    lg.rotateY(Math.atan2(perpZ, perpX));
+    lg.translate(px, groundY + H * 0.94, pz);
+    geoms.push(bakeFlatColors(lg, theme.mesaShadow));
+    // Rubble at the feet — it has stood here a long time.
+    for (let i = 0; i < 7; i++) {
+      const side = i % 2 ? 1 : -1;
+      const r = (4 + rng() * 9) * S;
+      const g = new THREE.DodecahedronGeometry(r, 0);
+      g.translate(px + perpX * (halfW * side + (rng() - 0.5) * 30 * S),
+        groundY + r * 0.4, pz + perpZ * (halfW * side + (rng() - 0.5) * 30 * S));
+      geoms.push(bakeFlatColors(g, theme.rock));
+    }
+    const mesh = new THREE.Mesh(mergeGeoms(geoms),
+      new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+    mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+    return { group, update: null };
+  }
+
+  if (lm.type === 'lighthouse') {
+    // The lighthouse: red/white banded tower at the edge of the open sea, a
+    // slow sweeping beam, and a strip of cream resort towers down the shore.
+    const opa = [], glo = [];
+    const H = 96, R = 8.5;
+    const segs = 6;
+    for (let i = 0; i < segs; i++) {
+      const h = H / segs;
+      const r0 = R - (i / segs) * 2.6, r1 = R - ((i + 1) / segs) * 2.6;
+      const g = new THREE.CylinderGeometry(r1, r0, h, 10);
+      g.translate(px, groundY + h / 2 + i * h, pz);
+      opa.push(bakeFlatColors(g, i % 2 ? 0xd94848 : 0xf2ede2, { rim: false }));
+    }
+    // Gallery + lamp room + roof.
+    const gal = new THREE.CylinderGeometry(6.4, 6.4, 3.2, 10);
+    gal.translate(px, groundY + H + 1.6, pz);
+    opa.push(bakeFlatColors(gal, 0x2a3138, { rim: false }));
+    const roof = new THREE.ConeGeometry(5.2, 7, 10);
+    roof.translate(px, groundY + H + 8.5, pz);
+    opa.push(bakeFlatColors(roof, 0xd94848, { rim: false }));
+    const lampY = groundY + H + 3.8;
+    const lamp = new THREE.BoxGeometry(4.6, 3.4, 4.6);
+    lamp.translate(px, lampY, pz);
+    glo.push(colorTint(lamp, new THREE.Color(0xfff2c8)));
+    // Resort strip: cream towers along the shore arc past the lighthouse.
+    for (let i = 0; i < 9; i++) {
+      const a2 = ang + 0.09 + i * 0.028 + rng() * 0.012;
+      const rr = dist + 40 + rng() * 60;
+      const w = 13 + rng() * 9, h = 22 + rng() * 26, d = 10 + rng() * 8;
+      const g = new THREE.BoxGeometry(w, h, d);
+      g.rotateY(-a2);
+      g.translate(cx + Math.cos(a2) * rr, groundY + h / 2, cz + Math.sin(a2) * rr);
+      opa.push(bakeFlatColors(g, i % 3 === 2 ? 0xd9ccb4 : 0xe9e2d2, { rim: false }));
+    }
+    const mesh = new THREE.Mesh(mergeGeoms(opa),
+      new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+    mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+    const glowMesh = new THREE.Mesh(mergeGeoms(glo), new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    glowMesh.frustumCulled = false; glowMesh.matrixAutoUpdate = false;
+    group.add(glowMesh);
+    // The beam: one long horizontal cone on a pivot at the lamp, sweeping the
+    // sea — same recipe as the city searchlights (cheap, low opacity).
+    const beamGeo = new THREE.CylinderGeometry(8, 0.6, 240, 6, 1, true);
+    beamGeo.translate(0, 120, 0);
+    beamGeo.rotateZ(Math.PI / 2 + 0.04); // near-horizontal
+    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
+      color: 0xfff2c8, transparent: true, opacity: 0.05,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      side: THREE.DoubleSide,
+    }));
+    beam.frustumCulled = false;
+    const pivot = new THREE.Group();
+    pivot.position.set(px, lampY, pz);
+    pivot.add(beam);
+    group.add(pivot);
+    return { group, update: (t) => { pivot.rotation.y = t * 0.35; } };
+  }
+
+  return null;
 }
 
 // ------------------------------------------------------------------ mesas
@@ -1633,17 +1780,48 @@ function buildCity(rng, groundY, cx, cz, cityAng) {
     return g;
   };
 
+  // THE SPIRE — the world icon: one supertall anchoring the skyline hierarchy
+  // (1 icon / a few supertalls / a mass of mid-rise, instead of uniform noise).
+  {
+    const shafts = [[36, 0.52], [26, 0.30], [16, 0.18]]; // [width, height share]
+    const H = 335;
+    let y = groundY;
+    for (const [w, share] of shafts) {
+      const h = H * share;
+      const box = new THREE.BoxGeometry(w, h, w * 0.9);
+      box.translate(ccx, y + h / 2, ccz);
+      opa.push(bakeFlatColors(box, 0x1d0f44, { rim: false }));
+      glo.push(windowGeo(w, h, w * 0.9, 0, ccx, y + h / 2, ccz));
+      y += h;
+    }
+    // Vertical neon seams up two faces + crown mast + beacon.
+    for (const side of [-1, 1]) {
+      const seam = new THREE.BoxGeometry(1.4, H * 0.86, 0.8);
+      seam.translate(ccx + side * (36 / 2 + 0.6), groundY + H * 0.45, ccz);
+      glo.push(colorTint(seam, side < 0 ? cl : cr));
+    }
+    const mast = new THREE.BoxGeometry(1.4, 42, 1.4);
+    mast.translate(ccx, y + 21, ccz);
+    opa.push(bakeFlatColors(mast, 0x120a2c, { rim: false }));
+    const tip = new THREE.BoxGeometry(3.2, 3.2, 3.2);
+    tip.translate(ccx, y + 42, ccz);
+    glo.push(colorTint(tip, new THREE.Color(0xffffff)));
+  }
+
   const n = 44;
   for (let i = 0; i < n; i++) {
     // Two depth rings: a nearer ring of bigger towers + a far backdrop ring.
     const near = rng() < 0.42;
-    const rr = near ? 40 + rng() * 110 : 160 + rng() * 150;
+    const rr = near ? 60 + rng() * 110 : 170 + rng() * 150; // keep clear of the Spire base
     const a = rng() * Math.PI * 2;
     const px = ccx + Math.cos(a) * rr;
     const pz = ccz + Math.sin(a) * rr * 0.7;
     const w = (near ? 24 : 14) + rng() * (near ? 26 : 20);
     const d = (near ? 24 : 14) + rng() * (near ? 26 : 20);
-    const h = (near ? 90 : 50) + rng() * (near ? 190 : 120);
+    // Skyline hierarchy: the first few are supertalls, the rest cap at mid-rise
+    // so the Spire and its lieutenants OWN the silhouette.
+    let h = (near ? 80 : 50) + rng() * (near ? 115 : 90);
+    if (i < 4) h = 195 + rng() * 60;
     const rot = rng() * 0.6;
     const py = groundY + h / 2;
     const tower = new THREE.BoxGeometry(w, h, d);

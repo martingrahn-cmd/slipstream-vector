@@ -42,6 +42,19 @@ export const THEMES = {
     trackBand: 0x2a1a55,
     mesaStyle: 'rocks',
     mesaMax: 190,
+    // Stage-1 world identity: composition knobs (see world-uplift plan).
+    // horizonMask: angular windows that thin/boost the far-mountain rings —
+    // a directed horizon instead of an even ring. ang in radians around the
+    // track centroid; density 0..1 keeps that fraction; hScale scales height.
+    horizonMask: [
+      { ang: 0.12, span: 0.42, density: 0 },            // keep the skyline window clear
+      { ang: 3.26, span: 1.1, density: 1, hScale: 1.45 }, // the great mesa wall opposite the city
+      { ang: 1.7, span: 0.8, density: 0.45 },            // thinner flanks — open dune horizon
+      { ang: -1.0, span: 0.55, density: 0.5 },
+    ],
+    // The world icon: a colossal free-standing rock arch on the SUN azimuth,
+    // so the striped disc sits inside the opening most of the lap.
+    landmark: { type: 'sunGate', dist: 430, scale: 1 },
     archMax: 22,          // ribbed arches over the long desert straights
     mountainStyle: 'peaks',
     farCount: 44,
@@ -92,6 +105,15 @@ export const THEMES = {
     trackBand: 0x1d3c48,
     mesaStyle: 'islands',
     mesaMax: 150,
+    // Open OCEAN over the sun half (mountains removed — water meets sky at
+    // golden hour), island ridge on the other side.
+    horizonMask: [
+      { ang: -1.93, span: 1.25, density: 0 },  // pure sea horizon (sun azimuth)
+      { ang: 1.21, span: 1.6, density: 1, hScale: 1.1 }, // the island chain behind you
+    ],
+    // The world icon: a banded lighthouse silhouetted at the edge of the open
+    // sea, slow rotating beam + a strip of cream resort towers further along.
+    landmark: { type: 'lighthouse', ang: -1.15, dist: 385 },
     archMax: 14,          // a few light coastal arches
     mountainStyle: 'peaks',
     farCount: 26,         // distant isles dotting the horizon
@@ -140,7 +162,14 @@ export const THEMES = {
     trackBand: 0x1c1c36,
     gridGlow: 0xff2ec8,   // street grid shining through the asphalt
     mesaStyle: 'towers',
-    mesaMax: 92,          // downtown blocks — the canyon rows carry the near field
+    mesaMax: 92,
+    horizonMask: [
+      { ang: 0.12, span: 0.5, density: 0 },              // the skyline window — nothing competes
+      { ang: 3.26, span: 1.3, density: 1, hScale: 1.15 }, // industrial ridge behind the track
+    ],
+    // The world icon: THE SPIRE — one supertall anchoring the skyline
+    // hierarchy (built inside buildCity, marked here for readability).
+    landmark: { type: 'spire' },          // downtown blocks — the canyon rows carry the near field
     archMax: 40,          // dense industrial tunnel ribs over the straights
     mountainStyle: 'towers',
     farCount: 46,
