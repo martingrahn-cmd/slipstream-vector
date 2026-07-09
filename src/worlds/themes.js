@@ -28,6 +28,7 @@ export const THEMES = {
       sunStripes: 1.0,
       starLevel: 0.985,
       cloudAmp: 0.22,
+      event: 'planet',    // a huge dim sister planet low opposite the sun + rare meteor streaks
     },
     fog: 0xff7a3c,
     ground: 0x241052,
@@ -55,8 +56,10 @@ export const THEMES = {
     // The world icon: a colossal free-standing rock arch on the SUN azimuth,
     // so the striped disc sits inside the opening most of the lap.
     landmark: { type: 'sunGate', dist: 430, scale: 1 },
+    monumentZones: true,   // cluster the buttes into monument valleys + leave EMPTY dune flats
+    rockCut: true,         // one canyon pass-through per lap — compression, then release toward the sun
     archMax: 22,          // ribbed arches over the long desert straights
-    mountainStyle: 'peaks',
+    mountainStyle: 'ridges',   // jagged connected ridge strips — a third silhouette language
     farCount: 44,
     groundStyle: 'dunes',
     scrubCount: 210,      // low desert bushes near the track
@@ -66,7 +69,9 @@ export const THEMES = {
     billboardEvery: 220,
     searchlights: false,
     city: true,
-    drones: 50,
+    drones: 8,             // near the gantry only — the desert sky belongs to the raptors
+    birds: true,
+    birdCol: 0x2a1440,     // raptors: deep dusk silhouettes circling the Sun Gate
     ambient: { color: 0xd8b06a, mode: 'dust' },   // drifting sand motes
   },
 

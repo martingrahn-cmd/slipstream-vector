@@ -98,6 +98,7 @@ export function buildScenery(spline, scene, theme) {
   const landmarks = buildLandmarks(rng, spline, groundY, cx, cz, theme);
   if (landmarks) group.add(landmarks.group);
   group.add(buildMesas(rng, spline, groundY, theme));
+  if (theme.rockCut) { const rc = buildRockCut(rng, spline, groundY, theme); if (rc) group.add(rc); }
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
   group.add(rings.mesh);
@@ -114,7 +115,7 @@ export function buildScenery(spline, scene, theme) {
   if (theme.overheads) group.add(buildOverheads(spline));
   const traffic = theme.traffic ? buildTraffic(rng, spline, groundY, cx, cz) : null;
   if (traffic) group.add(traffic.mesh);
-  if (theme.city) group.add(buildCity(rng, groundY, cx, cz, CITY_ANG));
+  if (theme.city) group.add(buildCity(rng, groundY, cx, cz, CITY_ANG, theme));
   const lights = theme.searchlights ? buildSearchlights(rng, spline, groundY) : null;
   if (lights) group.add(lights.group);
   const drones = theme.drones ? buildDrones(rng, spline, theme) : null;
@@ -125,7 +126,9 @@ export function buildScenery(spline, scene, theme) {
   if (skyCars) group.add(skyCars.mesh);
   const bridges = theme.bridges ? buildBridges(rng, spline, groundY, theme) : null;
   if (bridges) group.add(bridges.group);
-  const birds = theme.birds ? buildBirds(rng, spline, groundY) : null;
+  const birds = theme.birds
+    ? buildBirds(rng, spline, groundY, { color: theme.birdCol, anchor: landmarks && landmarks.anchor })
+    : null;
   if (birds) group.add(birds.mesh);
 
   let flash = 0;
@@ -182,6 +185,7 @@ function buildSky(S) {
       cloudPuff: { value: S.cloudPuff ?? 1.0 },
       progress: { value: 0 },   // 0..1 race progress — mood drifts over the laps
       flash: { value: 0 },      // lightning flash (city storms)
+      planet: { value: S.event === 'planet' ? 1.0 : 0.0 }, // sister planet + meteors (desert)
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -192,7 +196,7 @@ function buildSky(S) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash;
+      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
@@ -230,6 +234,38 @@ function buildSky(S) {
         float rayAz = atan(d.y - sunDir.y, d.x - sunDir.x);
         float shafts = pow(0.5 + 0.5 * sin(rayAz * 22.0 + time * 0.08), 2.0);
         col += sunCore * shafts * (1.0 - smoothstep(0.0, 0.5, ang)) * 0.12 * sunStripes;
+        // Sky event (desert): a huge dim SISTER PLANET low on the horizon
+        // opposite the sun, plus a rare meteor streak. Silent scale-teller.
+        if (planet > 0.5) {
+          vec3 pDir = normalize(vec3(-sunAzimuth.x, 0.14, -sunAzimuth.z));
+          float pAng = acos(clamp(dot(d, pDir), -1.0, 1.0));
+          float pDisc = 1.0 - smoothstep(0.20, 0.215, pAng);
+          if (pDisc > 0.0) {
+            // dusty violet body, slightly darker limb, faint horizontal bands
+            vec3 pCol = mix(upper, band, 0.45) * 1.25 + vec3(0.05, 0.03, 0.07);
+            pCol *= 0.82 + 0.18 * (1.0 - pAng / 0.215);
+            pCol *= 0.92 + 0.08 * sin(d.y * 90.0);
+            col = mix(col, pCol, pDisc * 0.55);
+          }
+          col += (mix(upper, band, 0.5) + vec3(0.05)) * 0.10 * (1.0 - smoothstep(0.0, 0.5, pAng));
+          // meteor: every ~9s window, sometimes, a brief bright streak
+          float mseed = floor(time / 9.0);
+          float mfrac = fract(time / 9.0);
+          float mgate = step(0.55, hash(vec2(mseed, 3.7))) * step(mfrac, 0.1);
+          if (mgate > 0.0) {
+            vec2 sc2 = vec2(atan(d.x, d.z) * 0.318, d.y);
+            vec2 mo = vec2((hash(vec2(mseed, 1.0)) - 0.5) * 1.2, 0.5 + hash(vec2(mseed, 2.0)) * 0.22);
+            vec2 mdir = normalize(vec2(0.4, -0.18));
+            vec2 rel = sc2 - mo;
+            float along = dot(rel, mdir);
+            float acrossM = abs(dot(rel, vec2(-mdir.y, mdir.x)));
+            float head = mfrac / 0.1;
+            float streak = smoothstep(0.010, 0.0, acrossM)
+              * smoothstep(-0.01, 0.01, along) * smoothstep(0.14, 0.02, along)
+              * step(along, head * 0.14) * (1.0 - head * 0.7);
+            col += vec3(0.95, 0.9, 1.0) * streak * 0.7;
+          }
+        }
         // Stars above the horizon band.
         if (y > 0.18) {
           vec2 cell = vec2(atan(d.x, d.z) * 28.0, y * 60.0);
@@ -282,6 +318,11 @@ function buildGround(groundY, cx, cz, theme) {
         {
           colA: { value: new THREE.Color(theme.ground) },
           colB: { value: new THREE.Color(theme.groundB ?? theme.ground) },
+          uWarm: { value: new THREE.Color(theme.warm ?? 0xffd9a0) },
+          uSunDir: { value: new THREE.Vector2(
+            theme.sky.sunAz ? theme.sky.sunAz[0] : -0.35,
+            theme.sky.sunAz ? theme.sky.sunAz[1] : -0.94).normalize() },
+          uCenter: { value: new THREE.Vector2(cx, cz) },
         },
       ]),
       vertexShader: /* glsl */ `
@@ -296,7 +337,8 @@ function buildGround(groundY, cx, cz, theme) {
         }
       `,
       fragmentShader: /* glsl */ `
-        uniform vec3 colA, colB;
+        uniform vec3 colA, colB, uWarm;
+        uniform vec2 uSunDir, uCenter;
         varying vec2 vXZ;
         #include <fog_pars_fragment>
         float hash(vec2 p) {
@@ -314,6 +356,11 @@ function buildGround(groundY, cx, cz, theme) {
           // Sparse darker scrub blotches.
           float blotch = hash(floor(vXZ * 0.045));
           col = mix(col, colA * 0.72, step(0.82, blotch) * 0.5);
+          // Sun-kiss: dune band crests brighten toward the sun side of the
+          // world — a warm gold brush that dies into the fog.
+          float crest = smoothstep(0.72, 0.98, band);
+          float sunSide = clamp(0.5 + 0.5 * dot(normalize(vXZ - uCenter), uSunDir), 0.0, 1.0);
+          col = mix(col, uWarm, crest * sunSide * sunSide * 0.30);
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -433,6 +480,21 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     return true;
   };
   const towers = theme.mountainStyle === 'towers';
+  const ridges = theme.mountainStyle === 'ridges';
+  // A ridge = 3 overlapping WIDE squashed cones with sawtooth heights, laid
+  // along the tangent so neighbours read as one connected crest line.
+  const pushRidge = (px, pz, ang, w, h, colHex) => {
+    const tx = -Math.sin(ang), tz = Math.cos(ang);
+    for (let k = -1; k <= 1; k++) {
+      const hk = h * (0.62 + rng() * 0.5);
+      const wk = w * (2.1 + rng() * 0.9);
+      const g = new THREE.ConeGeometry(wk, hk, 4 + Math.floor(rng() * 2), 1);
+      g.scale(1, 1, 0.38); // thin slab-like ridge tooth
+      g.rotateY(ang + (rng() - 0.5) * 0.2);
+      g.translate(px + tx * wk * k * 0.9, groundY + hk / 2 - 2, pz + tz * wk * k * 0.9);
+      geoms.push(bakeFlatColors(g, colHex, { rim: false }));
+    }
+  };
   for (let i = 0; i < count; i++) {
     const ang = (i / count) * Math.PI * 2 + rng() * 0.15;
     const mk = maskAt(ang);
@@ -446,6 +508,7 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
       px = cx + Math.cos(ang) * r;
       pz = cz + Math.sin(ang) * r;
     }
+    if (ridges) { pushRidge(px, pz, ang, w, h, theme.mountainFar); continue; }
     const g = towers
       ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
       : new THREE.ConeGeometry(w, h, 4 + Math.floor(rng() * 3), 1);
@@ -467,6 +530,7 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     const h = (towers ? 80 + rng() * 140 : lowWide ? 30 + rng() * 50 : 60 + rng() * 110) * 0.7 * mk.hScale;
     const w = (towers ? 40 + rng() * 60 : lowWide ? 100 + rng() * 140 : 70 + rng() * 100) * 1.1;
     const px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
+    if (ridges) { pushRidge(px, pz, ang, w, h, farCol); continue; }
     const g = towers
       ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
       : new THREE.ConeGeometry(w, h, 4 + Math.floor(rng() * 3), 1);
@@ -546,7 +610,7 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
       new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
     mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
     group.add(mesh);
-    return { group, update: null };
+    return { group, update: null, anchor: { x: px, z: pz } };
   }
 
   if (lm.type === 'lighthouse') {
@@ -613,6 +677,141 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
 
   return null;
 }
+
+// ----------------------------------------------------------------- rock cut
+// The desert's pass-through moment: ~230m of the lap walled in by tall
+// stratified rock 13-22m off the road edge, with natural stone arches OVER
+// the road — compression and shadow, then release back out toward the sun.
+// Site is picked deterministically: the straightest, flattest stretch that
+// avoids jumps, forks and the start gantry. Opaque merged geometry that
+// OCCLUDES sky = fill-neutral or better.
+function buildRockCut(rng, spline, groundY, theme) {
+  const L = spline.length;
+  const WIN = 230;
+  const inSpan = (s, a, b) => {
+    const rel = ((s - a) % L + L) % L;
+    const span = ((b - a) % L + L) % L;
+    return rel < span;
+  };
+  const badAt = (s) => {
+    for (const j of spline.jumps || []) if (inSpan(s, j.takeoff - 50, j.end + 50)) return true;
+    for (const sp of spline.splits || []) if (inSpan(s, sp.s0 - 40, sp.s1 + 40)) return true;
+    return false;
+  };
+  let bestS = -1, bestScore = Infinity;
+  for (let s0 = 140; s0 < L - WIN - 60; s0 += 15) {
+    let score = 0, ok = true;
+    for (let d = 0; d <= WIN; d += 12) {
+      const s = s0 + d;
+      if (badAt(s)) { ok = false; break; }
+      const i = Math.floor(s / spline.step) % spline.n;
+      score += Math.abs(spline.kappa[i]) * 60 + Math.abs(spline.bank[i]);
+    }
+    if (ok && score < bestScore) { bestScore = score; bestS = s0; }
+  }
+  if (bestS < 0) return null;
+
+  const f = makeFrame();
+  const geoms = [];
+  const strataCol = [theme.mesaShadow, theme.mesaLit, theme.rock];
+
+  // Canyon walls: stacked strata slabs marching down both sides, taller than
+  // the road so the sky narrows to a ribbon.
+  for (const side of [-1, 1]) {
+    for (let d = 0; d <= WIN; d += 15 + rng() * 5) {
+      const s = bestS + d;
+      spline.frameAt(s, f);
+      const lat = f.width + 13 + rng() * 9;
+      const px = f.pos.x + f.R.x * side * lat;
+      const pz = f.pos.z + f.R.z * side * lat;
+      const yaw = Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.16;
+      const roadH = Math.max(0, f.pos.y - groundY);
+      let y = groundY;
+      const total = roadH + 20 + rng() * 16;
+      const layers = 2 + Math.floor(rng() * 2);
+      let w = 17 + rng() * 8, dep = 9 + rng() * 6;
+      for (let k = 0; k < layers; k++) {
+        const h = total * (k === layers - 1 ? 0.3 : 0.7 / (layers - 1)) * (0.85 + rng() * 0.3);
+        const g = new THREE.BoxGeometry(dep, h, w);
+        g.rotateY(yaw);
+        g.translate(px + (rng() - 0.5) * 2.5, y + h / 2, pz + (rng() - 0.5) * 2.5);
+        geoms.push(bakeFlatColors(g, strataCol[k % strataCol.length], { rim: k === layers - 1 }));
+        y += h * (0.92 + rng() * 0.06);
+        w *= 0.78 + rng() * 0.12;
+        dep *= 0.8 + rng() * 0.1;
+      }
+    }
+  }
+
+  // Natural stone arches OVER the road — raw rock, no neon (gameplay language
+  // stays on the track itself). Pillars on both verges + a fat irregular
+  // lintel with hanging chunks. Clearance: lintel underside ~13m over the deck.
+  const archAt = [bestS + 46, bestS + 122, bestS + 196];
+  for (const s of archAt) {
+    spline.frameAt(s, f);
+    const yaw = Math.atan2(f.R.x, f.R.z);
+    const roadY = f.pos.y;
+    const half = f.width + 5.5;
+    for (const side of [-1, 1]) {
+      const px = f.pos.x + f.R.x * side * half;
+      const pz = f.pos.z + f.R.z * side * half;
+      const h = (roadY - groundY) + 15 + rng() * 3;
+      const g = new THREE.CylinderGeometry(2.6 + rng(), 4.2 + rng() * 1.4, h, 5);
+      g.rotateY(rng() * Math.PI);
+      g.translate(px, groundY + h / 2, pz);
+      geoms.push(bakeFlatColors(g, theme.mesaShadow, { rim: false }));
+    }
+    // two stacked lintel slabs, slightly offset — reads as weathered rock
+    for (let k = 0; k < 2; k++) {
+      const lh = 4.5 + rng() * 2.5;
+      const g = new THREE.BoxGeometry(9 + rng() * 4, lh, half * 2 + 7);
+      g.rotateY(yaw + (rng() - 0.5) * 0.06);
+      g.translate(
+        f.pos.x + (rng() - 0.5) * 2, roadY + 13.5 + k * (lh * 0.9) + lh / 2,
+        f.pos.z + (rng() - 0.5) * 2);
+      geoms.push(bakeFlatColors(g, k ? theme.mesaLit : theme.mesaShadow, { rim: k === 1 }));
+    }
+    // hanging chunks under the lintel near the pillars
+    for (const side of [-1, 1]) {
+      if (rng() < 0.4) continue;
+      const r = 1.6 + rng() * 1.6;
+      const g = new THREE.DodecahedronGeometry(r, 0);
+      g.translate(
+        f.pos.x + f.R.x * side * (half - 3.5), roadY + 12.2 - r * 0.4,
+        f.pos.z + f.R.z * side * (half - 3.5));
+      geoms.push(bakeFlatColors(g, theme.rock, { rim: false }));
+    }
+  }
+
+  const mesh = new THREE.Mesh(mergeGeoms(geoms),
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// -------------------------------------------------------------- lap zones
+// Monument-valley rhythm: a few dense CLUSTERS around the lap with genuinely
+// empty flats between them. Deterministic (own seed) so mesas, cacti and
+// anchor buttes all agree on where the zones are.
+function lapZones(seed, length, n = 5) {
+  const zr = mulberry32(seed);
+  const zones = [];
+  for (let i = 0; i < n; i++) {
+    zones.push({ s: ((i + 0.15 + zr() * 0.7) / n) * length, span: 90 + zr() * 130, w: 0.65 + zr() * 0.35 });
+  }
+  return zones;
+}
+function zoneDensity(zones, s, length, base = 0.1) {
+  let d = base;
+  for (const z of zones) {
+    let ds = Math.abs(s - z.s) % length;
+    if (ds > length / 2) ds = length - ds;
+    d = Math.max(d, z.w * Math.exp(-(ds * ds) / (2 * z.span * z.span)));
+  }
+  return d;
+}
+const ZONE_SEED = 9001;
 
 // ------------------------------------------------------------------ mesas
 // Rock spires in the wilderness worlds; tower blocks (with glowing window
@@ -685,8 +884,39 @@ function buildMesas(rng, spline, groundY, theme) {
   const f = makeFrame();
   const tries = 600, placed = [];
   const MAX = theme.mesaMax ?? 150;
+  // Monument rhythm: cluster the field into zones, and seed each of the two
+  // strongest zones with a pair of ANCHOR buttes — the nameable giants.
+  const zones = theme.monumentZones ? lapZones(ZONE_SEED, spline.length) : null;
+  if (zones) {
+    const top = [...zones].sort((a, b) => b.w - a.w).slice(0, 2);
+    for (const z of top) {
+      for (let k = 0; k < 2; k++) {
+        spline.frameAt(z.s + (k - 0.5) * 90, f);
+        const side = k % 2 ? -1 : 1;
+        const dist = 130 + rng() * 80;
+        const px = f.pos.x + f.R.x * side * dist;
+        const pz = f.pos.z + f.R.z * side * dist;
+        let ok = true;
+        for (let i = 0; i < spline.n; i += 12) {
+          const dx = spline.pos[i * 3] - px, dz = spline.pos[i * 3 + 2] - pz;
+          if (dx * dx + dz * dz < 110 * 110) { ok = false; break; }
+        }
+        if (!ok) continue;
+        const scale = 78 + rng() * 30; // monumental flat-top butte
+        const g = new THREE.CylinderGeometry(0.62, 1, 1.1, 7);
+        g.scale(scale, scale * (0.55 + rng() * 0.2), scale);
+        g.rotateY(rng() * Math.PI * 2);
+        const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
+        g.translate(px, groundY - bb.min.y - 0.5, pz);
+        geoms.push(bakeFlatColors(g, theme.mesaLit, { shadow: theme.mesaShadow }));
+        placed.push([px, pz, scale]);
+      }
+    }
+  }
   for (let t = 0; t < tries && geoms.length < MAX; t++) {
     const s = rng() * spline.length;
+    // Rhythm gate: most spawns land inside a zone; the flats stay EMPTY.
+    if (zones && rng() > zoneDensity(zones, s, spline.length)) continue;
     spline.frameAt(s, f);
     const side = rng() < 0.5 ? -1 : 1;
     const dist = 35 + rng() * 215;
@@ -1147,12 +1377,19 @@ function buildFlora(rng, spline, groundY, theme) {
   const p = new THREE.Vector3();
   const sc = new THREE.Vector3();
   const Y = new THREE.Vector3(0, 1, 0);
+  // Monument worlds: cacti gather into OASES on the same lap zones as the
+  // buttes (same seed), leaving the empty flats truly empty.
+  const zones = theme.monumentZones ? lapZones(ZONE_SEED, spline.length) : null;
   for (let i = 0; i < count; i++) {
     // Pick a spot, but reject any that lands over the track — palms are tall
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
     for (let attempt = 0; attempt < 8; attempt++) {
-      const s = rng() * spline.length;
+      let s = rng() * spline.length;
+      if (zones) {
+        let guard = 12;
+        while (guard-- > 0 && rng() > zoneDensity(zones, s, spline.length, 0.06)) s = rng() * spline.length;
+      }
       spline.frameAt(s, f);
       const side = rng() < 0.5 ? -1 : 1;
       const dist = f.width + 8 + rng() * 60;
@@ -1729,7 +1966,7 @@ function buildSearchlights(rng, spline, groundY) {
 // ------------------------------------------------------------ distant city
 // A skyline cluster beyond the mesas with glowing window strips piercing the
 // haze — the destination on the horizon.
-function buildCity(rng, groundY, cx, cz, cityAng) {
+function buildCity(rng, groundY, cx, cz, cityAng, theme = {}) {
   const dist = 600;
   const ccx = cx + Math.cos(cityAng) * dist;
   const ccz = cz + Math.sin(cityAng) * dist;
@@ -1782,7 +2019,9 @@ function buildCity(rng, groundY, cx, cz, cityAng) {
 
   // THE SPIRE — the world icon: one supertall anchoring the skyline hierarchy
   // (1 icon / a few supertalls / a mass of mid-rise, instead of uniform noise).
-  {
+  // ONLY in the city world — the desert borrows this skyline for its horizon
+  // and must not inherit the icon.
+  if ((theme.landmark && theme.landmark.type) === 'spire') {
     const shafts = [[36, 0.52], [26, 0.30], [16, 0.18]]; // [width, height share]
     const H = 335;
     let y = groundY;
@@ -2007,7 +2246,7 @@ function buildSkyTraffic(rng, cx, cz, groundY) {
 
 // ------------------------------------------------------------------ birds
 // Two small flocks wheeling over the lagoon.
-function buildBirds(rng, spline, groundY) {
+function buildBirds(rng, spline, groundY, opts = {}) {
   const FLOCKS = 2, PER = 7, N = FLOCKS * PER;
   // A simple chevron silhouette.
   const g = new THREE.BufferGeometry();
@@ -2016,12 +2255,24 @@ function buildBirds(rng, spline, groundY) {
     0, 0, 0, 1.1, 0, 0.45, 0, 0.1, 0.22,
   ]), 3));
   const mesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({
-    color: 0x14333d, side: THREE.DoubleSide, fog: true,
+    color: opts.color ?? 0x14333d, side: THREE.DoubleSide, fog: true,
   }), N);
   mesh.frustumCulled = false;
   const f = makeFrame();
   const flocks = [];
   for (let k = 0; k < FLOCKS; k++) {
+    // Raptors: the first flock circles the world icon (the Sun Gate) high up —
+    // scale-tellers that make the monument read as COLOSSAL.
+    if (k === 0 && opts.anchor) {
+      flocks.push({
+        cx: opts.anchor.x, cz: opts.anchor.z,
+        y: groundY + 105 + rng() * 25,
+        r: 55 + rng() * 30,
+        sp: (0.035 + rng() * 0.02) * (rng() < 0.5 ? 1 : -1),
+        ph: rng() * Math.PI * 2,
+      });
+      continue;
+    }
     spline.frameAt(rng() * spline.length, f);
     const side = rng() < 0.5 ? -1 : 1;
     flocks.push({
