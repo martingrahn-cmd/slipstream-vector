@@ -714,6 +714,19 @@ function buildRockCut(rng, spline, groundY, theme) {
   const f = makeFrame();
   const geoms = [];
   const strataCol = [theme.mesaShadow, theme.mesaLit, theme.rock];
+  // A wall/pillar hugs THIS stretch by design, but other parts of the lap may
+  // sweep right past it — reject anything close to track samples OUTSIDE the
+  // cut window (with margin for the object footprint).
+  const clearOfRest = (px, pz, radius) => {
+    const need = (radius + spline.width[0] + 6) ** 2;
+    for (let i = 0; i < spline.n; i += 6) {
+      const ss = i * spline.step;
+      if (inSpan(ss, bestS - 40, bestS + WIN + 40)) continue;
+      const dx = spline.pos[i * 3] - px, dz = spline.pos[i * 3 + 2] - pz;
+      if (dx * dx + dz * dz < need) return false;
+    }
+    return true;
+  };
 
   // Canyon walls: stacked strata slabs marching down both sides, taller than
   // the road so the sky narrows to a ribbon.
@@ -724,6 +737,7 @@ function buildRockCut(rng, spline, groundY, theme) {
       const lat = f.width + 13 + rng() * 9;
       const px = f.pos.x + f.R.x * side * lat;
       const pz = f.pos.z + f.R.z * side * lat;
+      if (!clearOfRest(px, pz, 16)) continue; // another lap segment sweeps through here
       const yaw = Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.16;
       const roadH = Math.max(0, f.pos.y - groundY);
       let y = groundY;
@@ -749,6 +763,8 @@ function buildRockCut(rng, spline, groundY, theme) {
   const archAt = [bestS + 46, bestS + 122, bestS + 196];
   for (const s of archAt) {
     spline.frameAt(s, f);
+    // The whole arch (pillars + lintel) must clear every other lap segment.
+    if (!clearOfRest(f.pos.x, f.pos.z, f.width + 12)) continue;
     const yaw = Math.atan2(f.R.x, f.R.z);
     const roadY = f.pos.y;
     const half = f.width + 5.5;
@@ -893,16 +909,19 @@ function buildMesas(rng, spline, groundY, theme) {
       for (let k = 0; k < 2; k++) {
         spline.frameAt(z.s + (k - 0.5) * 90, f);
         const side = k % 2 ? -1 : 1;
-        const dist = 130 + rng() * 80;
+        const dist = 150 + rng() * 80;
         const px = f.pos.x + f.R.x * side * dist;
         const pz = f.pos.z + f.R.z * side * dist;
+        const scale = 78 + rng() * 30; // monumental flat-top butte
+        // Clearance must include the butte's own footprint (radius ≈ scale) —
+        // checked against the WHOLE spline, not just this zone.
+        const need = (scale + 34) ** 2;
         let ok = true;
-        for (let i = 0; i < spline.n; i += 12) {
+        for (let i = 0; i < spline.n; i += 8) {
           const dx = spline.pos[i * 3] - px, dz = spline.pos[i * 3 + 2] - pz;
-          if (dx * dx + dz * dz < 110 * 110) { ok = false; break; }
+          if (dx * dx + dz * dz < need) { ok = false; break; }
         }
         if (!ok) continue;
-        const scale = 78 + rng() * 30; // monumental flat-top butte
         const g = new THREE.CylinderGeometry(0.62, 1, 1.1, 7);
         g.scale(scale, scale * (0.55 + rng() * 0.2), scale);
         g.rotateY(rng() * Math.PI * 2);
