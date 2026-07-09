@@ -488,10 +488,14 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     for (let k = -1; k <= 1; k++) {
       const hk = h * (0.62 + rng() * 0.5);
       const wk = w * (2.1 + rng() * 0.9);
+      const cx2 = px + tx * wk * k * 0.9, cz2 = pz + tz * wk * k * 0.9;
+      // A tooth is up to ~3x wider than the base cone the ring clearance was
+      // sized for — every tooth must clear the track on its own footprint.
+      if (!clearOfTrack(cx2, cz2, wk)) continue;
       const g = new THREE.ConeGeometry(wk, hk, 4 + Math.floor(rng() * 2), 1);
       g.scale(1, 1, 0.38); // thin slab-like ridge tooth
       g.rotateY(ang + (rng() - 0.5) * 0.2);
-      g.translate(px + tx * wk * k * 0.9, groundY + hk / 2 - 2, pz + tz * wk * k * 0.9);
+      g.translate(cx2, groundY + hk / 2 - 2, cz2);
       geoms.push(bakeFlatColors(g, colHex, { rim: false }));
     }
   };
@@ -503,7 +507,8 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     const h = (towers ? 90 + rng() * 160 : lowWide ? 35 + rng() * 60 : 70 + rng() * 130) * mk.hScale;
     const w = towers ? 35 + rng() * 55 : lowWide ? 90 + rng() * 130 : 60 + rng() * 90;
     let px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
-    for (let push = 0; push < 8 && !clearOfTrack(px, pz, w); push++) {
+    const footR = ridges ? w * 3.2 + 30 : w; // a ridge sweeps ~3x wider than its base cone
+    for (let push = 0; push < 10 && !clearOfTrack(px, pz, footR); push++) {
       r += 45;
       px = cx + Math.cos(ang) * r;
       pz = cz + Math.sin(ang) * r;
@@ -526,10 +531,16 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     const ang = (i / ringN) * Math.PI * 2 + rng() * 0.3 + 0.2; // offset so it peeks between the near ridge
     const mk = maskAt(ang);
     if (mk.density <= 0 || rng() >= mk.density) continue;
-    const r = 920 + rng() * 170;
+    let r = 920 + rng() * 170;
     const h = (towers ? 80 + rng() * 140 : lowWide ? 30 + rng() * 50 : 60 + rng() * 110) * 0.7 * mk.hScale;
     const w = (towers ? 40 + rng() * 60 : lowWide ? 100 + rng() * 140 : 70 + rng() * 100) * 1.1;
-    const px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
+    let px = cx + Math.cos(ang) * r, pz = cz + Math.sin(ang) * r;
+    const footR2 = ridges ? w * 3.2 + 30 : w;
+    for (let push = 0; push < 10 && !clearOfTrack(px, pz, footR2); push++) {
+      r += 45;
+      px = cx + Math.cos(ang) * r;
+      pz = cz + Math.sin(ang) * r;
+    }
     if (ridges) { pushRidge(px, pz, ang, w, h, farCol); continue; }
     const g = towers
       ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
