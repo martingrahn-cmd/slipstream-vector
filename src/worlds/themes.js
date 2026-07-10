@@ -13,34 +13,37 @@ export const THEMES = {
     id: 'desert',
     name: 'SUNSET MESA',
     music: 'sunset',
-    grade: { contrast: 1.08, saturation: 1.18 },   // warm, rich sunset
+    grade: { contrast: 1.05, saturation: 1.14 },   // bright late afternoon — open, warm
     adGlow: 0.32,
+    // LIGHT PASS (Martin: world 1 too dark): lifted from near-night dusk to a
+    // BRIGHT late afternoon — blue-violet sky, sandy warm ground, red-rock
+    // mesas. The synthwave sun/stripes + violet accents keep the identity.
     sky: {
-      zenith: 0x12052e,
-      upper: 0x3d1a78,
-      band: 0xc42b8f,
-      horizon: 0xff7a3c,
-      hot: 0xffd23f,
-      sunCore: 0xffe066,
-      sunStripe: 0xff477e,
-      cloud: 0xff9e6b,
+      zenith: 0x3a55c4,   // clear blue overhead (was near-black)
+      upper: 0x8672e0,    // light violet
+      band: 0xe87ab8,     // soft magenta haze
+      horizon: 0xffa25e,  // light warm horizon
+      hot: 0xffe27a,
+      sunCore: 0xffec8f,
+      sunStripe: 0xff6a92,
+      cloud: 0xffc99a,
       sunSize: 0.17,
       sunStripes: 1.0,
-      starLevel: 0.985,
-      cloudAmp: 0.22,
-      event: 'planet',    // a huge dim sister planet low opposite the sun + rare meteor streaks
+      starLevel: 1.0,     // daylight — no stars
+      cloudAmp: 0.3,
+      event: 'planet',    // the sister planet reads as a pale day-moon now
     },
-    fog: 0xff7a3c,
-    ground: 0x241052,
-    groundB: 0x33186b,    // dune-band second tone
-    mesaLit: 0x6b2fa0,
-    mesaShadow: 0x3a1b6b,
-    mesaRim: 0xff8c5a,
-    warm: 0xffd9a0,       // sun-facing highlight tint — warm sunset gold
-    mountainFar: 0x5c2a9d,
-    rock: 0x3a1b6b,
-    trackBase: 0x1b1038,
-    trackBand: 0x2a1a55,
+    fog: 0xffa25e,
+    ground: 0xd0a068,     // warm sand (was dark purple)
+    groundB: 0xe2bc84,    // light dune band
+    mesaLit: 0xe08a56,    // sunlit red rock
+    mesaShadow: 0x9a5a86, // violet-magenta shadow side — the synthwave tell
+    mesaRim: 0xffc27a,
+    warm: 0xffedc4,       // bright golden daylight highlight
+    mountainFar: 0xc084c8, // light violet ridges melting into the haze
+    rock: 0xb87a58,
+    trackBase: 0x241448,  // the ROAD stays dark so the neon edges read
+    trackBand: 0x342058,
     mesaStyle: 'rocks',
     mesaMax: 190,
     // Stage-1 world identity: composition knobs (see world-uplift plan).
@@ -139,32 +142,35 @@ export const THEMES = {
     id: 'city',
     name: 'NEON SPRAWL',
     music: 'sprawl',
-    grade: { contrast: 1.12, saturation: 1.10 },   // moody high-contrast night
-    adGlow: 0.55,                                   // signage blazes at night
+    grade: { contrast: 1.08, saturation: 1.10 },   // blue hour — moody but readable
+    adGlow: 0.55,                                   // signage still blazes
+    // LIGHT PASS (Martin: world 3 too dark): dead-of-night -> BLUE HOUR. The
+    // sky keeps real light in it, the smog and towers lift two stops, and the
+    // neon still owns the scene — night identity, readable picture.
     sky: {
-      zenith: 0x05030f,
-      upper: 0x140b2e,
-      band: 0x3a1b5e,
-      horizon: 0xc93b8e,  // the city's own glow
-      hot: 0xff8fc0,
-      sunCore: 0xf5f0ff,  // a pale full moon
+      zenith: 0x1a2658,   // deep evening blue (was near-black)
+      upper: 0x33427e,
+      band: 0x5e4a9e,
+      horizon: 0xd668a8,  // brighter city glow
+      hot: 0xff9fd0,
+      sunCore: 0xf5f0ff,  // the moon stays
       sunStripe: 0xbcb8d9,
-      cloud: 0x3d2b5e,    // smog banks
+      cloud: 0x584a80,    // lighter smog banks
       sunSize: 0.09,
       sunStripes: 0.0,
       starLevel: 0.992,   // light pollution
       cloudAmp: 0.35,
     },
-    fog: 0xc93b8e,
-    ground: 0x0b0717,     // asphalt sprawl
-    mesaLit: 0x231c44,    // tower blocks along the track
-    mesaShadow: 0x120d28,
-    mesaRim: 0xff8fc0,    // catch the city glow on the edges
-    warm: 0xb9c2ff,       // cool moonlit highlight — it's night, not sunset
-    mountainFar: 0x1a1133,
-    rock: 0x1f1838,
-    trackBase: 0x101020,
-    trackBand: 0x1c1c36,
+    fog: 0xd668a8,
+    ground: 0x1e1a38,     // lifted asphalt
+    mesaLit: 0x3c3568,    // tower blocks catch the evening light
+    mesaShadow: 0x262048,
+    mesaRim: 0xff9fd0,
+    warm: 0xc6ceff,       // cool blue-hour highlight
+    mountainFar: 0x2e2658,
+    rock: 0x342c54,
+    trackBase: 0x161630,
+    trackBand: 0x242444,
     gridGlow: 0xff2ec8,   // street grid shining through the asphalt
     mesaStyle: 'towers',
     mesaMax: 92,
