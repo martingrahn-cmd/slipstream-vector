@@ -119,6 +119,34 @@
   .cell:hover .pf { box-shadow: 0 0 14px -4px var(--pa); }
   .note { font-size: 12px; color: #6a6a8f; margin: 8px 2px 0; letter-spacing: 0.03em; line-height: 1.5; }
   .note b { color: #c8d0ee; }
+
+  /* ---- ElevenLabs voice section ---- */
+  .vbox { border: 1px solid #241a3a; background: #0a0714; padding: 12px; }
+  .vtop { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .vtop input[type=password] { flex: 1; min-width: 220px; background: #14102a; border: 1px solid #2a2050; color: #c8d0ee; padding: 7px 10px; font-family: monospace; font-size: 12px; }
+  .vtop button, .vfoot button { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.12em; font-size: 12px; padding: 8px 18px; background: #14102a; color: #b9c4e8; border: 1px solid #2a2050; cursor: pointer; }
+  .vtop button:hover, .vfoot button:hover { border-color: #4a3f78; }
+  .vtop select, .vprow select { background: #14102a; border: 1px solid #2a2050; color: #c8d0ee; padding: 6px 8px; font-family: 'Rajdhani'; font-size: 12px; }
+  .vs { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.1em; color: #6a6a8f; }
+  .vs input { width: 90px; }
+  .vs span { color: #c8d0ee; min-width: 30px; }
+  .vprow { display: grid; grid-template-columns: 150px 1fr auto auto auto auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid #16112b; }
+  .vprow b { font-family: 'Rajdhani'; font-weight: 700; font-size: 12px; letter-spacing: 0.05em; color: var(--pa); }
+  .vprow .aud { font-size: 15px; padding: 4px 10px; background: #14102a; border: 1px solid #2a2050; cursor: pointer; }
+  .vprow .aud:hover { border-color: var(--pa); }
+  .vprow .vst { font-size: 10px; color: #6a6a8f; min-width: 60px; text-align: right; }
+  .vlib { margin: 4px 0 12px; padding: 10px; border: 1px solid #16112b; background: #080612; }
+  .vlib .vtop { margin-bottom: 8px; }
+  .vlib input[type=text] { flex: 1; min-width: 200px; background: #14102a; border: 1px solid #2a2050; color: #c8d0ee; padding: 7px 10px; font-family: 'Rajdhani'; font-size: 13px; }
+  .vres { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 5px 4px; border-bottom: 1px solid #120e24; }
+  .vres b { font-family: 'Rajdhani'; font-weight: 700; font-size: 12.5px; color: #c8d0ee; }
+  .vres i { font-style: normal; font-size: 10.5px; color: #6a6a8f; letter-spacing: 0.04em; }
+  .vres button { font-size: 11px; padding: 4px 12px; background: #14102a; border: 1px solid #2a2050; color: #b9c4e8; cursor: pointer; font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.08em; }
+  .vres button:hover { border-color: #4a3f78; }
+  .vfoot { display: flex; gap: 14px; align-items: center; margin-top: 12px; }
+  .vfoot .vnote { font-size: 11.5px; color: #6a6a8f; }
+  .vfoot code { color: #9ff7c0; font-size: 10.5px; }
+  #vout { width: 100%; height: 140px; margin-top: 10px; background: #05040c; color: #9ff7c0; border: 1px solid #2a2050; font-family: monospace; font-size: 10px; padding: 8px; display: none; }
 </style>
 </head>
 <body>
@@ -188,6 +216,35 @@
 
   <h2>SPEAKER <small>who talks — RANDOM picks any driver</small></h2>
   <div class="pilots-row" id="pilots-row"></div>
+
+  <h2>VOICES <small>ElevenLabs — assign a voice per driver, audition with real lines, export config · <b id="vstatus" style="color:#8a93b8">not connected</b></small></h2>
+  <div class="vbox">
+    <div class="vtop">
+      <input id="vkey" type="password" placeholder="ElevenLabs API key (sk_…) — stays in localStorage, never committed" />
+      <button id="vconnect">CONNECT</button>
+      <select id="vmodel">
+        <option value="eleven_multilingual_v2">multilingual_v2 · quality</option>
+        <option value="eleven_turbo_v2_5">turbo_v2_5 · fast</option>
+        <option value="eleven_flash_v2_5">flash_v2_5 · cheapest</option>
+      </select>
+      <label class="vs">stability <input id="vstab" type="range" min="0" max="1" step="0.05" value="0.45"><span id="vstabv">0.45</span></label>
+      <label class="vs">style <input id="vstyle" type="range" min="0" max="1" step="0.05" value="0.35"><span id="vstylev">0.35</span></label>
+    </div>
+    <div class="vlib">
+      <div class="vtop">
+        <input id="vq" type="text" placeholder="search the PUBLIC voice library — e.g. 'raspy villain', 'robotic female', 'calm deep'" />
+        <select id="vgen"><option value="">any gender</option><option value="male">male</option><option value="female">female</option><option value="neutral">neutral</option></select>
+        <button id="vsearch">SEARCH LIBRARY</button>
+      </div>
+      <div id="vresults"><span class="vnote" style="color:#6a6a8f">Preview plays free (no credits). ADD puts a voice in your library → it appears in every driver dropdown below.</span></div>
+    </div>
+    <div id="vpilots"><div class="vfoot vnote" style="color:#6a6a8f">Connect with your API key to load your voice library.</div></div>
+    <div class="vfoot">
+      <button id="vexport">EXPORT VOICE CONFIG</button>
+      <span class="vnote">save as <code>tools/voice-config.json</code> → then <code>ELEVEN_API_KEY=sk_… node tools/generate-voices.mjs</code> generates every line as mp3</span>
+    </div>
+    <textarea id="vout" readonly></textarea>
+  </div>
 
   <h2>ART SCOPE <small>8 drivers × 3 buckets — click a cell to preview it live · <b id="progress" style="color:#6fd6a0">probing…</b></small></h2>
   <div class="matrix"><table id="matrix"></table></div>
@@ -416,6 +473,169 @@ function buildMatrix() {
   const pr = document.getElementById('progress');
   if (pr) pr.textContent = `${done} / ${total} generated`;
 }
+
+// ---- ElevenLabs voice lab -------------------------------------------------
+// Assign a library voice per driver, audition real bank lines (chip fires so
+// you SEE + HEAR the moment together), export tools/voice-config.json for the
+// batch generator. Key lives in localStorage only — never committed.
+const EL = {
+  key: localStorage.getItem('el-key') || '',
+  voices: [],
+  assign: JSON.parse(localStorage.getItem('el-assign') || '{}'), // pilot -> {voice_id, voice_name}
+  cache: new Map(), // voice|model|line -> objectURL — repeat clicks don't re-bill
+};
+const vEls = {
+  status: document.getElementById('vstatus'), key: document.getElementById('vkey'),
+  connect: document.getElementById('vconnect'), model: document.getElementById('vmodel'),
+  stab: document.getElementById('vstab'), stabv: document.getElementById('vstabv'),
+  styleR: document.getElementById('vstyle'), stylev: document.getElementById('vstylev'),
+  pilots: document.getElementById('vpilots'), exportBtn: document.getElementById('vexport'),
+  out: document.getElementById('vout'),
+};
+vEls.key.value = EL.key;
+vEls.model.value = localStorage.getItem('el-model') || 'eleven_multilingual_v2';
+vEls.model.onchange = () => localStorage.setItem('el-model', vEls.model.value);
+vEls.stab.oninput = () => { vEls.stabv.textContent = vEls.stab.value; };
+vEls.styleR.oninput = () => { vEls.stylev.textContent = vEls.styleR.value; };
+function vSet(msg, ok) { vEls.status.textContent = msg; vEls.status.style.color = ok ? '#6fd6a0' : '#ff6a5a'; }
+
+async function elFetch(path, opts = {}) {
+  const res = await fetch('https://api.elevenlabs.io' + path, {
+    ...opts,
+    headers: { 'xi-api-key': EL.key, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+  });
+  if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 120));
+  return res;
+}
+
+vEls.connect.onclick = async () => {
+  EL.key = vEls.key.value.trim();
+  if (!EL.key) return vSet('enter your API key first', false);
+  localStorage.setItem('el-key', EL.key);
+  vSet('connecting…', true);
+  try {
+    const data = await (await elFetch('/v1/voices')).json();
+    EL.voices = data.voices || [];
+    vSet(`connected — ${EL.voices.length} voices in your library`, true);
+    renderVoiceRows();
+  } catch (e) { vSet('connect failed: ' + e.message, false); }
+};
+
+function renderVoiceRows() {
+  vEls.pilots.innerHTML = '';
+  for (const p of PILOTS) {
+    const row = document.createElement('div');
+    row.className = 'vprow'; row.style.setProperty('--pa', p.pa);
+    const opts = ['<option value="">— pick voice —</option>']
+      .concat(EL.voices.map((v) => `<option value="${v.voice_id}"${EL.assign[p.name] && EL.assign[p.name].voice_id === v.voice_id ? ' selected' : ''}>${v.name}</option>`));
+    row.innerHTML = `<b>${p.name}</b><select>${opts.join('')}</select>`
+      + `<button class="aud" data-b="glad" title="audition a GLAD line">😏</button>`
+      + `<button class="aud" data-b="arg" title="audition an ARG line">😠</button>`
+      + `<button class="aud" data-b="neutral" title="audition a NEUTRAL line">😐</button>`
+      + `<span class="vst"></span>`;
+    const sel = row.querySelector('select');
+    sel.onchange = () => {
+      const v = EL.voices.find((x) => x.voice_id === sel.value);
+      if (v) EL.assign[p.name] = { voice_id: v.voice_id, voice_name: v.name };
+      else delete EL.assign[p.name];
+      localStorage.setItem('el-assign', JSON.stringify(EL.assign));
+    };
+    const st = row.querySelector('.vst');
+    row.querySelectorAll('.aud').forEach((btn) => { btn.onclick = () => audition(p, btn.dataset.b, st); });
+    vEls.pilots.appendChild(row);
+  }
+}
+
+let _vaudio = null;
+async function audition(pilot, bucket, statusEl) {
+  const a = EL.assign[pilot.name];
+  if (!a) { statusEl.textContent = 'pick a voice'; return; }
+  const bank = (LINES[pilot.name] && LINES[pilot.name][bucket]) || [];
+  if (!bank.length) { statusEl.textContent = 'no lines'; return; }
+  const line = pick(bank);
+  fireBucket(pilot, bucket, 'VOICE'); // see the chip while you hear the line
+  const ck = a.voice_id + '|' + vEls.model.value + '|' + line;
+  try {
+    let url = EL.cache.get(ck);
+    if (!url) {
+      statusEl.textContent = 'generating…';
+      const res = await elFetch(`/v1/text-to-speech/${a.voice_id}?output_format=mp3_44100_128`, {
+        method: 'POST',
+        body: JSON.stringify({
+          text: line, model_id: vEls.model.value,
+          voice_settings: { stability: +vEls.stab.value, similarity_boost: 0.8, style: +vEls.styleR.value },
+        }),
+      });
+      url = URL.createObjectURL(await res.blob());
+      EL.cache.set(ck, url);
+    }
+    statusEl.textContent = '▶ ' + line.slice(0, 18);
+    if (_vaudio) _vaudio.pause();
+    _vaudio = new Audio(url); _vaudio.play();
+  } catch (e) { statusEl.textContent = 'err: ' + e.message.slice(0, 40); }
+}
+
+// ---- public voice-library browser: search → free preview → ADD to library ----
+const vlibEls = {
+  q: document.getElementById('vq'), gen: document.getElementById('vgen'),
+  search: document.getElementById('vsearch'), results: document.getElementById('vresults'),
+};
+async function refreshMyVoices() {
+  const data = await (await elFetch('/v1/voices')).json();
+  EL.voices = data.voices || [];
+  renderVoiceRows();
+}
+vlibEls.search.onclick = async () => {
+  if (!EL.key) return vSet('connect first — the library search needs your key', false);
+  vlibEls.results.innerHTML = '<span class="vnote" style="color:#6a6a8f">searching…</span>';
+  try {
+    const params = new URLSearchParams({ page_size: '20' });
+    if (vlibEls.q.value.trim()) params.set('search', vlibEls.q.value.trim());
+    if (vlibEls.gen.value) params.set('gender', vlibEls.gen.value);
+    const data = await (await elFetch('/v1/shared-voices?' + params)).json();
+    const voices = data.voices || [];
+    if (!voices.length) { vlibEls.results.innerHTML = '<span class="vnote">no hits — try other words</span>'; return; }
+    vlibEls.results.innerHTML = '';
+    for (const v of voices) {
+      const row = document.createElement('div');
+      row.className = 'vres';
+      const labels = [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).join(' · ');
+      row.innerHTML = `<span><b>${v.name}</b> <i>${labels}</i></span>`
+        + `<button class="prev">▶ PREVIEW</button><button class="add">ADD</button><span class="vst"></span>`;
+      const st = row.querySelector('.vst');
+      row.querySelector('.prev').onclick = () => {
+        if (!v.preview_url) { st.textContent = 'no preview'; return; }
+        if (_vaudio) _vaudio.pause();
+        _vaudio = new Audio(v.preview_url); _vaudio.play(); // free — no credits
+      };
+      row.querySelector('.add').onclick = async () => {
+        st.textContent = 'adding…';
+        try {
+          await elFetch(`/v1/voices/add/${v.public_owner_id}/${v.voice_id}`, {
+            method: 'POST', body: JSON.stringify({ new_name: v.name }),
+          });
+          await refreshMyVoices();
+          st.textContent = '✓ in library';
+        } catch (e) { st.textContent = 'err: ' + e.message.slice(0, 40); }
+      };
+      vlibEls.results.appendChild(row);
+    }
+  } catch (e) { vlibEls.results.innerHTML = `<span class="vnote" style="color:#ff6a5a">search failed: ${e.message.slice(0, 80)}</span>`; }
+};
+vlibEls.q.addEventListener('keydown', (e) => { if (e.key === 'Enter') vlibEls.search.onclick(); });
+
+vEls.exportBtn.onclick = () => {
+  const missing = PILOTS.filter((p) => !EL.assign[p.name]).map((p) => p.name);
+  const cfg = {
+    model_id: vEls.model.value,
+    voice_settings: { stability: +vEls.stab.value, similarity_boost: 0.8, style: +vEls.styleR.value },
+    voices: EL.assign,
+  };
+  vEls.out.style.display = 'block';
+  vEls.out.value = (missing.length ? `// WARNING — no voice picked for: ${missing.join(', ')}\n` : '')
+    + JSON.stringify(cfg, null, 2);
+  vEls.out.scrollIntoView({ block: 'center' });
+};
 
 (async function init() {
   await probeVariants();

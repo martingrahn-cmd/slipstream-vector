@@ -11,7 +11,10 @@ import { pilotSlug } from '../worlds/teams.js';
 
 // Per-driver line banks, keyed by bucket. Distinct voices — the seed table from
 // the lab. Expand freely; a driver can have as many lines as you like.
-const LINES = {
+// EXPORTED: the voice lab (pilot-expression-lab.html) auditions these lines and
+// tools/generate-voices.mjs batch-generates one audio clip per line — ONE
+// source of truth, so generated audio always matches what the feed shows.
+export const LINES = {
   'JUNO VEX': {
     glad: ["Rookie? Watch again.", "First blood to the kid.", "Blink and you missed it.", "Sheet music, remember?", "Golden. Every time.", "Was that your best line?", "The prodigy has teeth."],
     arg: ["That the best you've got?", "Cheap. I'll answer it.", "You woke the rookie up.", "Mistake. Yours.", "I don't blink — you will.", "Noted. And returned."],
