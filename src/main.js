@@ -785,6 +785,36 @@ function updateNearMiss(realDt) {
   }
 }
 
+// Desert sun-gate set-piece: the sun disc blooms as you drive into it through
+// the Sun Gate, and a scripted meteor crowns the final lap. Both are pure sky-
+// shader drivers computed here (read-only over camera/ship) and handed to
+// scenery.update — no physics, no extra passes.
+let _sunFlare = 0;
+let _meteorT = -1;               // -1 idle, else 0..1 life of the last-lap fireball
+let _meteorAz = 0;               // world heading the fireball drops into view along
+const _sunFwd = new THREE.Vector3();
+function fireMeteor() {
+  if (!(theme && theme.sky && theme.sky.event === 'planet')) return;
+  camera.getWorldDirection(_sunFwd);           // aim it ahead of where you're looking
+  _meteorAz = Math.atan2(_sunFwd.x, _sunFwd.z); // matches the shader's atan(d.x, d.z)
+  _meteorT = 0;
+}
+function updateSunGate(realDt) {
+  if (_meteorT >= 0) { _meteorT += realDt / T.METEOR_DURATION; if (_meteorT > 1) _meteorT = -1; }
+  let target = 0;
+  if (state === 'race' && theme && theme.sky && theme.sky.event === 'planet') {
+    const sa = theme.sky.sunAz || [-0.35, -0.94];
+    const sl = Math.hypot(sa[0], sa[1]) || 1;
+    camera.getWorldDirection(_sunFwd);
+    const fl = Math.hypot(_sunFwd.x, _sunFwd.z) || 1;
+    const align = (_sunFwd.x / fl) * (sa[0] / sl) + (_sunFwd.z / fl) * (sa[1] / sl);
+    let a = (align - T.SUNGATE_ALIGN_LO) / (T.SUNGATE_ALIGN_HI - T.SUNGATE_ALIGN_LO);
+    a = Math.max(0, Math.min(1, a)); a = a * a * (3 - 2 * a); // smoothstep
+    target = a * Math.min(1, 0.2 + ship.speedNorm * 1.2);    // only sells at speed
+  }
+  _sunFlare += (target - _sunFlare) * Math.min(1, T.SUNGATE_FLARE_EASE * realDt);
+}
+
 // Impact FIREBALL + SMOKE — pooled billboards: a hot core that balloons and
 // whites out, then 2-3 dark puffs that rise and fade. Plus the shockwave ring.
 const _impactTex = (() => {
@@ -1195,6 +1225,7 @@ function startCountdown() {
   introArmed = introMode === 'always'; // re-arm so ALWAYS hails before every race
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
   ship.lap = 1;
+  _sunFlare = 0; _meteorT = -1; // clear the sun-gate set-piece for the new race
   rig.reset(ship);
   // Cinematic arc: front approach -> orbit around -> settle behind the ship.
   // Reduced-motion skips the sweep and starts at the chase pose.
@@ -1280,6 +1311,7 @@ juice.on('lap', ({ lap, time }) => {
     // Time Trial never ends — keep lapping the ghost until the player quits.
   } else if (lap === TOTAL_LAPS) {
     hud.flashCenter('FINAL LAP', 1300);
+    fireMeteor(); // crown the last lap with a meteor arcing across the desert sky
   } else if (lap > TOTAL_LAPS) {
     state = 'finished';
     playerFinishTime = race.clock;
@@ -1522,7 +1554,8 @@ function tick(now) {
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
-  scenery.update(now / 1000, camera.position, raceProgress);
+  updateSunGate(realDt); // sun-gate bloom + scripted last-lap meteor (desert)
+  scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz);
 
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {

@@ -136,10 +136,13 @@ export function buildScenery(spline, scene, theme) {
   return {
     group,
     sky: sky.mesh,
-    update(t, cameraPos, raceProgress = 0) {
+    update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
       sky.mat.uniforms.progress.value = raceProgress;
+      sky.mat.uniforms.sunFlare.value = sunFlare;
+      sky.mat.uniforms.meteor.value = meteor;
+      sky.mat.uniforms.meteorAz.value = meteorAz;
       if (stormy) {
         flash *= 0.86;                                 // decay the last strike
         if (Math.random() < 0.004) flash = 1;          // ~occasional lightning
@@ -186,6 +189,9 @@ function buildSky(S) {
       progress: { value: 0 },   // 0..1 race progress — mood drifts over the laps
       flash: { value: 0 },      // lightning flash (city storms)
       planet: { value: S.event === 'planet' ? 1.0 : 0.0 }, // sister planet + meteors (desert)
+      sunFlare: { value: 0 },   // 0..1 sun-gate bloom — swells as you drive into the sun
+      meteor: { value: -1 },    // -1 idle, else 0..1 life of the scripted last-lap fireball
+      meteorAz: { value: 0 },   // world azimuth the fireball is centred on (player's heading at trigger)
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -196,7 +202,7 @@ function buildSky(S) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet;
+      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, sunFlare, meteor, meteorAz;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
@@ -228,12 +234,17 @@ function buildSky(S) {
           col = mix(col, sun, disc * mask);
           col += sun * disc * 0.12;
         }
-        // Soft glow around the sun.
-        col += sunCore * 0.18 * (1.0 - smoothstep(0.0, 0.55, ang));
-        // God-rays: faint shafts fanning out from the sun (sunny worlds only).
+        // Soft glow around the sun — swells when you drive INTO it (sun-gate run).
+        col += sunCore * (0.18 + 0.55 * sunFlare) * (1.0 - smoothstep(0.0, 0.55 + 0.4 * sunFlare, ang));
+        // God-rays: faint shafts fanning out from the sun (sunny worlds only),
+        // fanning wider and brighter as the gate lines up on the sun.
         float rayAz = atan(d.y - sunDir.y, d.x - sunDir.x);
         float shafts = pow(0.5 + 0.5 * sin(rayAz * 22.0 + time * 0.08), 2.0);
-        col += sunCore * shafts * (1.0 - smoothstep(0.0, 0.5, ang)) * 0.12 * sunStripes;
+        col += sunCore * shafts * (1.0 - smoothstep(0.0, 0.5 + 0.4 * sunFlare, ang)) * (0.12 + 0.6 * sunFlare) * sunStripes;
+        // Sun-gate bloom: a broad warm halo washing out from the disc as you
+        // aim through the arch — the "driving into the sun" flood.
+        col += hot * sunFlare * (1.0 - smoothstep(0.0, 0.95, ang)) * 0.6;
+        col += sunCore * sunFlare * (1.0 - smoothstep(0.0, 0.42, ang)) * 0.7;
         // Sky event (desert): a huge dim SISTER PLANET low on the horizon
         // opposite the sun, plus a rare meteor streak. Silent scale-teller.
         if (planet > 0.5) {
@@ -265,6 +276,30 @@ function buildSky(S) {
               * step(along, head * 0.14) * (1.0 - head * 0.7);
             col += vec3(0.95, 0.9, 1.0) * streak * 0.7;
           }
+        }
+        // Scripted CLIMAX meteor (final lap): a bright fireball arcing across
+        // the sky with a long glowing trail, brightest mid-flight. meteor: -1
+        // idle, else 0..1 life. Bigger and brighter than the ambient streak.
+        if (meteor >= 0.0) {
+          // Centred on the player's heading at trigger (meteorAz) so it always
+          // falls into view — a diagonal fireball dropping ahead of you.
+          float azRel = atan(d.x, d.z) - meteorAz;
+          azRel = mod(azRel + 3.14159265, 6.28318530) - 3.14159265; // wrap [-pi,pi]
+          vec2 mc = vec2(azRel, d.y);
+          vec2 mStart = vec2(-0.34, 0.44), mEnd = vec2(0.24, 0.045);
+          vec2 mDir = normalize(mEnd - mStart);
+          vec2 headP = mix(mStart, mEnd, meteor);
+          vec2 rel = mc - headP;
+          float along = dot(rel, mDir);                       // >0 ahead, <0 trail
+          float across = abs(dot(rel, vec2(-mDir.y, mDir.x)));
+          float tail = clamp(-along / 0.6, 0.0, 1.0);         // 0 at head .. 1 at tail end
+          float w = mix(0.012, 0.05, tail);                   // thin at head, feathers back
+          float body = smoothstep(w, 0.0, across) * (1.0 - tail) * step(along, 0.012);
+          float head = smoothstep(0.075, 0.0, length(rel));   // hot core blob
+          float life = smoothstep(0.0, 0.12, meteor) * smoothstep(1.0, 0.8, meteor);
+          vec3 mCol = mix(vec3(1.0, 0.82, 0.5), vec3(1.0, 0.97, 0.92), head);
+          col += mCol * (body * 1.0 + head * 1.9) * life;
+          col += hot * life * head * 0.2;                     // faint warm wash at the head
         }
         // Stars above the horizon band.
         if (y > 0.18) {

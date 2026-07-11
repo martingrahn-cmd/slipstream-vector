@@ -157,6 +157,14 @@ export const TUNING = {
   BOB_A2: 0.03, BOB_F2: 3.7,
   BOB_SPEED_KILL: 0.7,    // bob amplitude dies at speed
 
+  // ---- Desert sun-gate set-piece ----
+  // Driving INTO the sun through the Sun Gate blooms the disc + god-rays; the
+  // final lap is crowned by a scripted meteor arcing across the sky.
+  SUNGATE_ALIGN_LO: 0.55,   // heading·sun dot where the flare starts to bloom
+  SUNGATE_ALIGN_HI: 0.94,   // ...and where it's full
+  SUNGATE_FLARE_EASE: 2.6,  // per second — how fast the bloom eases in/out
+  METEOR_DURATION: 2.6,     // s the last-lap fireball takes to cross the sky
+
   // ---- Fog / world ----
   FOG_COLOR: 0xff7a3c,
   FOG_NEAR: 60,
