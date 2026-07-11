@@ -51,6 +51,7 @@ export class AudioEngine {
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
     this._buildEngine();
+    this._buildShieldHum();
     this._buildOpponentVoices();
     this._tryMusic();
   }
@@ -172,6 +173,38 @@ export class AudioEngine {
     this.scrapeFilter.connect(this.scrapeGain);
     this.scrapeGain.connect(this.sfx);
     this.scrape.start();
+  }
+
+  // Continuous SHIELD hum: a warm low drone with a slow beating throb (two
+  // detuned saws ~0.8Hz apart = the "brumm") + a faint high shimmer for the
+  // energy-bubble tell. Built like the engine/wind beds — persistent nodes,
+  // gain lerped up while the shield is live and down when it drops.
+  _buildShieldHum() {
+    const ctx = this.ctx;
+    this.shieldLevel = 0;
+    const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 55;
+    const bodyA = ctx.createOscillator(); bodyA.type = 'sawtooth'; bodyA.frequency.value = 110;
+    const bodyB = ctx.createOscillator(); bodyB.type = 'sawtooth'; bodyB.frequency.value = 110.8; // beat -> throb
+    const shimmer = ctx.createOscillator(); shimmer.type = 'triangle'; shimmer.frequency.value = 660;
+    const subG = ctx.createGain(); subG.gain.value = 0.6;
+    const bodyG = ctx.createGain(); bodyG.gain.value = 0.42;
+    const shimG = ctx.createGain(); shimG.gain.value = 0.05;
+    const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 520; filt.Q.value = 0.7;
+    this.shieldGain = ctx.createGain(); this.shieldGain.gain.value = 0;
+    sub.connect(subG); subG.connect(filt);
+    bodyA.connect(bodyG); bodyB.connect(bodyG); bodyG.connect(filt);
+    filt.connect(this.shieldGain);
+    shimmer.connect(shimG); shimG.connect(this.shieldGain); // shimmer skips the lowpass — a faint sparkle
+    this.shieldGain.connect(this.sfx);
+    sub.start(); bodyA.start(); bodyB.start(); shimmer.start();
+  }
+
+  // Ramp the shield drone up while the bubble is live, down when it drops.
+  updateShield(dt, active) {
+    if (!this.ctx || !this.shieldGain) return;
+    const target = active ? 0.11 * this.stateScale : 0;
+    this.shieldLevel += (target - this.shieldLevel) * Math.min(1, 5 * dt);
+    this.shieldGain.gain.value = this.shieldLevel;
   }
 
   // Called every frame. All values lerped here — no AudioParam event spam.
@@ -302,12 +335,15 @@ export class AudioEngine {
 
   weaponFire(type) {
     if (type === 'missiles' || type === 'homing') {
-      // ROCKET launch: ignition thump + throaty falling saw + a long exhaust
-      // tail sweeping down as the rocket leaves the ship.
-      this.blip(130, 0.09, { type: 'sine', gain: 0.18, slideTo: 55 });          // ignition thump
-      this.blip(360, 0.5, { type: 'sawtooth', gain: 0.12, slideTo: 55 });        // motor drop
-      this.burst(2800, 0.55, 0.2, 'bandpass', 1.1, 350);                          // exhaust tail, sweeping away
-      this.burst(5200, 0.12, 0.1, 'highpass', 0.8);                               // launch crack
+      // ROCKET launch: lead with WEIGHT — a deep sub kick + a chest boom as it
+      // leaves the rail — then the ignition thump, throaty falling saw and a
+      // long exhaust tail sweeping down as the rocket clears the ship.
+      this.blip(96, 0.30, { type: 'sine', gain: 0.5, slideTo: 30 });             // sub kick — the heft
+      this.burst(150, 0.30, 0.36, 'lowpass', 0.7);                               // chest boom body
+      this.blip(150, 0.10, { type: 'sine', gain: 0.22, slideTo: 55 });           // ignition thump
+      this.blip(360, 0.5, { type: 'sawtooth', gain: 0.13, slideTo: 55 });        // motor drop
+      this.burst(2600, 0.55, 0.2, 'bandpass', 1.1, 320);                          // exhaust tail, sweeping away
+      this.burst(5200, 0.12, 0.1, 'highpass', 0.8);                              // launch crack
     } else if (type === 'mine') {
       this.blip(190, 0.1, { type: 'square', gain: 0.1 });
       this.blip(120, 0.12, { type: 'square', gain: 0.09, delay: 0.07 });

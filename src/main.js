@@ -1573,6 +1573,7 @@ function tick(now) {
   hud.update(realDt, ship, selection.mode === 2 ? 0 : TOTAL_LAPS); // TT: open-ended laps
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
+  audio.updateShield(realDt, state === 'race' && ship.shielded); // brummande sköld-drönare medan bubblan är uppe
   audio.updateOpponentEngines(realDt,
     state === 'race' ? race.racers.map((r) => r.phys) : null,
     ship.s, spline.length, state === 'race');
