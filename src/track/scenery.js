@@ -115,7 +115,7 @@ export function buildScenery(spline, scene, theme) {
   if (theme.overheads) group.add(buildOverheads(spline));
   const traffic = theme.traffic ? buildTraffic(rng, spline, groundY, cx, cz) : null;
   if (traffic) group.add(traffic.mesh);
-  if (theme.city) group.add(buildCity(rng, groundY, cx, cz, CITY_ANG, theme));
+  if (theme.city) group.add(buildCity(rng, groundY, cx, cz, CITY_ANG, theme, spline));
   const lights = theme.searchlights ? buildSearchlights(rng, spline, groundY) : null;
   if (lights) group.add(lights.group);
   const drones = theme.drones ? buildDrones(rng, spline, theme) : null;
@@ -2035,9 +2035,18 @@ function buildSearchlights(rng, spline, groundY) {
 
 // ------------------------------------------------------------ distant city
 // A skyline cluster beyond the mesas with glowing window strips piercing the
-// haze — the destination on the horizon.
-function buildCity(rng, groundY, cx, cz, cityAng, theme = {}) {
-  const dist = 600;
+// haze — the destination on the horizon. Two roles from one builder:
+//   • city world  → the near/mid skyline you race under (dark towers, lit
+//     windows against the blue hour);
+//   • desert world → a distant megacity glittering in the sunset haze on the
+//     horizon (theme.cityFar) — pushed out, tinted into the warm haze, warm
+//     sun-caught crowns, so it reads as a shimmering skyline, not a grey wall.
+// Either way every tower is kept CLEAR of the racing line (spline clearance):
+// a distant cluster can spare the odd tower, but never one on the road.
+function buildCity(rng, groundY, cx, cz, cityAng, theme = {}, spline = null) {
+  const far = !!theme.cityFar;                    // desert borrows the skyline
+  const dist = theme.cityDist ?? (far ? 780 : 600);
+  const haze = theme.cityHaze ?? (far ? 0.44 : 0); // lerp toward the horizon haze
   const ccx = cx + Math.cos(cityAng) * dist;
   const ccz = cz + Math.sin(cityAng) * dist;
   const opa = [], glo = [];
@@ -2049,6 +2058,55 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}) {
   ];
   const pickWin = () => { let r = rng(); for (const [c, w] of WIN) { r -= w; if (r <= 0) return c; } return WIN[0][0]; };
   const beacon = [cr, cl, new THREE.Color(0xff3a3a)];
+  // Fraction of window cells left DARK. Distant daytime city: mostly dark, so
+  // the lit ones read as sparkle not a wall of light; the blue-hour city keeps
+  // its dense grid (~60% lit, as before).
+  const skipWin = far ? 0.8 : 0.4;
+
+  // Atmospheric perspective: pull a colour toward the sky-horizon haze. p lets
+  // the far backdrop ring melt in harder than the near ring. No-op when haze=0.
+  const hazeCol = new THREE.Color(theme.sky.horizon);
+  const tint = (hex, p = 1) => haze > 0
+    ? new THREE.Color(hex).lerp(hazeCol, Math.min(0.85, haze * p)).getHex() : hex;
+  // Sun-caught crown: warm the top vertices so the skyline glitters along its
+  // upper edge instead of dying into a flat slab.
+  const crownWarm = new THREE.Color(theme.mesaRim ?? 0xffc27a);
+  const crownGrad = (geom, baseY, topY, amt) => {
+    const pos = geom.getAttribute('position'), col = geom.getAttribute('color');
+    if (!col) return geom;
+    const span = Math.max(1, topY - baseY), c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const t = Math.max(0, Math.min(1, (pos.getY(i) - baseY) / span));
+      c.setRGB(col.getX(i), col.getY(i), col.getZ(i)).lerp(crownWarm, amt * t * t);
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    return geom;
+  };
+  const bakeTower = (geom, baseHex, baseY, topY, near) =>
+    crownGrad(bakeFlatColors(geom, tint(baseHex, near ? 0.72 : 1), { rim: !far }),
+      baseY, topY, far ? 0.5 : 0.3);
+
+  // Keep a footprint clear of the racing line: shove it straight away from the
+  // nearest track sample until it clears, or return null so the caller drops
+  // it. Cheap (samples the spline every 6th point) and only runs when spline
+  // is supplied.
+  const clearPush = (px, pz, foot) => {
+    if (!spline) return [px, pz];
+    for (let it = 0; it < 16; it++) {
+      let hi = -1, hdx = 0, hdz = 0, hd2 = Infinity, hw = 0;
+      for (let i = 0; i < spline.n; i += 6) {
+        const dx = px - spline.pos[i * 3], dz = pz - spline.pos[i * 3 + 2];
+        const need = foot + spline.width[i] + 10;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < need * need && d2 < hd2) { hd2 = d2; hi = i; hdx = dx; hdz = dz; hw = spline.width[i]; }
+      }
+      if (hi < 0) return [px, pz];
+      const d = Math.sqrt(hd2) || 0.001;
+      const move = (foot + hw + 12) - d;
+      px += (hdx / d) * move; pz += (hdz / d) * move;
+    }
+    return null; // hemmed in on both sides — better gone than on the road
+  };
 
   // A grid of lit window cells over the four faces of one tower; baked straight
   // into a position+colour BufferGeometry (one per tower) so the glow merge
@@ -2071,7 +2129,7 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}) {
       const sw = span / nc, sgx = sw * 0.62;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < nc; c++) {
-          if (rng() > 0.6) continue; // ~60% of cells are lit
+          if (rng() < skipWin) continue; // most cells dark
           const cy = -h / 2 + (r + 0.5) * ch;
           const ct = -span / 2 + (c + 0.5) * sw;
           const col = pickWin();
@@ -2087,71 +2145,115 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}) {
     return g;
   };
 
+  // A blinking comms mast + beacon tip on top of a tower/tier at (px, topY, pz).
+  const addMast = (px, topY, pz) => {
+    const sh = 12 + rng() * 26;
+    const mast = new THREE.BoxGeometry(0.9, sh, 0.9);
+    mast.translate(px, topY + sh / 2, pz);
+    opa.push(bakeFlatColors(mast, 0x120a2c, { rim: false }));
+    const tip = new THREE.BoxGeometry(2.4, 2.4, 2.4);
+    tip.translate(px, topY + sh, pz);
+    glo.push(colorTint(tip, beacon[Math.floor(rng() * beacon.length)]));
+  };
+
   // THE SPIRE — the world icon: one supertall anchoring the skyline hierarchy
   // (1 icon / a few supertalls / a mass of mid-rise, instead of uniform noise).
   // ONLY in the city world — the desert borrows this skyline for its horizon
   // and must not inherit the icon.
   if ((theme.landmark && theme.landmark.type) === 'spire') {
+    const s = clearPush(ccx, ccz, 60) || [ccx, ccz];
+    const sx = s[0], sz = s[1];
     const shafts = [[36, 0.52], [26, 0.30], [16, 0.18]]; // [width, height share]
     const H = 335;
     let y = groundY;
     for (const [w, share] of shafts) {
       const h = H * share;
       const box = new THREE.BoxGeometry(w, h, w * 0.9);
-      box.translate(ccx, y + h / 2, ccz);
-      opa.push(bakeFlatColors(box, 0x1d0f44, { rim: false }));
-      glo.push(windowGeo(w, h, w * 0.9, 0, ccx, y + h / 2, ccz));
+      box.translate(sx, y + h / 2, sz);
+      opa.push(bakeTower(box, 0x1d0f44, groundY, groundY + H, true));
+      glo.push(windowGeo(w, h, w * 0.9, 0, sx, y + h / 2, sz));
       y += h;
     }
     // Vertical neon seams up two faces + crown mast + beacon.
     for (const side of [-1, 1]) {
       const seam = new THREE.BoxGeometry(1.4, H * 0.86, 0.8);
-      seam.translate(ccx + side * (36 / 2 + 0.6), groundY + H * 0.45, ccz);
+      seam.translate(sx + side * (36 / 2 + 0.6), groundY + H * 0.45, sz);
       glo.push(colorTint(seam, side < 0 ? cl : cr));
     }
     const mast = new THREE.BoxGeometry(1.4, 42, 1.4);
-    mast.translate(ccx, y + 21, ccz);
+    mast.translate(sx, y + 21, sz);
     opa.push(bakeFlatColors(mast, 0x120a2c, { rim: false }));
     const tip = new THREE.BoxGeometry(3.2, 3.2, 3.2);
-    tip.translate(ccx, y + 42, ccz);
+    tip.translate(sx, y + 42, sz);
     glo.push(colorTint(tip, new THREE.Color(0xffffff)));
   }
 
   const n = 44;
+  const nearProb = far ? 0.24 : 0.42; // the far city is mostly a distant band
   for (let i = 0; i < n; i++) {
     // Two depth rings: a nearer ring of bigger towers + a far backdrop ring.
-    const near = rng() < 0.42;
+    const near = rng() < nearProb;
     const rr = near ? 60 + rng() * 110 : 170 + rng() * 150; // keep clear of the Spire base
     const a = rng() * Math.PI * 2;
-    const px = ccx + Math.cos(a) * rr;
-    const pz = ccz + Math.sin(a) * rr * 0.7;
-    const w = (near ? 24 : 14) + rng() * (near ? 26 : 20);
-    const d = (near ? 24 : 14) + rng() * (near ? 26 : 20);
+    let px = ccx + Math.cos(a) * rr;
+    let pz = ccz + Math.sin(a) * rr * 0.7;
+    const w = (near ? (far ? 18 : 24) : 14) + rng() * (near ? (far ? 20 : 26) : 20);
+    const d = (near ? (far ? 18 : 24) : 14) + rng() * (near ? (far ? 20 : 26) : 20);
     // Skyline hierarchy: the first few are supertalls, the rest cap at mid-rise
     // so the Spire and its lieutenants OWN the silhouette.
-    let h = (near ? 80 : 50) + rng() * (near ? 115 : 90);
-    if (i < 4) h = 195 + rng() * 60;
+    let h = (near ? (far ? 62 : 80) : 50) + rng() * (near ? (far ? 92 : 115) : 90);
+    if (i < 4) h = (far ? 150 : 195) + rng() * 60;
     const rot = rng() * 0.6;
-    const py = groundY + h / 2;
-    const tower = new THREE.BoxGeometry(w, h, d);
-    tower.rotateY(rot); tower.translate(px, py, pz);
-    opa.push(bakeFlatColors(tower, 0x190d3c, { rim: false }));
-    glo.push(windowGeo(w, h, d, rot, px, py, pz));
-    // Antenna spire + blinking beacon tip on the taller towers (comms-mast look).
-    if (h > 150 && rng() < 0.6) {
-      const sh = 12 + rng() * 26;
-      const mast = new THREE.BoxGeometry(0.9, sh, 0.9);
-      mast.translate(px, groundY + h + sh / 2, pz);
-      opa.push(bakeFlatColors(mast, 0x120a2c, { rim: false }));
-      const tip = new THREE.BoxGeometry(2.4, 2.4, 2.4);
-      tip.translate(px, groundY + h + sh, pz);
-      glo.push(colorTint(tip, beacon[Math.floor(rng() * beacon.length)]));
+    const foot = Math.max(w, d) * 0.62 + 6;
+    const pushed = clearPush(px, pz, foot);
+    if (!pushed) continue;              // couldn't clear the racing line → drop it
+    px = pushed[0]; pz = pushed[1];
+    const topY = groundY + h;
+    const arch = rng();
+    if (arch < 0.32) {
+      // SETBACK ZIGGURAT — tiers narrowing upward: the classic skyline profile.
+      const tiers = 2 + (rng() < 0.5 ? 1 : 0);
+      let y = groundY, tw = w, td = d;
+      for (let k = 0; k < tiers; k++) {
+        const th = h * (k === 0 ? 0.52 : 0.48 / (tiers - 1)) * (0.85 + rng() * 0.2);
+        const box = new THREE.BoxGeometry(tw, th, td);
+        box.rotateY(rot); box.translate(px, y + th / 2, pz);
+        opa.push(bakeTower(box, 0x190d3c, groundY, topY, near));
+        if (k === 0) glo.push(windowGeo(tw, th, td, rot, px, y + th / 2, pz));
+        y += th; tw *= 0.66 + rng() * 0.1; td *= 0.66 + rng() * 0.1;
+      }
+      if (rng() < (far ? 0.7 : 0.5)) addMast(px, y, pz);
+    } else if (arch < 0.58) {
+      // TAPERED CROWN — box body under a 4-sided pyramid cap (a pointed spire).
+      const bodyH = h * 0.8;
+      const body = new THREE.BoxGeometry(w, bodyH, d);
+      body.rotateY(rot); body.translate(px, groundY + bodyH / 2, pz);
+      opa.push(bakeTower(body, 0x190d3c, groundY, topY, near));
+      glo.push(windowGeo(w, bodyH, d, rot, px, groundY + bodyH / 2, pz));
+      const cap = new THREE.ConeGeometry(Math.max(w, d) * 0.6, h - bodyH, 4, 1);
+      cap.rotateY(rot + Math.PI / 4); cap.translate(px, groundY + bodyH + (h - bodyH) / 2, pz);
+      opa.push(bakeTower(cap, 0x190d3c, groundY, topY, near));
+      if (far && rng() < 0.5) addMast(px, topY, pz); // a beacon crowning the spire
+    } else {
+      // PLAIN SLAB — the mass of mid-rise, with the odd comms mast on the talls.
+      const tower = new THREE.BoxGeometry(w, h, d);
+      tower.rotateY(rot); tower.translate(px, groundY + h / 2, pz);
+      opa.push(bakeTower(tower, 0x190d3c, groundY, topY, near));
+      glo.push(windowGeo(w, h, d, rot, px, groundY + h / 2, pz));
+      if (h > (far ? 90 : 150) && rng() < (far ? 0.7 : 0.6)) addMast(px, topY, pz);
+    }
+    // Vertical neon seam up a near tower's edge — a little life in the near
+    // field (city world only; the far desert city stays a clean silhouette).
+    if (near && !far && rng() < 0.3) {
+      const seam = new THREE.BoxGeometry(1.0, h * 0.8, 0.7);
+      seam.rotateY(rot); seam.translate(px + Math.cos(rot) * (w / 2 + 0.4), groundY + h * 0.44, pz - Math.sin(rot) * (w / 2 + 0.4));
+      glo.push(colorTint(seam, rng() < 0.5 ? cl : cr));
     }
   }
   const g = new THREE.Group();
   g.add(new THREE.Mesh(mergeGeoms(opa), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
   const glowMesh = new THREE.Mesh(mergeGeoms(glo), new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 0.62,
+    vertexColors: true, transparent: true, opacity: far ? 0.5 : 0.62,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
   }));
   glowMesh.renderOrder = 1;

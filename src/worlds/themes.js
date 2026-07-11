@@ -73,6 +73,9 @@ export const THEMES = {
     billboardEvery: 220,
     searchlights: false,
     city: true,
+    cityFar: true,         // a distant megacity glittering in the sunset haze on
+                           // the skyline window — pushed out, hazed, warm-crowned,
+                           // and (like all scenery) kept clear of the racing line
     drones: 8,             // near the gantry only — the desert sky belongs to the raptors
     birds: true,
     birdCol: 0x2a1440,     // raptors: deep dusk silhouettes circling the Sun Gate
