@@ -105,6 +105,18 @@ export const TUNING = {
   HITSTOP_SCALE: 0.3,
   HITSTOP_TIME: 0.045,
 
+  // ---- Near-miss whoosh (cosmetic feel: a doppler swish + a faint camera tug
+  //  as a wall/pylon or a rival flies close past at speed — no trauma, no
+  //  gameplay effect; detected read-only in the feel layer, routed via juice) ----
+  NEARMISS_MIN_SN: 0.5,       // only sells speed above this speedNorm
+  NEARMISS_WALL_GAP: 1.1,     // m inside the wall limit that reads as a skim
+  NEARMISS_WALL_CD: 0.55,     // s before the wall whoosh can retrigger
+  NEARMISS_RIVAL_DS: 4.5,     // m along-track window to count as 'alongside'
+  NEARMISS_RIVAL_IN: 2.6,     // m lateral inner edge (just outside contact @2.5)
+  NEARMISS_RIVAL_OUT: 6.5,    // m lateral outer edge of the near-miss band
+  NEARMISS_RIVAL_CD: 0.9,     // s per-rival cooldown so one pass = one whoosh
+  NEARMISS_PUNCH: 0.13,       // lateral camera tug toward the thing that flew past
+
   // ---- Weapons (Pass 3) ----
   // Every value identical for player and AI — weapons are combat, never catch-up.
   WEAPON_DISABLE_TIME: 1.7,  // s of cut thrust + mushy steering on hit (coast, not dead stop)

@@ -71,6 +71,13 @@ export class Juice {
     this.on('shieldSave', ({ victimIsPlayer }) => {
       if (victimIsPlayer) this.addTrauma(0.2); // a knock, not a punishment
     });
+    // Near-miss: a wall/pylon or rival flew close past. Pure rush — NO trauma,
+    // NO flash, NO hitstop (a near-miss is not a hit). Just a quick lateral tug
+    // toward the thing that whipped by (wake suction), which camPunch decays out
+    // in a few frames. The doppler swish lives in audio.
+    this.on('nearMiss', ({ side = 1, intensity = 1 }) => {
+      this.camPunch += side * T.NEARMISS_PUNCH * intensity;
+    });
   }
 
   on(name, fn) {

@@ -746,6 +746,45 @@ const _f = makeFrame();
 const _v = new THREE.Vector3();
 const _vel = new THREE.Vector3();
 
+// Near-miss "whoosh": a wall/pylon or a rival flying close past at speed sends a
+// doppler swish (panned, in audio) + a faint camera tug (via juice). Pure feel,
+// detected read-only over sim state — no physics touched. Cooldowns debounce it
+// so one pass reads as one rush, not a stutter.
+const _nmF = makeFrame();
+let _nmWallCd = 0;
+const _nmRivalCd = new Map();
+function updateNearMiss(realDt) {
+  _nmWallCd = Math.max(0, _nmWallCd - realDt);
+  for (const [r, cd] of _nmRivalCd) { const n = cd - realDt; if (n <= 0) _nmRivalCd.delete(r); else _nmRivalCd.set(r, n); }
+  const sn = ship.speedNorm;
+  if (sn < T.NEARMISS_MIN_SN) return;
+  const spd = (sn - T.NEARMISS_MIN_SN) / (1 - T.NEARMISS_MIN_SN); // 0..1 above the floor
+  // Trackside skim: tucked close to the edge (pylons/walls whipping past) but
+  // NOT actually scraping — that's the "phew" as you thread a pinch at speed.
+  spline.frameAt(ship.s, _nmF);
+  const gap = (_nmF.width - T.WALL_MARGIN) - Math.abs(ship.d);
+  if (!ship.scraping && gap >= 0 && gap < T.NEARMISS_WALL_GAP && _nmWallCd === 0) {
+    juice.emit('nearMiss', { side: Math.sign(ship.d) || 1, intensity: 0.35 + 0.65 * spd });
+    _nmWallCd = T.NEARMISS_WALL_CD;
+  }
+  // A rival flying past close but clear of contact (interact handles the touch).
+  if (state !== 'race' || !race || !race.racers) return;
+  const L = spline.length;
+  for (const r of race.racers) {
+    if (_nmRivalCd.has(r)) continue;
+    const rp = r.phys;
+    if (r.finishTime !== null || rp === ship) continue;
+    let ds = (((rp.s - ship.s) % L) + L) % L; if (ds > L / 2) ds -= L;
+    if (Math.abs(ds) > T.NEARMISS_RIVAL_DS) continue;
+    const dd = Math.abs(rp.d - ship.d);
+    if (dd < T.NEARMISS_RIVAL_IN || dd > T.NEARMISS_RIVAL_OUT) continue;
+    const closeness = 1 - (dd - T.NEARMISS_RIVAL_IN) / (T.NEARMISS_RIVAL_OUT - T.NEARMISS_RIVAL_IN);
+    const rel = Math.min(1, Math.abs(ship.v - rp.v) / 22);
+    juice.emit('nearMiss', { side: Math.sign(rp.d - ship.d) || 1, intensity: 0.4 + 0.35 * closeness + 0.25 * rel });
+    _nmRivalCd.set(r, T.NEARMISS_RIVAL_CD);
+  }
+}
+
 // Impact FIREBALL + SMOKE — pooled billboards: a hot core that balloons and
 // whites out, then 2-3 dark puffs that rise and fade. Plus the shockwave ring.
 const _impactTex = (() => {
@@ -1429,6 +1468,7 @@ function tick(now) {
 
   // Visuals.
   const sn = ship.speedNorm;
+  if (state === 'race') updateNearMiss(realDt); // feeds camPunch (rig.update) + the whoosh
   // Lean the hull from the live input in race, and from the post-race AI's input
   // while the ship auto-races the finish, so it still banks into corners.
   const visInput = state === 'race' ? input : (state === 'finished' ? simInput : NULL_INPUT);

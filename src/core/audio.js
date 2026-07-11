@@ -23,6 +23,7 @@ export class AudioEngine {
     juice.on('land', ({ severity }) => this.wallThud(severity * 0.4));
     juice.on('bump', () => this.bumpThud());
     juice.on('lap', () => this.lapChime());
+    juice.on('nearMiss', ({ side = 0, intensity = 1 }) => this.nearMissWhoosh(side, intensity));
   }
 
   unlock() {
@@ -335,6 +336,41 @@ export class AudioEngine {
   boostWhoosh(amount) {
     this.blip(170, 0.5 * amount + 0.15, { type: 'sawtooth', gain: 0.1 * amount, slideTo: 950 });
     this.burst(1100, 0.45 * amount + 0.1, 0.16 * amount, 'bandpass', 0.8);
+  }
+
+  // A wall/pylon or a rival flying close past: a short doppler swish that drops
+  // in pitch and sweeps across the stereo field (start on the side it's on, whip
+  // to the far side as it passes). side: -1 left .. +1 right. Airy, quick, quiet.
+  nearMissWhoosh(side = 0, intensity = 1) {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    if (t0 - (this._lastWhoosh ?? -1) < 0.1) return; // don't stack same-frame fires
+    this._lastWhoosh = t0;
+    const amt = Math.max(0.3, Math.min(1, intensity));
+    const dur = 0.18 + 0.07 * amt;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(2600, t0);
+    f.frequency.exponentialRampToValueAtTime(560, t0 + dur); // doppler drop past you
+    f.Q.value = 0.9;
+    const g = this.ctx.createGain();
+    const peak = 0.1 * (0.5 + 0.5 * amt);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.28);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g);
+    const s = Math.max(-1, Math.min(1, side));
+    if (this.ctx.createStereoPanner) {
+      const pan = this.ctx.createStereoPanner();
+      pan.pan.setValueAtTime(s * 0.85, t0);
+      pan.pan.linearRampToValueAtTime(-s * 0.55, t0 + dur); // whips across as it goes by
+      g.connect(pan); pan.connect(this.sfx);
+    } else {
+      g.connect(this.sfx);
+    }
+    src.start(t0); src.stop(t0 + dur + 0.03);
   }
 
   wallThud(severity) {
