@@ -170,11 +170,12 @@ export class WeaponSystem {
     this._prevPad = new Map();   // phys -> activeWeaponPad last step (arm on transition)
     this._ammo = new Map();      // phys -> missiles left in the salvo
     this._cool = new Map();      // phys -> fire cooldown (s)
+    this._holdT = new Map();     // phys -> s left on an unfired held weapon (use-it-or-lose-it)
     this._aiDelay = new Map();   // phys -> hold-fire countdown (reaction time)
     this._kap = { kappa: 0, bank: 0, width: 8, slope: 0, splitHalf: 0 }; // scalarsAt scratch
-    // Per-pad cooldown, GLOBAL (once someone grabs pad i, it's spent for
-    // everyone until it recharges). Stored normalized 1..0 so the pad decal can
-    // dim by it directly.
+    // Vestigial per-pad state fed to the pad decal: pads no longer dim/lock
+    // (every empty-handed racer that crosses gets armed), so this stays 0 and
+    // the pad reads as always-live; the pickup flash is the gold spark burst.
     this.padCd = new Float32Array((spline.weaponPads && spline.weaponPads.length) || 0);
     this.projectiles = [];       // {slot, type, s, d, v, owner, life, armT, target}
     this._freeSlots = Array.from({ length: MAX_PROJ }, (_, i) => MAX_PROJ - 1 - i);
@@ -258,6 +259,7 @@ export class WeaponSystem {
   _tryFire(phys, isPlayer) {
     if (!phys.heldWeapon || phys.disabledT > 0) return;
     if ((this._cool.get(phys) || 0) > 0) return;
+    this._holdT.delete(phys); // you're using it — the fizzle fuse is off
     const type = phys.heldWeapon;
     const L = this.spline.length;
 
@@ -311,25 +313,35 @@ export class WeaponSystem {
     if (!this.active || !racing) return;
     const L = this.spline.length;
 
-    // ---- pickups: arm on a fresh weapon-pad crossing (latch transition), but
-    // only if the pad has recharged — a pad is spent (dimmed) for a few seconds
-    // after anyone grabs it, so the whole pack can't harvest the same one.
+    // ---- pickups: arm on a fresh weapon-pad crossing (latch transition). PER
+    // DRIVER — every empty-handed racer that crosses gets one, so the leader
+    // can't hoard the pad. Fairness by construction; no position term.
     for (const phys of this._ships()) {
       const prev = this._prevPad.get(phys) ?? -1;
       const cur = phys.activeWeaponPad;
-      if (cur >= 0 && cur !== prev && phys.heldWeapon === null && !(this.padCd[cur] > 0)) {
+      if (cur >= 0 && cur !== prev && phys.heldWeapon === null) {
         phys.heldWeapon = this._roll();
-        this.padCd[cur] = 1; // full charge spent — decays to 0 over the cooldown
+        this._holdT.set(phys, T.WEAPON_HOLD_TIME); // start the use-it-or-lose-it fuse
         this.juice.emit('weaponArmed', { type: phys.heldWeapon, isPlayer: phys === this.player });
         this.juice.emit('padTaken', { pad: cur, isPlayer: phys === this.player });
       }
       this._prevPad.set(phys, cur);
+      // use-it-or-lose-it: an UNFIRED held weapon fizzles after WEAPON_HOLD_TIME
+      // (the fuse is cleared the instant you fire — see _tryFire). An offensive
+      // pickup with no target ahead just burns down and pops — no banking.
+      if (phys.heldWeapon !== null && this._holdT.has(phys)) {
+        const h = this._holdT.get(phys) - dt;
+        if (h <= 0) {
+          const lost = phys.heldWeapon;
+          phys.heldWeapon = null;
+          this._ammo.delete(phys);
+          this._holdT.delete(phys);
+          this.juice.emit('weaponFizzle', { type: lost, isPlayer: phys === this.player });
+        } else this._holdT.set(phys, h);
+      }
       const c = this._cool.get(phys);
       if (c > 0) this._cool.set(phys, c - dt);
     }
-    // recharge pads (normalized 1 -> 0 over WEAPON_PAD_COOLDOWN seconds)
-    const padDecay = dt / T.WEAPON_PAD_COOLDOWN;
-    for (let i = 0; i < this.padCd.length; i++) if (this.padCd[i] > 0) this.padCd[i] = Math.max(0, this.padCd[i] - padDecay);
 
     // ---- player fire intent (edge, once per frame)
     if (playerFire) this._tryFire(this.player, true);
@@ -458,6 +470,7 @@ export class WeaponSystem {
     this._prevPad.clear();
     this._ammo.clear();
     this._cool.clear();
+    this._holdT.clear();
     this._aiDelay.clear();
     this.padCd.fill(0);
     while (this.projectiles.length) this._despawn(this.projectiles[0]);

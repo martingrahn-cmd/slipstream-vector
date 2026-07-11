@@ -1010,6 +1010,13 @@ juice.on('weaponArmed', ({ type, isPlayer }) => {
   hud.setWeapon(type);
   if (type && state === 'race') { audio.weaponPickup(); input.rumble(0.25, 120); }
 });
+// Held too long, never fired: it fizzles out (use-it-or-lose-it). Clear the HUD
+// slot and give a soft power-down cue so the player reads the loss.
+juice.on('weaponFizzle', ({ isPlayer }) => {
+  if (!isPlayer) return;
+  hud.setWeapon(null, 0);
+  if (state === 'race') audio.weaponFizzle();
+});
 // A pad was grabbed (by anyone): a gold spark burst at the pad so the pickup
 // reads, governed by distance to camera (fill-budget).
 juice.on('padTaken', ({ pad }) => {

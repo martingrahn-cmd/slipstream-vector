@@ -137,7 +137,12 @@ export const TUNING = {
   MINE_TRIGGER_DD: 2.2,
   WEAPON_BOOST_TIME: 1.6,    // rides the normal boostTimer pipeline
   WEAPON_SHIELD_TIME: 6.0,   // s a shield stays up before it drops on its own (or until it eats a hit)
-  WEAPON_PAD_COOLDOWN: 4.0,   // s a weapon pad is spent (dimmed, gives nothing) after someone grabs it
+  // Weapon pads arm EVERY empty-handed racer that crosses them (per-driver, no
+  // shared pad lock — the leader can't hoard the pad). Scarcity + "the one who
+  // needs it least" self-corrects via use-it-or-lose-it: a held weapon fizzles
+  // if you don't fire it in time, so an offensive pickup with no target ahead
+  // (typically the leader) is simply wasted. Position-blind, no rubber-banding.
+  WEAPON_HOLD_TIME: 6.0,     // s an unfired held weapon lasts before it fizzles
 
   // ---- Boost envelope ----
   BOOST_ATTACK: 12.0,     // boostFactor per second

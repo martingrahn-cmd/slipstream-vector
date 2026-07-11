@@ -374,6 +374,13 @@ export class AudioEngine {
     this.burst(1100, 0.45 * amount + 0.1, 0.16 * amount, 'bandpass', 0.8);
   }
 
+  // A held weapon fizzled out (never fired in time): a soft, deflating power-down.
+  weaponFizzle() {
+    this.blip(430, 0.22, { type: 'triangle', gain: 0.09, slideTo: 120 });
+    this.blip(210, 0.18, { type: 'sine', gain: 0.06, slideTo: 70, delay: 0.02 });
+    this.burst(900, 0.14, 0.05, 'lowpass', 0.8, 300);
+  }
+
   // A wall/pylon or a rival flying close past: a short doppler swish that drops
   // in pitch and sweeps across the stereo field (start on the side it's on, whip
   // to the far side as it passes). side: -1 left .. +1 right. Airy, quick, quiet.
