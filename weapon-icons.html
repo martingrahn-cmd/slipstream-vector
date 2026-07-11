@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>WEAPON ICONS — pick your set</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #07060f; color: #dfe6ff; font-family: 'Rajdhani', system-ui, sans-serif; }
+  #wrap { max-width: 1100px; margin: 0 auto; padding: 22px 26px 80px; }
+  h1 { font-family: 'Orbitron', sans-serif; font-size: 17px; letter-spacing: 0.22em; color: #7df9ff; margin: 4px 0 2px; }
+  .sub { font-size: 13px; letter-spacing: 0.08em; color: #8a93b8; margin-bottom: 16px; }
+  /* tint switcher */
+  .tints { display: flex; gap: 8px; align-items: center; margin: 10px 0 4px; }
+  .tints span { font-size: 11px; letter-spacing: 0.18em; color: #6a6a8f; margin-right: 4px; }
+  .tints button { width: 26px; height: 26px; border: 1px solid #2a2050; background: #14102a; cursor: pointer; padding: 3px; }
+  .tints button i { display: block; width: 100%; height: 100%; background: var(--c); }
+  .tints button.on { border-color: #fff; }
+  /* selected-set HUD preview */
+  #hudbar { display: flex; gap: 26px; align-items: center; margin: 14px 0 26px; padding: 12px 18px; border: 1px solid #241a3a; background: linear-gradient(150deg, rgba(255,255,255,0.04), rgba(255,255,255,0.008)), #0a0714; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+  #hudbar .slot { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 64px; }
+  #hudbar .slot svg { width: 42px; height: 42px; color: var(--tint); filter: drop-shadow(0 0 7px var(--tint)); }
+  #hudbar .slot em { font-style: normal; font-size: 9px; letter-spacing: 0.2em; color: #6a6a8f; }
+  #hudbar .empty { color: #3a3358; font-size: 22px; line-height: 42px; }
+  /* weapon sections */
+  .weapon { margin: 26px 0 8px; }
+  .weapon h2 { font-family: 'Orbitron', sans-serif; font-size: 13px; letter-spacing: 0.2em; color: #fff; margin: 0 0 2px; }
+  .weapon p { margin: 0 0 10px; font-size: 12.5px; color: #8a93b8; letter-spacing: 0.04em; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .card { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #241a3a; background: #0a0714; cursor: pointer; transition: border-color 120ms, box-shadow 120ms; }
+  .card:hover { border-color: #4a3f78; }
+  .card.sel { border-color: var(--tint); box-shadow: 0 0 18px -8px var(--tint); }
+  .card.sel::after { content: 'VALD'; position: absolute; top: 6px; right: 8px; font-size: 8px; font-weight: 800; letter-spacing: 0.2em; color: var(--tint); }
+  .card .big svg { width: 56px; height: 56px; color: var(--tint); filter: drop-shadow(0 0 6px var(--tint)); display: block; }
+  .card .small svg { width: 24px; height: 24px; color: var(--tint); display: block; margin-top: 6px; }
+  .card .meta { display: flex; flex-direction: column; gap: 2px; }
+  .card .meta b { font-size: 11px; letter-spacing: 0.14em; color: #b9c4e8; font-weight: 700; }
+  .card .meta i { font-style: normal; font-size: 10.5px; color: #6a6a8f; }
+  /* export */
+  #export { margin-top: 30px; font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.12em; font-size: 12px; padding: 9px 22px; background: #14102a; color: #b9c4e8; border: 1px solid #2a2050; cursor: pointer; }
+  #out { width: 100%; height: 150px; margin-top: 10px; background: #05040c; color: #9ff7c0; border: 1px solid #2a2050; font-family: monospace; font-size: 10px; padding: 8px; display: none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>WEAPON ICONS</h1>
+  <div class="sub">4 stilriktningar &times; 5 vapen — klicka ihop ditt set. HUD-raden överst visar valen tillsammans.</div>
+  <div class="tints" id="tints"><span>TINT</span></div>
+  <div id="hudbar"></div>
+  <div id="weapons"></div>
+  <button id="export">EXPORT</button>
+  <textarea id="out" readonly></textarea>
+</div>
+<script>
+const SETS = [{"icons":[{"weapon":"homing","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8 16 V8 H16 M48 8 H56 V16 M56 48 V56 H48 M16 56 H8 V48\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M32 14 L37 22 V38 L41 46 H23 L27 38 V22 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"rocket locked inside targeting brackets"},{"weapon":"missiles","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M32 42 V10 M25 19 L32 10 L39 19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M14 52 V20 M7 29 L14 20 L21 29\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M50 52 V20 M43 29 L50 20 L57 29\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"three staggered straight-fire projectiles"},{"weapon":"boost","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"32\" cy=\"32\" r=\"23\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\"/><path d=\"M23 31 L32 22 L41 31 M23 42 L32 33 L41 42\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"thrust chevrons capsuled in an item ring (not bare pad arrows)"},{"weapon":"shield","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M32 8 L52 15 V28 Q52 45 32 56 Q12 45 12 28 V15 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"single clean badge-shield outline"},{"weapon":"mine","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"32\" cy=\"32\" r=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\"/><path d=\"M32 19 V9 M32 45 V55 M19 32 H9 M45 32 H55 M41.2 22.8 L48.3 15.7 M22.8 22.8 L15.7 15.7 M41.2 41.2 L48.3 48.3 M22.8 41.2 L15.7 48.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></svg>","note":"eight-spike naval contact mine"}],"style":"Pure Outline Glyphs"},{"style":"Neon Cutout — filled silhouettes","icons":[{"weapon":"homing","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path fill=\"currentColor\" d=\"M32 12 L38 22 L38 38 L43 46 L43 50 L36 45 L28 45 L21 50 L21 46 L26 38 L26 22 Z\"/><path fill=\"currentColor\" d=\"M4 4 H16 V9 H9 V16 H4 Z M48 4 H60 V16 H55 V9 H48 Z M4 48 H9 V55 H16 V60 H4 Z M55 48 H60 V60 H48 V55 H55 Z\"/></svg>","note":"solid finned missile centered inside four lock-on corner brackets"},{"weapon":"missiles","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path fill=\"currentColor\" d=\"M32 8 L37 18 L37 44 L40 50 L24 50 L27 44 L27 18 Z\"/><path fill=\"currentColor\" d=\"M16 14 L21 24 L21 50 L24 56 L8 56 L11 50 L11 24 Z\"/><path fill=\"currentColor\" d=\"M48 14 L53 24 L53 50 L56 56 L40 56 L43 50 L43 24 Z\"/></svg>","note":"three parallel slim rockets with flared tails, center one leading"},{"weapon":"boost","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M32 6 L54 19 L54 45 L32 58 L10 45 L10 19 Z M32 12 L44 24 L44 32 L32 20 L20 32 L20 24 Z M32 28 L44 40 L44 48 L32 36 L20 48 L20 40 Z\"/></svg>","note":"solid hex item-token with double negative-space chevron punched through — reads as a held pickup, not a track pad arrow"},{"weapon":"shield","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M12 8 L52 8 L52 32 L32 56 L12 32 Z M19 15 L45 15 L45 29 L32 45 L19 29 Z\"/><path fill=\"currentColor\" d=\"M25 22 L39 22 L39 28 L32 36 L25 28 Z\"/></svg>","note":"bold crest-shield ring with a floating solid core — layered barrier"},{"weapon":"mine","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M32 18 A14 14 0 1 0 32 46 A14 14 0 1 0 32 18 Z M32 27 A5 5 0 1 0 32 37 A5 5 0 1 0 32 27 Z\"/><path fill=\"currentColor\" d=\"M32 7 L37 22 L27 22 Z M32 57 L37 42 L27 42 Z M57 32 L42 37 L42 27 Z M7 32 L22 37 L22 27 Z M50 14 L43 28 L36 21 Z M14 14 L28 21 L21 28 Z M50 50 L36 43 L43 36 Z M14 50 L21 36 L28 43 Z\"/></svg>","note":"eight-spiked naval mine ball with a punched armed-core port"}]},{"style":"Chevron-Tech","icons":[{"weapon":"homing","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8 18 L8 8 L18 8 M46 8 L56 8 L56 18 M56 46 L56 56 L46 56 M18 56 L8 56 L8 46\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/><polygon points=\"32,14 43,42 32,35 21,42\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linejoin=\"miter\"/></svg>","note":"missile dart locked inside four targeting corner brackets"},{"weapon":"missiles","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M25 17 L32 10 L39 17 M32 14 L32 42\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/><path d=\"M9 29 L16 22 L23 29 M16 26 L16 54\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/><path d=\"M41 29 L48 22 L55 29 M48 26 L48 54\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/></svg>","note":"staggered x3 salvo of straight-fire rockets, center round leading"},{"weapon":"boost","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"22,8 42,8 54,32 42,56 22,56 10,32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linejoin=\"miter\"/><path d=\"M24 33 L32 25 L40 33 M24 45 L32 37 L40 45\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/></svg>","note":"thrust double-chevron sealed in a hex canister — a held charge, not a pad arrow"},{"weapon":"shield","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"12,10 52,10 52,32 32,56 12,32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linejoin=\"miter\"/><path d=\"M23 24 L32 33 L41 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/></svg>","note":"angular crest with nested deflection chevron"},{"weapon":"mine","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"32,23 41,32 32,41 23,32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linejoin=\"miter\"/><path d=\"M24 16 L32 8 L40 16 M48 24 L56 32 L48 40 M40 48 L32 56 L24 48 M16 40 L8 32 L16 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"square\" stroke-linejoin=\"miter\"/></svg>","note":"diamond core with four outward proximity chevrons — spiky armed device"}]},{"style":"HUD Badge — Cut-Corner Plate","icons":[{"weapon":"homing","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"14,6 50,6 58,14 58,50 50,58 14,58 6,50 6,14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><circle cx=\"32\" cy=\"32\" r=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\"/><path d=\"M32 41 L32 23 M25 30 L32 23 L39 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"missile dart locked inside a targeting ring"},{"weapon":"missiles","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"14,6 50,6 58,14 58,50 50,58 14,58 6,50 6,14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><path d=\"M18 46 L18 24 M13 30 L18 24 L23 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M32 38 L32 16 M26 23 L32 16 L38 23\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M46 46 L46 24 M41 30 L46 24 L51 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>","note":"three staggered straight rockets firing forward"},{"weapon":"boost","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"14,6 50,6 58,14 58,50 50,58 14,58 6,50 6,14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><polyline points=\"20,28 32,16 44,28\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><polyline points=\"20,42 32,30 44,42\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><line x1=\"22\" y1=\"50\" x2=\"42\" y2=\"50\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\"/></svg>","note":"thrust surge off a launch bar (bar keeps it distinct from bare pad chevrons)"},{"weapon":"shield","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"14,6 50,6 58,14 58,50 50,58 14,58 6,50 6,14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><polygon points=\"18,14 46,14 46,30 32,50 18,30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linejoin=\"round\"/></svg>","note":"angular crest shield, point-down protective barrier"},{"weapon":"mine","svg":"<svg viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"14,6 50,6 58,14 58,50 50,58 14,58 6,50 6,14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\"/><circle cx=\"32\" cy=\"32\" r=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\"/><path d=\"M32 13 L32 19 M32 45 L32 51 M13 32 L19 32 M45 32 L51 32 M19 19 L23 23 M45 19 L41 23 M19 45 L23 41 M45 45 L41 41\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\"/></svg>","note":"eight-spiked proximity mine core"}]}];
+const WEAPONS = [
+  { key: 'homing',   name: 'HOMING',   desc: 'Målsökande robot — låser på skeppet framför och jagar det. Sällsynt, stark.' },
+  { key: 'missiles', name: 'MISSILES', desc: 'Salva ×3 rakt fram — går att undvika med en juke.' },
+  { key: 'boost',    name: 'BOOST',    desc: 'Omedelbar fartstöt — hållet item, inte boost-pad.' },
+  { key: 'shield',   name: 'SHIELD',   desc: 'Absorberar nästa träff.' },
+  { key: 'mine',     name: 'MINE',     desc: 'Släpps bakåt — smäller på den som kör över den.' },
+];
+const TINTS = ['#00f0ff', '#ff2ec8', '#ffd23f', '#ff3a1f', '#8ef23a'];
+let tint = TINTS[0];
+const sel = {}; // weapon -> set index
+
+const tintsEl = document.getElementById('tints');
+TINTS.forEach((c, i) => {
+  const b = document.createElement('button'); b.style.setProperty('--c', c); b.innerHTML = '<i></i>';
+  if (i === 0) b.classList.add('on');
+  b.onclick = () => { tint = c; document.documentElement.style.setProperty('--tint', c); [...tintsEl.querySelectorAll('button')].forEach(x => x.classList.toggle('on', x === b)); };
+  tintsEl.appendChild(b);
+});
+document.documentElement.style.setProperty('--tint', tint);
+
+function iconOf(setIdx, weapon) {
+  const s = SETS[setIdx]; if (!s) return null;
+  const ic = s.icons.find(i => i.weapon === weapon);
+  return ic ? ic.svg : null;
+}
+function renderHud() {
+  const bar = document.getElementById('hudbar');
+  bar.innerHTML = WEAPONS.map(w => {
+    const svg = sel[w.key] != null ? iconOf(sel[w.key], w.key) : null;
+    return `<div class="slot">${svg ? svg : '<div class="empty">·</div>'}<em>${w.name}</em></div>`;
+  }).join('');
+}
+function render() {
+  const root = document.getElementById('weapons');
+  root.innerHTML = '';
+  for (const w of WEAPONS) {
+    const sec = document.createElement('div'); sec.className = 'weapon';
+    sec.innerHTML = `<h2>${w.name}</h2><p>${w.desc}</p><div class="cards"></div>`;
+    const cards = sec.querySelector('.cards');
+    SETS.forEach((s, si) => {
+      const svg = iconOf(si, w.key); if (!svg) return;
+      const card = document.createElement('div'); card.className = 'card' + (sel[w.key] === si ? ' sel' : '');
+      card.innerHTML = `<div><div class="big">${svg}</div><div class="small">${svg}</div></div><div class="meta"><b>${s.style}</b><i>${(s.icons.find(i => i.weapon === w.key) || {}).note || ''}</i></div>`;
+      card.onclick = () => { sel[w.key] = si; render(); renderHud(); };
+      cards.appendChild(card);
+    });
+    root.appendChild(sec);
+  }
+}
+document.getElementById('export').onclick = () => {
+  const out = document.getElementById('out');
+  const chosen = {};
+  for (const w of WEAPONS) if (sel[w.key] != null) chosen[w.key] = { style: SETS[sel[w.key]].style, svg: iconOf(sel[w.key], w.key) };
+  out.style.display = 'block';
+  out.value = JSON.stringify(chosen, null, 1);
+  out.select();
+};
+render(); renderHud();
+</script>
+</body>
+</html>

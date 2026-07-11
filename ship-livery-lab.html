@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slipstream Vector — Livery Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --cyan:#65f3ff; --magenta:#ff3158; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#04030b; }
+    body {
+      font-family:"Rajdhani",system-ui,sans-serif; color:#fff;
+      background:
+        radial-gradient(circle at 50% 22%, rgba(101,243,255,0.10), transparent 34%),
+        radial-gradient(ellipse at 50% 94%, rgba(101,243,255,0.06), transparent 50%),
+        linear-gradient(180deg,#0e1426 0%,#070a16 60%,#020106 100%);
+    }
+    #stage { position:fixed; inset:0; }
+    canvas { display:block; }
+    .scan { position:fixed; inset:0; pointer-events:none; opacity:.34; mix-blend-mode:screen;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,.026) 0 1px, transparent 1px 4px),
+        radial-gradient(ellipse at 50% 42%, transparent 48%, rgba(0,0,0,.5) 100%); }
+    .title { position:fixed; left:28px; top:22px; pointer-events:none; transform:skewX(-8deg); }
+    .title .tag { font-size:11px; font-weight:700; letter-spacing:.34em; color:var(--cyan); text-shadow:0 0 12px rgba(101,243,255,.7); }
+    .title h1 { margin-top:4px; font-family:"Orbitron",monospace; font-size:clamp(30px,4vw,56px); line-height:.9; letter-spacing:.08em;
+      background:linear-gradient(180deg,#fff 22%,var(--cyan) 60%,var(--magenta) 98%); -webkit-background-clip:text; background-clip:text; color:transparent;
+      filter:drop-shadow(4px 4px 0 rgba(255,49,88,.14)) drop-shadow(0 0 20px rgba(101,243,255,.24)); }
+    .title .pitch { margin-top:8px; font-weight:600; font-size:14px; letter-spacing:.04em; color:rgba(223,230,255,.72); max-width:360px; transform:skewX(8deg); }
+    /* livery swatch dock */
+    .dock { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); display:flex; gap:14px; z-index:5; }
+    .sw { width:150px; padding:10px 12px 11px; cursor:pointer; background:rgba(8,10,20,0.7); border:1px solid rgba(255,255,255,0.12);
+      border-top:2px solid rgba(255,255,255,0.18); clip-path:polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+      backdrop-filter:blur(8px); transition:transform .12s, border-color .12s; }
+    .sw:hover { transform:translateY(-3px); }
+    .sw.active { border-top-color:var(--cyan); box-shadow:0 0 26px rgba(101,243,255,0.18); }
+    .sw .nm { font-family:"Orbitron",monospace; font-weight:700; font-size:12px; letter-spacing:.08em; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sw .chips { display:flex; gap:5px; margin-top:8px; }
+    .sw .chips i { width:22px; height:13px; border-radius:2px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
+    .hint { position:fixed; right:24px; top:24px; text-align:right; pointer-events:none; font-weight:600; font-size:12px; line-height:1.5; color:rgba(223,230,255,.6); }
+    .hint b { color:#fff; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="scan"></div>
+  <div class="title"><div class="tag">SLIPSTREAM VECTOR · LIVERY LAB</div><h1 id="liv-name">—</h1><div class="pitch" id="liv-pitch">—</div></div>
+  <div class="hint"><b>Premium-färgsättning.</b><br>Klicka en livery nedan.<br>Fortfarande platt neon, obelyst.</div>
+  <div class="dock" id="dock"></div>
+
+  <script type="importmap">
+  { "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+    import { buildShipMesh } from "./src/ship/shipVisual.js";
+    import { TUNING } from "./src/config.js";
+    const ENGINE_COL = TUNING.COL.ENGINE; // baked engine-glow colour to re-tint per livery
+
+    // ===== LIVERIES (placeholder premium set — replaced by the director's specs) =====
+    const LIVERIES = [
+      { name: "Apex Works 01",    pitch: "Works-team white-over-navy with one brutal slash of signal orange — confident because it's restrained.", hull:"#f5f2e9", bellyTint:"#121829", accent:"#ff4d0a", accent2:"#3a6ea8", glow:"#10e0ff", rim:"#ff661a", domeTint:"#0b1330" },
+      { name: "Carbon Vyper",     pitch: "A carbon-black blade outlined in toxic acid green — stealthy, surgical, permanently charged.", hull:"#16191f", bellyTint:"#0a0c10", accent:"#9dff1f", accent2:"#5a6b14", glow:"#aaff2b", rim:"#b6ff3a", domeTint:"#101a0a" },
+      { name: "Garnet Sovereign", pitch: "Blood-garnet plunging to oxblood, one disciplined line of champagne gold — old-money menace.", hull:"#5a0f1e", bellyTint:"#1c060d", accent:"#f0cd84", accent2:"#b07a2e", glow:"#ffcf5c", rim:"#ffe6a6", domeTint:"#2a0f14" },
+      { name: "Iris Prism",       pitch: "Cool pearl-steel flagship that banks from cyan to magenta — honest holographic, zero shaders.", hull:"#cdd6e8", bellyTint:"#2a2350", accent:"#ff3df0", accent2:"#19f0ff", glow:"#3affd0", rim:"#7df6ff", domeTint:"#241a52", irid:true },
+    ];
+
+    const stage = document.getElementById("stage");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    stage.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x06091a, 11, 40);
+    const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 1.45, 7.6); camera.lookAt(0, 0.36, 0);
+    const FLOOR_Y = -1.05;
+
+    // ---- helpers ----
+    function radialTex(stops) {
+      const s = 128, cv = document.createElement("canvas"); cv.width = cv.height = s;
+      const c = cv.getContext("2d"); const g = c.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+      for (const [o, col] of stops) g.addColorStop(o, col);
+      c.fillStyle = g; c.fillRect(0, 0, s, s);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+    }
+    const GLOWTEX = radialTex([[0, "rgba(255,255,255,1)"], [0.22, "rgba(255,255,255,0.65)"], [1, "rgba(255,255,255,0)"]]);
+    const glowSprite = (color, scale, opacity) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOWTEX, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      s.scale.setScalar(scale); return s;
+    };
+    function celMat(hex, opts = {}) {
+      return new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color(hex) }, uRim: { value: new THREE.Color(opts.rim ?? 0x65f3ff) }, uRimS: { value: opts.rimS ?? 0.32 } },
+        vertexShader: `varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vN=normalize(normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vNv=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+        fragmentShader: `uniform vec3 uColor; uniform vec3 uRim; uniform float uRimS; varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vec3 N=normalize(vN); float k=max(dot(N,normalize(vec3(0.34,0.86,0.38))),0.0); float kq=floor(k*3.0+0.5)/3.0; float sh=mix(0.70,1.18,kq);
+            float ao=mix(0.64,1.0,clamp(N.y*0.5+0.5,0.0,1.0)); float rim=pow(1.0-max(dot(normalize(vNv),normalize(vV)),0.0),2.6);
+            gl_FragColor=vec4(uColor*sh*ao + uRim*rim*uRimS, 1.0); }`,
+        side: THREE.DoubleSide,
+      });
+    }
+    const hex = (h) => new THREE.Color(h);
+    const mixC = (a, b, t) => hex(a).lerp(hex(b), t);
+    // re-tint the baked engine-glow vertices (cyan) to the livery's glow colour
+    function retintGlow(geo, fromCol, toHex) {
+      const c = geo.attributes.color; if (!c) return;
+      const f = new THREE.Color(fromCol), to = new THREE.Color(toHex);
+      for (let i = 0; i < c.count; i++) {
+        if (Math.abs(c.getX(i)-f.r) < 0.14 && Math.abs(c.getY(i)-f.g) < 0.14 && Math.abs(c.getZ(i)-f.b) < 0.14) c.setXYZ(i, to.r, to.g, to.b);
+      }
+      c.needsUpdate = true;
+    }
+
+    // ---- environment ----
+    scene.add(new THREE.GridHelper(140, 70, 0x2c5a6e, 0x15303c)).position.y = FLOOR_Y + 0.004;
+    const grid = scene.children[scene.children.length - 1]; grid.material.transparent = true; grid.material.opacity = 0.42; grid.material.fog = true;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), new THREE.MeshBasicMaterial({ color: 0x05070f, transparent: true, opacity: 0.6, depthWrite: false, fog: true }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.renderOrder = 2; scene.add(floor);
+    const horizon = glowSprite(0x4fd8ff, 1, 0.26); horizon.scale.set(64, 11, 1); horizon.position.set(0, -0.3, -22); scene.add(horizon);
+    const platRing = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.16, 80), new THREE.MeshBasicMaterial({ color: 0x65f3ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    platRing.rotation.x = -Math.PI / 2; platRing.position.y = FLOOR_Y + 0.01; scene.add(platRing);
+    const halo = glowSprite(0x65f3ff, 8.5, 0.2); halo.position.set(0, 0.7, -3.2); scene.add(halo);
+
+    // ---- engines (lit nozzle glow + plume) ----
+    const NOZ = [[-1.05, 0.06, 2.46], [1.05, 0.06, 2.46]];
+    const plumeGeo = new THREE.ConeGeometry(0.15, 1, 16); plumeGeo.rotateX(-Math.PI / 2); plumeGeo.translate(0, 0, 0.5);
+    function addEngines(ship, glowHex) {
+      for (const n of NOZ) {
+        const g = glowSprite(glowHex, 1.5, 0.85); g.position.set(n[0], n[1], n[2] + 0.15); ship.add(g);
+        const core = glowSprite(0xffffff, 0.66, 0.9); core.position.set(n[0], n[1], n[2] + 0.12); ship.add(core);
+        const plume = new THREE.Mesh(plumeGeo, new THREE.MeshBasicMaterial({ color: glowHex, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+        plume.position.set(n[0], n[1], n[2] + 0.06); plume.scale.set(1, 1, 1.5); ship.add(plume);
+      }
+    }
+
+    // ===== the pimped ship, built from a livery spec =====
+    function buildPimped(L) {
+      const ship = buildShipMesh({ scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1, hull: hex(L.hull).getHex(), accent: hex(L.accent).getHex() });
+      retintGlow(ship.children[1].geometry, ENGINE_COL, L.glow); // baked cyan glow → livery glow
+      const metal = mixC(L.hull, L.bellyTint, 0.62);
+      // hull shader: cel form + AO + gloss + two-tone (mix to bellyTint) + dual rim (optional iridescent)
+      const hull = ship.children[0];
+      hull.material = new THREE.ShaderMaterial({
+        uniforms: { rimCol: { value: hex(L.rim) }, rim2Col: { value: hex(L.glow) }, uBelly: { value: hex(L.bellyTint) }, rimStrength: { value: 0.66 }, uBoost: { value: 0 },
+          uRimA: { value: hex(L.irid ? L.accent : L.rim) }, uRimB: { value: hex(L.irid ? L.accent2 : L.rim) }, uIrid: { value: L.irid ? 1 : 0 } },
+        vertexShader: `attribute vec3 color; varying vec3 vColor; varying vec3 vNobj; varying vec3 vNview; varying vec3 vView; varying float vPosY;
+          void main(){ vColor=color; vNobj=normalize(normal); vPosY=position.y; vec4 mv=modelViewMatrix*vec4(position,1.0); vNview=normalize(normalMatrix*normal); vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+        fragmentShader: `uniform vec3 rimCol; uniform vec3 rim2Col; uniform vec3 uBelly; uniform float rimStrength; uniform float uBoost;
+          uniform vec3 uRimA; uniform vec3 uRimB; uniform float uIrid;
+          varying vec3 vColor; varying vec3 vNobj; varying vec3 vNview; varying vec3 vView; varying float vPosY;
+          void main(){ vec3 No=normalize(vNobj); float key=max(dot(No,normalize(vec3(0.34,0.86,0.38))),0.0);
+            float kq=floor(key*3.0+0.5)/3.0; float shade=mix(0.82,1.20,kq); float ao=mix(0.72,1.0,clamp(No.y*0.5+0.5,0.0,1.0));
+            vec3 base=vColor*shade*ao; float belly=smoothstep(0.16,-0.10,vPosY); base=mix(base,uBelly,belly*0.72);
+            float gloss=smoothstep(0.88,0.99,key); base+=gloss*0.16;
+            float rim=pow(1.0-max(dot(normalize(vNview),normalize(vView)),0.0),2.4);
+            vec3 irid=mix(uRimA, uRimB, clamp(vNview.x*0.6+0.5, 0.0, 1.0)); // banks across the silhouette as it turns
+            vec3 baseRim=mix(rimCol, irid, uIrid); vec3 rc=mix(baseRim,vec3(1.0),uBoost*0.4);
+            float rs=rimStrength*mix(1.0,1.6,uBoost); float coolMask=clamp(-No.y*1.4,0.0,1.0);
+            gl_FragColor=vec4(base + rc*rim*rs + rim2Col*rim*coolMask*0.5, 1.0); }`,
+        side: THREE.DoubleSide,
+      });
+      const pglow = ship.children[1]; pglow.material = pglow.material.clone(); pglow.material.opacity = 1.0;
+
+      // --- greebles: high-poly engines + smooth fins + rounded overlays + canopy ---
+      const B = { graphite: [], accent: [], glow: [] };
+      const o = new THREE.Object3D();
+      const put = (geo, b, x, y, z, rx = 0, ry = 0, rz = 0) => { o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(1, 1, 1); o.updateMatrix(); const gg = geo.clone(); gg.applyMatrix4(o.matrix); gg.deleteAttribute("uv"); B[b].push(gg); };
+      for (const sx of [-1, 1]) {
+        const ex = sx * 1.05;
+        put(new THREE.CylinderGeometry(0.27, 0.32, 0.52, 64, 1, true), "graphite", ex, 0.06, 2.16, Math.PI / 2);
+        put(new THREE.CylinderGeometry(0.20, 0.27, 0.18, 64, 1, true), "graphite", ex, 0.06, 1.90, Math.PI / 2);
+        put(new THREE.TorusGeometry(0.295, 0.045, 28, 96), "accent", ex, 0.06, 2.44);
+        put(new THREE.TorusGeometry(0.235, 0.030, 24, 90), "glow", ex, 0.06, 2.40);
+        put(new THREE.TorusGeometry(0.30, 0.020, 14, 72), "graphite", ex, 0.06, 1.97);
+        put(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 32), "graphite", ex, 0.06, 2.30, Math.PI / 2);
+        for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; put(new THREE.BoxGeometry(0.02, 0.2, 0.045), "graphite", ex + Math.cos(a) * 0.135, 0.06 + Math.sin(a) * 0.135, 2.33, 0, 0, a); }
+        put(new THREE.TorusGeometry(0.15, 0.012, 16, 80), "graphite", ex, 0.06, 2.36);
+        put(new THREE.TorusGeometry(0.10, 0.010, 14, 64), "glow", ex, 0.06, 2.405);
+        put(new THREE.CircleGeometry(0.185, 64), "glow", ex, 0.06, 2.45);
+      }
+      const g = new THREE.Group();
+      const mats = {
+        graphite: celMat(metal.getHex(), { rim: hex(L.rim).getHex(), rimS: 0.30 }),
+        accent: new THREE.MeshBasicMaterial({ color: hex(L.accent) }),
+        glow: new THREE.MeshBasicMaterial({ color: hex(L.glow), transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      };
+      for (const k in B) if (B[k].length) g.add(new THREE.Mesh(mergeGeometries(B[k], false), mats[k]));
+
+      // smooth fins / overlays
+      const V = (x, y, z) => new THREE.Vector3(x, y, z);
+      const roundedShape = (pts, r) => {
+        const sh = new THREE.Shape(); const n = pts.length;
+        const sub = (a, b) => [a[0]-b[0], a[1]-b[1]], Ln = (v) => Math.hypot(v[0],v[1]) || 1, nz = (v) => { const l = Ln(v); return [v[0]/l, v[1]/l]; };
+        for (let i = 0; i < n; i++) { const cur = pts[i], prev = pts[(i-1+n)%n], next = pts[(i+1)%n];
+          const v1 = nz(sub(prev,cur)), v2 = nz(sub(next,cur)); const rr = Math.min(r, Ln(sub(prev,cur))*0.45, Ln(sub(next,cur))*0.45);
+          const p1 = [cur[0]+v1[0]*rr, cur[1]+v1[1]*rr], p2 = [cur[0]+v2[0]*rr, cur[1]+v2[1]*rr];
+          if (i === 0) sh.moveTo(p1[0], p1[1]); else sh.lineTo(p1[0], p1[1]); sh.quadraticCurveTo(cur[0], cur[1], p2[0], p2[1]); }
+        sh.closePath(); return sh;
+      };
+      const quadFin = (p0, p1, p2, p3, expand = 0.05, r = 0.13, thick = 0.06) => {
+        const C = [p0, p1, p2, p3]; const cen = new THREE.Vector3(); C.forEach((p) => cen.add(p)); cen.multiplyScalar(0.25);
+        const E = C.map((p) => p.clone().add(p.clone().sub(cen).normalize().multiplyScalar(expand)));
+        const ex = new THREE.Vector3().subVectors(E[1], E[0]).normalize();
+        const nrm = new THREE.Vector3().crossVectors(ex, new THREE.Vector3().subVectors(E[3], E[0])).normalize();
+        const ey = new THREE.Vector3().crossVectors(nrm, ex).normalize();
+        const to2 = (p) => { const d = new THREE.Vector3().subVectors(p, E[0]); return [d.dot(ex), d.dot(ey)]; };
+        const geo = new THREE.ExtrudeGeometry(roundedShape(E.map(to2), r), { depth: thick, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 3, steps: 1, curveSegments: 16 });
+        const m = new THREE.Matrix4().makeBasis(ex, ey, nrm); m.setPosition(E[0].clone().addScaledVector(nrm, -thick / 2)); geo.applyMatrix4(m); return geo;
+      };
+      const finMat = celMat(hex(L.accent).getHex(), { rim: mixC(L.accent, "#ffffff", 0.55).getHex(), rimS: 0.42 });
+      const hullCel = celMat(hex(L.hull).getHex(), { rim: hex(L.accent).getHex(), rimS: 0.26 });
+      const fins = new THREE.Group();
+      fins.add(new THREE.Mesh(quadFin(V(0,0.42,0.95), V(0,0.94,2.22), V(0,0.30,2.42), V(0,0.32,1.05), 0.05, 0.18), finMat));
+      for (const sx of [-1, 1]) fins.add(new THREE.Mesh(quadFin(V(sx*1.20,0.30,0.95), V(sx*1.66,0.62,1.75), V(sx*1.62,0.58,2.15), V(sx*1.18,0.26,2.05), 0.05, 0.12), finMat));
+      g.add(fins);
+      for (const sx of [-1, 1]) { const cap = new THREE.Mesh(new THREE.SphereGeometry(0.09, 28, 20), hullCel); cap.scale.set(1.0, 0.85, 1.85); cap.position.set(sx * 0.62, 0.05, -2.62); g.add(cap); }
+      for (const sx of [-1, 1]) g.add(new THREE.Mesh(quadFin(V(sx*0.32,0.12,-0.05), V(sx*0.95,0.12,0.55), V(sx*0.95,0.10,1.45), V(sx*0.32,0.12,0.80), 0.03, 0.16, 0.075), hullCel));
+      for (const sx of [-1, 1]) g.add(new THREE.Mesh(quadFin(V(sx*0.84,0.03,-1.82), V(sx*1.18,0.11,-1.50), V(sx*1.16,0.09,-1.34), V(sx*0.84,0.01,-1.60), 0.02, 0.06, 0.05), finMat));
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.23, 80, 52, 0, Math.PI * 2, 0, Math.PI * 0.55), celMat(hex(L.domeTint).getHex(), { rim: hex(L.glow).getHex(), rimS: 0.8 }));
+      dome.scale.set(0.9, 0.72, 1.5); dome.position.set(0, 0.37, 0.2); g.add(dome);
+      ship.add(g);
+      addEngines(ship, hex(L.glow).getHex());
+      return ship;
+    }
+
+    // ---- hero pivot + reflection + livery switching ----
+    const pivot = new THREE.Group(); pivot.position.set(0, 0.34, 0); scene.add(pivot);
+    let current = null, reflGroup = null;
+    function setLivery(i) {
+      const L = LIVERIES[i];
+      if (current) { pivot.remove(current); }
+      if (reflGroup) { pivot.remove(reflGroup); }
+      current = buildPimped(L);
+      pivot.add(current);
+      // reflection (hull + glow clones, mirrored under the floor)
+      reflGroup = new THREE.Group(); reflGroup.scale.set(1, -1, 1); reflGroup.position.y = 2 * (FLOOR_Y - pivot.position.y);
+      const hull = current.children[0], pg = current.children[1];
+      reflGroup.add(new THREE.Mesh(hull.geometry, new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xaab6c8, transparent: true, opacity: 0.16, depthWrite: false, fog: true, side: THREE.DoubleSide })));
+      reflGroup.add(new THREE.Mesh(pg.geometry, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false, fog: true, side: THREE.DoubleSide })));
+      pivot.add(reflGroup);
+      // recolour the stage to the livery
+      platRing.material.color = hex(L.glow); halo.material.color = hex(L.glow); horizon.material.color = hex(L.glow);
+      // labels
+      document.getElementById("liv-name").textContent = L.name;
+      document.getElementById("liv-pitch").textContent = L.pitch;
+      [...document.querySelectorAll(".sw")].forEach((el, k) => el.classList.toggle("active", k === i));
+    }
+
+    // ---- swatch dock ----
+    const dock = document.getElementById("dock");
+    LIVERIES.forEach((L, i) => {
+      const b = document.createElement("div"); b.className = "sw";
+      b.innerHTML = `<div class="nm">${L.name}</div><div class="chips"><i style="background:${L.hull}"></i><i style="background:${L.accent}"></i><i style="background:${L.glow}"></i><i style="background:${L.bellyTint}"></i></div>`;
+      b.addEventListener("click", () => setLivery(i));
+      dock.appendChild(b);
+    });
+    setLivery(1); // open on Carbon Vyper (a favourite)
+
+    addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+    let t = 0;
+    function frame() {
+      requestAnimationFrame(frame);
+      t += 0.0045;
+      pivot.rotation.y = 2.25 + Math.sin(t) * 0.5;
+      if (current) current.position.y = Math.sin(t * 2.0) * 0.04;
+      renderer.render(scene, camera);
+    }
+    frame();
+    window.__lab = { scene, camera, renderer, setLivery, LIVERIES };
+  </script>
+</body>
+</html>

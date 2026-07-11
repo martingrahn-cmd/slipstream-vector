@@ -2,10 +2,15 @@
 .DS_Store
 **/.DS_Store
 
-# Editor / tooling
-.claude/
+# Editor / tooling (launch.json is committed so the dev server config
+# travels with the repo; everything else in .claude/ stays machine-local)
+.claude/*
+!.claude/launch.json
 .vscode/
 .idea/
+
+# Working files (contact sheets, batch-render output — never ship these)
+exports/
 
 # Dependencies (this is a CDN import-map project with no build step, but
 # future-proof in case a toolchain is added later)

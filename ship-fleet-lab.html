@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slipstream Vector — Fleet Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --cyan:#65f3ff; --magenta:#ff3158; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#04030b; }
+    body { font-family:"Rajdhani",system-ui,sans-serif; color:#fff;
+      background:radial-gradient(circle at 50% 24%, rgba(101,243,255,0.10), transparent 36%),
+        radial-gradient(ellipse at 50% 94%, rgba(101,243,255,0.06), transparent 50%),
+        linear-gradient(180deg,#0e1426 0%,#070a16 60%,#020106 100%); }
+    #stage { position:fixed; inset:0; }
+    canvas { display:block; }
+    .scan { position:fixed; inset:0; pointer-events:none; opacity:.32; mix-blend-mode:screen;
+      background:repeating-linear-gradient(0deg, rgba(255,255,255,.026) 0 1px, transparent 1px 4px),
+        radial-gradient(ellipse at 50% 42%, transparent 48%, rgba(0,0,0,.5) 100%); }
+    .title { position:fixed; left:28px; top:22px; pointer-events:none; transform:skewX(-8deg); }
+    .title .tag { font-size:11px; font-weight:700; letter-spacing:.34em; color:var(--cyan); text-shadow:0 0 12px rgba(101,243,255,.7); }
+    .title h1 { margin-top:4px; font-family:"Orbitron",monospace; font-size:clamp(30px,4vw,56px); line-height:.9; letter-spacing:.08em;
+      background:linear-gradient(180deg,#fff 22%,var(--cyan) 60%,var(--magenta) 98%); -webkit-background-clip:text; background-clip:text; color:transparent;
+      filter:drop-shadow(4px 4px 0 rgba(255,49,88,.14)) drop-shadow(0 0 20px rgba(101,243,255,.24)); }
+    .title .pitch { margin-top:8px; font-weight:600; font-size:14px; letter-spacing:.03em; color:rgba(223,230,255,.74); max-width:380px; transform:skewX(8deg); }
+    .title .stat { margin-top:3px; font-weight:700; font-size:12px; letter-spacing:.14em; transform:skewX(8deg); }
+    .dock { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); display:flex; gap:14px; z-index:5; }
+    .sw { width:160px; padding:10px 12px 11px; cursor:pointer; background:rgba(8,10,20,0.7); border:1px solid rgba(255,255,255,0.12);
+      border-top:2px solid rgba(255,255,255,0.18); clip-path:polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+      backdrop-filter:blur(8px); transition:transform .12s, border-color .12s; }
+    .sw:hover { transform:translateY(-3px); }
+    .sw.active { border-top-color:var(--cyan); box-shadow:0 0 26px rgba(101,243,255,0.18); }
+    .sw .nm { font-family:"Orbitron",monospace; font-weight:700; font-size:12px; letter-spacing:.06em; white-space:nowrap; }
+    .sw .role { margin-top:4px; font-weight:600; font-size:11px; letter-spacing:.1em; color:rgba(223,230,255,.6); }
+    .hint { position:fixed; right:24px; top:24px; text-align:right; pointer-events:none; font-weight:600; font-size:12px; line-height:1.5; color:rgba(223,230,255,.6); }
+    .hint b { color:#fff; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="scan"></div>
+  <div class="title"><div class="tag">SLIPSTREAM VECTOR · FLEET LAB</div><h1 id="t-name">—</h1><div class="stat" id="t-stat">—</div><div class="pitch" id="t-pitch">—</div></div>
+  <div class="hint"><b>4 stall, 4 distinkta skepp.</b><br>Klicka ett stall nedan.<br>VEKTOR = riktiga skeppet · övriga = silhuett-koncept.</div>
+  <div class="dock" id="dock"></div>
+
+  <script type="importmap">
+  { "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { buildShipMesh } from "./src/ship/shipVisual.js";
+
+    const stage = document.getElementById("stage");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    stage.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x06091a, 12, 42);
+    const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 2.5, 10.8); camera.lookAt(0, 0.15, 0);
+    const FLOOR_Y = -1.05;
+    const hx = (h) => new THREE.Color(h);
+
+    // ---- env ----
+    const grid = new THREE.GridHelper(140, 70, 0x2c5a6e, 0x15303c);
+    grid.position.y = FLOOR_Y + 0.004; grid.material.transparent = true; grid.material.opacity = 0.42; grid.material.fog = true; scene.add(grid);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), new THREE.MeshBasicMaterial({ color: 0x05070f, transparent: true, opacity: 0.6, depthWrite: false, fog: true }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.renderOrder = 2; scene.add(floor);
+    function radialTex() { const s = 128, cv = document.createElement("canvas"); cv.width = cv.height = s; const c = cv.getContext("2d");
+      const g = c.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.22, "rgba(255,255,255,0.65)"); g.addColorStop(1, "rgba(255,255,255,0)");
+      c.fillStyle = g; c.fillRect(0, 0, s, s); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; }
+    const GLOW = radialTex();
+    const glowSprite = (color, scale, opacity) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); s.scale.setScalar(scale); return s; };
+    const platRing = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.16, 80), new THREE.MeshBasicMaterial({ color: 0x65f3ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+    platRing.rotation.x = -Math.PI / 2; platRing.position.y = FLOOR_Y + 0.01; scene.add(platRing);
+    const halo = glowSprite(0x65f3ff, 8.5, 0.2); halo.position.set(0, 0.7, -3.2); scene.add(halo);
+
+    // ---- unlit cel material (flat 3-step form + AO + rim), per-part uniform colour ----
+    function celMat(hex, opts = {}) {
+      return new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: hx(hex) }, uRim: { value: hx(opts.rim ?? 0x65f3ff) }, uRimS: { value: opts.rimS ?? 0.34 } },
+        vertexShader: `varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vN=normalize(normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vNv=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+        fragmentShader: `uniform vec3 uColor; uniform vec3 uRim; uniform float uRimS; varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vec3 N=normalize(vN); float k=max(dot(N,normalize(vec3(0.34,0.86,0.38))),0.0); float kq=floor(k*3.0+0.5)/3.0; float sh=mix(0.72,1.18,kq);
+            float ao=mix(0.66,1.0,clamp(N.y*0.5+0.5,0.0,1.0)); float rim=pow(1.0-max(dot(normalize(vNv),normalize(vV)),0.0),2.6);
+            gl_FragColor=vec4(uColor*sh*ao + uRim*rim*uRimS, 1.0); }`,
+        side: THREE.DoubleSide,
+      });
+    }
+
+    // ---- geometry helpers (flat-shaded, non-indexed) ----
+    function geoFrom(pos) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; }
+    // loft closed cross-sections (each: {z, pts:[[x,y]...]}) into a tube; optional caps.
+    function loft(stations, { capStart = false, capEnd = false } = {}) {
+      const pos = [], ring = (st) => st.pts.map(([x, y]) => [x, y, st.z]);
+      for (let i = 0; i < stations.length - 1; i++) {
+        const A = ring(stations[i]), B = ring(stations[i + 1]), n = A.length;
+        for (let j = 0; j < n; j++) { const k = (j + 1) % n; pos.push(...A[j], ...A[k], ...B[k], ...A[j], ...B[k], ...B[j]); }
+      }
+      const cap = (st, rev) => { const r = ring(st), c = [r.reduce((s, p) => s + p[0], 0) / r.length, r.reduce((s, p) => s + p[1], 0) / r.length, st.z];
+        for (let j = 0; j < r.length; j++) { const k = (j + 1) % r.length; if (rev) pos.push(...c, ...r[k], ...r[j]); else pos.push(...c, ...r[j], ...r[k]); } };
+      if (capStart) cap(stations[0], true); if (capEnd) cap(stations[stations.length - 1], false);
+      return geoFrom(pos);
+    }
+    // flat triangular plate (wing / fin / canard), extruded `t` along an axis.
+    function plate(a, b, c, t, axis = "y") {
+      const off = (p, s) => axis === "y" ? [p[0], p[1] + s, p[2]] : axis === "x" ? [p[0] + s, p[1], p[2]] : [p[0], p[1], p[2] + s];
+      const T = [off(a, t / 2), off(b, t / 2), off(c, t / 2)], B = [off(a, -t / 2), off(b, -t / 2), off(c, -t / 2)], pos = [];
+      pos.push(...T[0], ...T[1], ...T[2]); pos.push(...B[0], ...B[2], ...B[1]);
+      for (let i = 0; i < 3; i++) { const j = (i + 1) % 3; pos.push(...T[i], ...T[j], ...B[j], ...T[i], ...B[j], ...B[i]); }
+      return geoFrom(pos);
+    }
+    const mirX = (geo) => { const g = geo.clone(); const p = g.getAttribute("position"); for (let i = 0; i < p.count; i++) p.setX(i, -p.getX(i)); g.computeVertexNormals(); return g; };
+    // cross-section presets (x,y polygon)
+    const hexa = (w, t, m, b) => [[-w, m], [-w * 0.5, t], [w * 0.5, t], [w, m], [w * 0.5, b], [-w * 0.5, b]];
+
+    // engine block: dark nacelle + neon ring + glowing core + plume + glow sprite.
+    function engine(group, x, z, r, glowHex) {
+      const nac = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.12, r * 2.2, 28, 1, true), celMat(0x2c333f, { rim: 0x9fb6d8, rimS: 0.3 }));
+      nac.rotation.x = Math.PI / 2; nac.position.set(x, 0.04, z); group.add(nac);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r * 1.04, r * 0.13, 16, 36), new THREE.MeshBasicMaterial({ color: glowHex, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.position.set(x, 0.04, z + r * 1.05); group.add(ring);
+      const core = new THREE.Mesh(new THREE.CircleGeometry(r * 0.8, 30), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      core.position.set(x, 0.04, z + r * 1.06); group.add(core);
+      const spr = glowSprite(glowHex, r * 4.2, 0.85); spr.position.set(x, 0.04, z + r * 1.2); group.add(spr);
+    }
+    const accentLine = (a, b, color, w = 0.03) => { const g = plate(a, [b[0], b[1] + w, b[2]], b, 0.01, "y"); return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); };
+
+    // ===================== the four ships =====================
+    // VEKTOR — the real PRONGHORN, with the premium cel/two-tone hull shader.
+    function buildVektor() {
+      const ship = buildShipMesh({ scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1, hull: 0xe8e4f0, accent: 0xff2e88 });
+      const hull = ship.children[0];
+      hull.material = celMatVColor(0xff2e88);   // reuse cel look on the baked vertex colours
+      const g = new THREE.Group(); g.add(ship);
+      engine(g, -1.05, 2.1, 0.26, 0x65f3ff); engine(g, 1.05, 2.1, 0.26, 0x65f3ff);
+      return g;
+    }
+    // a vertex-colour cel variant for the real ship's baked hull
+    function celMatVColor(rimHex) {
+      return new THREE.ShaderMaterial({
+        uniforms: { uRim: { value: hx(rimHex) }, uRimS: { value: 0.4 } },
+        vertexShader: `attribute vec3 color; varying vec3 vColor; varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vColor=color; vN=normalize(normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vNv=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+        fragmentShader: `uniform vec3 uRim; uniform float uRimS; varying vec3 vColor; varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vec3 N=normalize(vN); float k=max(dot(N,normalize(vec3(0.34,0.86,0.38))),0.0); float kq=floor(k*3.0+0.5)/3.0; float sh=mix(0.84,1.16,kq);
+            float ao=mix(0.7,1.0,clamp(N.y*0.5+0.5,0.0,1.0)); float rim=pow(1.0-max(dot(normalize(vNv),normalize(vV)),0.0),2.4);
+            gl_FragColor=vec4(vColor*sh*ao + uRim*rim*uRimS, 1.0); }`,
+        side: THREE.DoubleSide,
+      });
+    }
+
+    // HALCYON — handling: a low, wide, soft-curved MANTA wing-body that glides.
+    function buildHalcyon() {
+      const g = new THREE.Group();
+      const hull = hx(0xfff3e0).getHex(), acc = 0xffb13d;
+      // wide flat lens cross-section (slightly domed top, flatter belly)
+      const lens = (W, T) => [[-W, 0], [-W * 0.55, T * 0.55], [0, T], [W * 0.55, T * 0.55], [W, 0], [W * 0.55, -T * 0.45], [0, -T * 0.62], [-W * 0.55, -T * 0.45]];
+      // a SLIM manta: narrower than the speed delta, longer + sleeker for handling
+      const body = loft([
+        { z: -2.0, pts: lens(0.22, 0.12) },
+        { z: -1.2, pts: lens(0.62, 0.16) },
+        { z: -0.35, pts: lens(1.1, 0.16) },
+        { z: 0.4, pts: lens(1.3, 0.14) },
+        { z: 1.2, pts: lens(0.95, 0.12) },
+        { z: 1.9, pts: lens(0.5, 0.1) },
+        { z: 2.45, pts: lens(0.16, 0.07) },
+      ], { capStart: true, capEnd: true });
+      g.add(new THREE.Mesh(body, celMat(hull, { rim: acc, rimS: 0.34 })));
+      // gently upturned wingtip winglets
+      const tip = plate([1.2, 0.0, 0.2], [1.42, 0.26, 0.5], [1.0, 0.0, 0.8], 0.04, "x");
+      g.add(new THREE.Mesh(tip, celMat(acc, { rim: 0xffffff, rimS: 0.3 })));
+      g.add(new THREE.Mesh(mirX(tip), celMat(acc, { rim: 0xffffff, rimS: 0.3 })));
+      // dorsal accent ridge + swept wing-edge accents
+      g.add(accentLine([0, 0.15, -1.6], [0, 0.10, 1.9], acc));
+      // twin integrated engines low at the tail
+      engine(g, -0.36, 2.05, 0.2, 0x9fe0ff); engine(g, 0.36, 2.05, 0.2, 0x9fe0ff);
+      return g;
+    }
+
+    // RAZORBACK — speed: wide, low, forward-swept delta arrow, sharp nose.
+    function buildRazorback() {
+      const g = new THREE.Group();
+      const hull = hx(0x2a1620).getHex(), acc = 0xff3d2e;
+      const body = loft([
+        { z: -3.0, pts: hexa(0.05, 0.05, 0.0, -0.05) },
+        { z: -1.4, pts: hexa(0.5, 0.1, 0.0, -0.12) },
+        { z: 0.4, pts: hexa(1.25, 0.13, 0.0, -0.14) },
+        { z: 2.0, pts: hexa(1.7, 0.12, 0.0, -0.12) },
+        { z: 2.5, pts: hexa(1.55, 0.1, 0.0, -0.1) },
+      ], { capStart: true, capEnd: true });
+      g.add(new THREE.Mesh(body, celMat(hull, { rim: acc, rimS: 0.4 })));
+      // forward-swept wing blades along the delta edge
+      const wing = plate([0.5, 0.02, -0.6], [2.2, 0.06, 1.4], [1.5, 0.0, 2.3], 0.05, "y");
+      g.add(new THREE.Mesh(wing, celMat(hull, { rim: acc, rimS: 0.4 })));
+      g.add(new THREE.Mesh(mirX(wing), celMat(hull, { rim: acc, rimS: 0.4 })));
+      // low swept-back dorsal fin at the TAIL (not a nose blade)
+      g.add(new THREE.Mesh(plate([0, 0.12, 0.95], [0, 0.58, 2.05], [0, 0.12, 2.35], 0.05, "x"), celMat(acc, { rim: 0xffffff, rimS: 0.3 })));
+      g.add(accentLine([0, 0.16, -2.6], [0, 0.14, 2.0], acc));
+      engine(g, -0.95, 2.25, 0.28, 0xff7a3a); engine(g, 0.95, 2.25, 0.28, 0xff7a3a);
+      return g;
+    }
+
+    // NOVASURGE — thrust: short, heavy, twin-boom with big rear engines.
+    function buildNovasurge() {
+      const g = new THREE.Group();
+      const hull = hx(0x3a1b6b).getHex(), acc = 0xffe066;
+      const pod = loft([
+        { z: -1.9, pts: hexa(0.16, 0.18, 0.04, -0.1) },
+        { z: -0.8, pts: hexa(0.46, 0.42, 0.08, -0.2) },
+        { z: 0.6, pts: hexa(0.52, 0.46, 0.08, -0.22) },
+        { z: 1.6, pts: hexa(0.4, 0.34, 0.06, -0.16) },
+      ], { capStart: true, capEnd: true });
+      g.add(new THREE.Mesh(pod, celMat(hull, { rim: acc, rimS: 0.34 })));
+      // twin booms out to the big engines
+      const boom = loft([
+        { z: -0.2, pts: hexa(0.16, 0.14, 0.0, -0.14) },
+        { z: 1.6, pts: hexa(0.26, 0.2, 0.0, -0.2) },
+      ]);
+      const bl = boom.clone(); bl.translate(-0.78, 0.02, 0); g.add(new THREE.Mesh(bl, celMat(hull, { rim: acc, rimS: 0.3 })));
+      const br = boom.clone(); br.translate(0.78, 0.02, 0); g.add(new THREE.Mesh(br, celMat(hull, { rim: acc, rimS: 0.3 })));
+      // big tall fin + intakes
+      g.add(new THREE.Mesh(plate([0, 0.4, 0.4], [0, 1.15, 1.5], [0, 0.4, 1.9], 0.06, "x"), celMat(acc, { rim: 0xffffff, rimS: 0.3 })));
+      g.add(accentLine([0, 0.48, -1.0], [0, 0.42, 1.4], acc));
+      engine(g, -0.78, 2.0, 0.42, 0xffd24a); engine(g, 0.78, 2.0, 0.42, 0xffd24a);
+      return g;
+    }
+
+    const FLEET = [
+      { name: "VEKTOR", role: "ALLROUND", stat: "SPEED ●●● · THRUST ●●● · HANDLING ●●●", pitch: "Den balanserade split-prong-katamaranen. Det riktiga skeppet — referensen.", build: buildVektor, glow: 0x65f3ff },
+      { name: "HALCYON", role: "HANDLING", stat: "SPEED ●● · THRUST ●●● · HANDLING ●●●●●", pitch: "Låg, bred manta-vinge som glider genom kurvorna — organisk och kurvig, sticker ut från flottan.", build: buildHalcyon, glow: 0x9fe0ff },
+      { name: "RAZORBACK", role: "SPEED", stat: "SPEED ●●●●● · THRUST ●● · HANDLING ●●", pitch: "Bred, låg, framåtlutad deltapil med vass nos. Allt för raksträckan.", build: buildRazorback, glow: 0xff7a3a },
+      { name: "NOVASURGE", role: "THRUST", stat: "SPEED ●● · THRUST ●●●●● · HANDLING ●●●", pitch: "Kort och tung tvilling-bom med stora dubbelmotorer bak. Lever för boost-paden.", build: buildNovasurge, glow: 0xffd24a },
+    ];
+
+    const pivot = new THREE.Group(); pivot.position.set(0, 0.34, 0); scene.add(pivot);
+    let current = null;
+    function setShip(i) {
+      const F = FLEET[i];
+      if (current) pivot.remove(current);
+      current = F.build(); pivot.add(current);
+      platRing.material.color = hx(F.glow); halo.material.color = hx(F.glow);
+      document.getElementById("t-name").textContent = F.name;
+      document.getElementById("t-stat").textContent = F.role;
+      document.getElementById("t-stat").style.color = "#" + hx(F.glow).getHexString();
+      document.getElementById("t-pitch").textContent = F.pitch;
+      [...document.querySelectorAll(".sw")].forEach((el, k) => el.classList.toggle("active", k === i));
+    }
+    const dock = document.getElementById("dock");
+    FLEET.forEach((F, i) => { const b = document.createElement("div"); b.className = "sw";
+      b.innerHTML = `<div class="nm" style="color:#${hx(F.glow).getHexString()}">${F.name}</div><div class="role">${F.role}</div>`;
+      b.addEventListener("click", () => setShip(i)); dock.appendChild(b); });
+    setShip(0);
+
+    addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+    let t = 0;
+    function frame() { requestAnimationFrame(frame); t += 0.0045; pivot.rotation.y = 2.5 + Math.sin(t) * 0.4; if (current) current.position.y = Math.sin(t * 2) * 0.04; renderer.render(scene, camera); }
+    frame();
+    window.__fleet = { setShip, FLEET, scene, camera, renderer };
+  </script>
+</body>
+</html>

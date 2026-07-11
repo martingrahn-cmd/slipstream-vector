@@ -1,0 +1,209 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>SHIP EDITOR</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #07060f; overflow: hidden; font-family: 'Rajdhani', system-ui, sans-serif; color: #dfe6ff; }
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+  #panel { position: fixed; top: 0; left: 0; bottom: 0; width: 300px; background: rgba(10,8,20,0.92); border-right: 1px solid #241a3a; padding: 12px 14px; overflow-y: auto; z-index: 5; }
+  h1 { font-family: 'Orbitron', sans-serif; font-size: 15px; letter-spacing: 0.18em; color: #7df9ff; margin: 2px 0 10px; }
+  .ships { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .ships button, .views button, .act button { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.08em; font-size: 11px; padding: 6px 4px; background: #14102a; color: #b9c4e8; border: 1px solid #2a2050; cursor: pointer; }
+  .ships button.on { background: #7df9ff; color: #05040c; border-color: #7df9ff; }
+  .views { display: flex; gap: 5px; margin: 6px 0 12px; }
+  .views button { flex: 1; padding: 5px 2px; font-size: 10px; }
+  .pilot { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.1em; margin-bottom: 10px; color: #8a93b8; }
+  .pilot button { font-family: 'Rajdhani'; font-weight: 700; font-size: 11px; padding: 3px 9px; background: #14102a; color: #b9c4e8; border: 1px solid #2a2050; cursor: pointer; }
+  .pilot button.on { background: #ff3df0; color: #05040c; border-color: #ff3df0; }
+  .grp { font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.2em; color: #6a6a8f; margin: 12px 0 4px; border-bottom: 1px solid #201838; padding-bottom: 3px; }
+  .row { display: grid; grid-template-columns: 62px 1fr 40px; align-items: center; gap: 6px; margin: 4px 0; }
+  .row label { font-size: 11px; letter-spacing: 0.06em; color: #aab3d8; }
+  .row input[type=range] { width: 100%; accent-color: #7df9ff; }
+  .row .val { font-family: 'Orbitron', monospace; font-size: 10px; color: #7df9ff; text-align: right; }
+  .crow { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; margin: 4px 0; }
+  .crow label { font-size: 11px; letter-spacing: 0.06em; color: #aab3d8; }
+  .crow input[type=color] { width: 100%; height: 22px; border: 1px solid #2a2050; background: #14102a; cursor: pointer; padding: 1px; }
+  .crow input[type=checkbox] { width: 16px; height: 16px; accent-color: #7df9ff; justify-self: start; }
+  .act { display: flex; gap: 6px; margin-top: 14px; }
+  .act button { flex: 1; padding: 7px; }
+  #out { width: 100%; height: 128px; margin-top: 8px; background: #05040c; color: #9ff7c0; border: 1px solid #2a2050; font-family: monospace; font-size: 10px; padding: 6px; resize: vertical; display: none; }
+  #hud { position: fixed; top: 12px; right: 16px; font-size: 12px; letter-spacing: 0.12em; color: #8a93b8; text-align: right; z-index: 5; }
+</style>
+<script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">drag = orbit · scroll = zoom</div>
+<div id="panel">
+  <h1>SHIP EDITOR</h1>
+  <div class="ships" id="ships"></div>
+  <div class="pilot">LIVERY <button data-p="0" class="on">A</button><button data-p="1">B</button></div>
+  <div class="views" id="views"></div>
+  <div id="knobs"></div>
+  <div class="act">
+    <button id="reset">RESET</button>
+    <button id="export">EXPORT</button>
+  </div>
+  <textarea id="out" readonly></textarea>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { buildShipMesh } from './src/ship/shipVisual.js';
+import { TEAMS } from './src/worlds/teams.js';
+
+// arch → team index
+const ARCH = [
+  { arch: 'pronghorn', team: 0 }, { arch: 'manta', team: 1 },
+  { arch: 'delta', team: 2 }, { arch: 'twinboom', team: 3 },
+];
+// knob(key, min, max, default, target='tune')
+const K = (key, min, max, def, target = 'tune') => ({ key, min, max, def, target });
+const G = (t) => ({ grp: t });
+const KNOBS = {
+  pronghorn: [
+    G('CANOPY'), K('canY', 0.2, 0.6, 0.4), K('canZ', -0.6, 0.4, -0.02), K('canW', 0.12, 0.35, 0.2), K('canH', 0.18, 0.45, 0.29), K('canL', 0.4, 0.9, 0.62),
+    G('FIN'), K('finScale', 0.4, 1.8, 1.0, 'variant'), K('finZ', -0.8, 0.8, 0),
+    G('V-FINS'), K('vfinH', 0.3, 1.8, 1.0), K('vfinSpread', 0.5, 1.5, 1.0), K('vfinZ', -0.8, 0.8, 0),
+  ],
+  manta: [
+    G('BODY / WING'), K('bodyW', 0.7, 1.4, 1.0),
+    G('WINGTIP'), K('tipSize', 0.4, 2.2, 1.0), K('tipRaise', 0, 2.5, 1.0), K('tipX', -0.3, 0.5, 0), K('tipZ', -0.7, 0.7, 0),
+    G('ENGINE'), K('engX', 0.1, 0.8, 0.3), K('engY', -0.15, 0.4, 0.07), K('engZ', 1.6, 2.5, 2.02), K('engR', 0.1, 0.35, 0.16),
+    G('CANOPY'), K('canY', -0.05, 0.45, 0.24), K('canZ', -1.0, 0.4, -0.4), K('canW', 0.15, 0.4, 0.26), K('canH', 0.15, 0.45, 0.3), K('canL', 0.4, 0.9, 0.66),
+  ],
+  delta: [
+    G('WING'), K('wingSpan', 0.7, 1.4, 1.0), K('wingLen', 0.7, 1.3, 1.0),
+    G('ENGINE'), K('engX', 0.2, 1.2, 0.52), K('engY', -0.15, 0.4, 0.06), K('engZ', 1.8, 2.6, 2.28), K('engR', 0.12, 0.4, 0.22),
+    G('FIN'), K('finH', 0.3, 1.8, 1.0), K('finZ', -0.8, 0.8, 0), K('finLen', 0.5, 1.6, 1.0),
+    G('CANOPY'), K('canY', -0.05, 0.4, 0.12), K('canZ', -1.2, 0.4, -0.6), K('canW', 0.15, 0.4, 0.24), K('canH', 0.15, 0.45, 0.3), K('canL', 0.4, 0.9, 0.62),
+  ],
+  twinboom: [
+    G('BOOMS'), K('boomX', 0.55, 1.1, 0.78),
+    G('ENGINE'), K('engY', -0.2, 0.4, 0.02), K('engZ', 1.6, 2.4, 2.0), K('engR', 0.25, 0.6, 0.42),
+    G('FIN'), K('finH', 0.3, 1.4, 1.0), K('finZ', -0.6, 0.6, 0), K('finLen', 0.5, 1.6, 1.0),
+    G('CANOPY'), K('canY', 0.25, 0.6, 0.42), K('canZ', -0.8, 0.3, -0.25), K('canW', 0.18, 0.4, 0.27), K('canH', 0.18, 0.5, 0.32), K('canL', 0.4, 0.9, 0.6),
+  ],
+};
+
+// per-arch edit state (tune object + variant overrides), all starting at defaults
+const state = {};
+for (const { arch } of ARCH) {
+  state[arch] = { tune: {}, variant: {}, colors: { 0: {}, 1: {} } }; // colours are per-livery (A/B)
+  for (const k of KNOBS[arch]) if (k.key) (k.target === 'variant' ? state[arch].variant : state[arch].tune)[k.key] = k.def;
+}
+// Overlay each ship's CURRENT in-game build from teams.js (variant.tune + any
+// variant knobs) so the editor OPENS ON THE SHIPPED SHIP, not bare defaults —
+// otherwise a ship you already baked looks different here than in the game.
+for (const { arch, team } of ARCH) {
+  const tv = (TEAMS[team] && TEAMS[team].variant) || {};
+  if (tv.tune) for (const key in tv.tune) if (key in state[arch].tune) state[arch].tune[key] = tv.tune[key];
+  for (const k of KNOBS[arch]) if (k.key && k.target === 'variant' && tv[k.key] != null) state[arch].variant[k.key] = tv[k.key];
+}
+let ai = 1, pilot = 0; // start on the manta
+
+// livery colour fields (hex numbers, spread over the base livery to retint)
+const COLORS = ['hull', 'accent', 'glow', 'rim', 'accent2', 'bellyTint'];
+const hexStr = (n) => '#' + ((n >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+const strHex = (s) => parseInt(s.slice(1), 16);
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07060f);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
+scene.add(new THREE.GridHelper(20, 20, 0x241a3a, 0x161033).translateY(-0.9));
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+let az = 0.7, pol = 1.15, rad = 8;
+function updateCam() { camera.position.set(rad * Math.sin(pol) * Math.sin(az), rad * Math.cos(pol) + 0.2, rad * Math.sin(pol) * Math.cos(az)); camera.lookAt(0, 0.15, 0); }
+updateCam();
+
+let ship = null;
+function build() {
+  if (ship) { scene.remove(ship); ship.traverse(o => o.geometry && o.geometry.dispose()); }
+  const { arch, team } = ARCH[ai]; const T = TEAMS[team];
+  ship = buildShipMesh({ ...T.variant, ...T.liveries[pilot], ...state[arch].colors[pilot], ...state[arch].variant, tune: state[arch].tune });
+  scene.add(ship);
+  document.getElementById('hud').innerHTML = `<b style="color:#7df9ff">${T.name}</b> · ${arch}<br>drag = orbit · scroll = zoom`;
+}
+
+// --- panel ---
+const shipsEl = document.getElementById('ships');
+ARCH.forEach((a, i) => { const b = document.createElement('button'); b.textContent = TEAMS[a.team].name; b.onclick = () => { ai = i; renderShips(); renderKnobs(); build(); }; shipsEl.appendChild(b); });
+function renderShips() { [...shipsEl.children].forEach((b, i) => b.classList.toggle('on', i === ai)); }
+const VIEWS = { '3Q': [0.7, 1.15, 8], TOP: [0.001, 0.02, 8], SIDE: [Math.PI / 2, 1.4, 8], FRONT: [Math.PI, 1.4, 9], REAR: [0, 1.4, 9] };
+const viewsEl = document.getElementById('views');
+Object.keys(VIEWS).forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => { [az, pol, rad] = VIEWS[n]; updateCam(); }; viewsEl.appendChild(b); });
+document.querySelectorAll('.pilot button').forEach(b => b.onclick = () => { pilot = +b.dataset.p; document.querySelectorAll('.pilot button').forEach(x => x.classList.toggle('on', x === b)); renderKnobs(); build(); });
+
+const knobsEl = document.getElementById('knobs');
+function renderKnobs() {
+  const { arch } = ARCH[ai]; knobsEl.innerHTML = '';
+  for (const k of KNOBS[arch]) {
+    if (k.grp) { const d = document.createElement('div'); d.className = 'grp'; d.textContent = k.grp; knobsEl.appendChild(d); continue; }
+    const store = k.target === 'variant' ? state[arch].variant : state[arch].tune;
+    const row = document.createElement('div'); row.className = 'row';
+    const val = store[k.key];
+    row.innerHTML = `<label>${k.key}</label><input type="range" min="${k.min}" max="${k.max}" step="0.01" value="${val}"><span class="val">${(+val).toFixed(2)}</span>`;
+    const rng = row.querySelector('input'), out = row.querySelector('.val');
+    rng.oninput = () => { store[k.key] = +rng.value; out.textContent = (+rng.value).toFixed(2); build(); };
+    knobsEl.appendChild(row);
+  }
+  renderColors();
+}
+function renderColors() {
+  const { arch, team } = ARCH[ai]; const liv = TEAMS[team].liveries[pilot]; const ov = state[arch].colors[pilot];
+  const grp = document.createElement('div'); grp.className = 'grp'; grp.textContent = `COLOURS · ${pilot ? 'B' : 'A'}`; knobsEl.appendChild(grp);
+  for (const f of COLORS) {
+    const cur = ov[f] ?? liv[f] ?? liv.accent; // accent2/bellyTint may be absent — fall back to accent
+    const row = document.createElement('div'); row.className = 'crow';
+    row.innerHTML = `<label>${f}</label><input type="color" value="${hexStr(cur)}">`;
+    const inp = row.querySelector('input');
+    inp.oninput = () => { ov[f] = strHex(inp.value); build(); };
+    knobsEl.appendChild(row);
+  }
+  const irow = document.createElement('div'); irow.className = 'crow';
+  irow.innerHTML = `<label>irid</label><input type="checkbox"${(ov.irid ?? liv.irid) ? ' checked' : ''}>`;
+  irow.querySelector('input').onchange = (e) => { ov.irid = e.target.checked; build(); };
+  knobsEl.appendChild(irow);
+}
+document.getElementById('reset').onclick = () => {
+  const { arch } = ARCH[ai];
+  for (const k of KNOBS[arch]) if (k.key) (k.target === 'variant' ? state[arch].variant : state[arch].tune)[k.key] = k.def;
+  state[arch].colors[pilot] = {}; // clear colour overrides for this livery
+  renderKnobs(); build();
+};
+document.getElementById('export').onclick = () => {
+  const { arch } = ARCH[ai]; const s = state[arch]; const col = s.colors[pilot];
+  const round = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, +(+v).toFixed(3)]));
+  // livery colours → a teams.js-ready snippet ({ hull: 0x…, irid: true })
+  const fmtLivery = (o) => '{ ' + Object.entries(o).map(([k, v]) => k === 'irid' ? `${k}: ${v}` : `${k}: 0x${((v >>> 0) & 0xffffff).toString(16).padStart(6, '0')}`).join(', ') + ' }';
+  const out = document.getElementById('out');
+  out.style.display = 'block';
+  out.value = `// ${arch} · livery ${pilot ? 'B' : 'A'}\ntune: ${JSON.stringify(round(s.tune))}`
+    + (Object.keys(s.variant).length ? `,\nvariant: ${JSON.stringify(round(s.variant))}` : '')
+    + (Object.keys(col).length ? `,\nlivery ${pilot ? 'B' : 'A'}: ${fmtLivery(col)}` : '');
+  out.select();
+};
+
+// --- orbit ---
+let drag = false, px = 0, py = 0;
+canvas.addEventListener('pointerdown', e => { drag = true; px = e.clientX; py = e.clientY; });
+addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => { if (!drag) return; az -= (e.clientX - px) * 0.01; pol = Math.max(0.02, Math.min(Math.PI - 0.05, pol - (e.clientY - py) * 0.01)); px = e.clientX; py = e.clientY; updateCam(); });
+canvas.addEventListener('wheel', e => { e.preventDefault(); rad = Math.max(3.5, Math.min(20, rad * (1 + e.deltaY * 0.001))); updateCam(); }, { passive: false });
+
+renderShips(); renderKnobs(); build();
+(function tick() { renderer.render(scene, camera); requestAnimationFrame(tick); })();
+</script>
+</body>
+</html>

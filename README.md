@@ -1,21 +1,30 @@
 # SLIPSTREAM VECTOR
 
 A WipEout × Horizon Chase arcade racer. Anti-grav ship, three low-poly worlds,
-six tracks, built for graphics and game feel first.
+six tracks, five weapons, and eight rivals who trash-talk you over the comms —
+built for graphics and game feel first.
 
 **Worlds & tracks** (pick with ← → on the start screen; lap records persist):
 
 | World | Tracks | Character |
 |---|---|---|
-| Sunset Mesa | Sunset Circuit · Mesa Run | synthwave dusk, open desert valley, spire mesas |
-| Palm Coast | Lagoon Pass · Coral Keys | daylight archipelago: animated lagoon water, half-sunk islands with beaches, palms, open ocean horizon; Coral Keys has a full F-Zero LOOP |
-| Neon Sprawl | Orbital Ring · Skyline Rush | night metropolis: street canyons of lit towers lining the track, glowing asphalt grid, sweeping searchlights; Skyline Rush has a LOOP + summit dive |
+| Sunset Mesa | Sunset Circuit · Mesa Run | bright late afternoon over a monument valley: banded buttes in clusters with empty dune flats between, a canyon rock-cut pass, raptors circling the colossal **Sun Gate** arch that frames the striped sun |
+| Palm Coast | Lagoon Pass · Coral Keys | golden-hour archipelago: animated lagoon water, half-sunk islands with beaches, palms, a red-and-white **lighthouse** sweeping its beam over a resort strip; Coral Keys has a full F-Zero LOOP |
+| Neon Sprawl | Orbital Ring · Skyline Rush | blue-hour metropolis: street canyons of lit towers lining the track, **the Spire** anchoring the skyline, glowing asphalt grid, sweeping searchlights; Skyline Rush has a LOOP + summit dive |
 
 Each theme controls composition, not just palette: ground style
 (flat/water/grid shaders), prop archetypes (rock spires / islands / tower
 blocks), far-horizon density, flora, billboard frequency, ribbed tunnel arches
 over the long straights (`archMax`) and one-off set pieces (city searchlights).
-See `src/worlds/themes.js`.
+On top of that each world gets **directed composition**: one iconic landmark
+placed on a meaningful azimuth (`landmark`, usually the sun's), a shaped
+horizon (`horizonMask` thins or boosts the far-mountain rings per angular
+window), monument **zones** that cluster the scatter into dense stretches with
+genuinely empty flats between (`monumentZones`), and per-world one-offs — the
+desert's ~230 m canyon rock-cut with stone arches over the road (`rockCut`), a
+dim sister planet + meteor streaks in its sky (`sky.event`). Big rock masses
+carry baked sediment **strata** bands, so nothing reads as an untextured
+block. See `src/worlds/themes.js`.
 
 **Detail & dynamism.** The road surface shader carries expansion joints, corner
 skid marks, a per-sector tint and a centre **energy spine** that flows forward
@@ -24,8 +33,10 @@ no extra geometry. Worlds run dense instanced scatter. Over a race the sky
 **drifts**: the sun sinks, the mood deepens and stars come out; desert air
 shimmers with heat-haze and the neon city gets the odd lightning flash. The
 player's ship reacts too — a boost bloom surges behind it and a brake strip
-lights under braking. Everything stays inside the draw budget (instanced/merged,
-~115 draws worst case).
+lights under braking. Everything stays inside the graphics budget — the
+renderer is **fill-bound, not draw-bound** (~60–100 draws / ~175k tris worst
+case; the real limit is additive overdraw at 4K on iGPUs, so effects are
+pooled and governed by screen coverage).
 
 Vertical loops are 40m-radius circles in the spline (7 control points,
 corkscrewed ~30m sideways so the exit clears the entry). They work because track
@@ -94,11 +105,12 @@ preview canvases are shared and **reparented** into whichever section is active.
 **Options** has its own section: separate **MUSIC** and **SFX** volume bars,
 gamepad **DEADZONE** (low / medium / high) and **RUMBLE** toggle, **FULLSCREEN**,
 a **MOTION FX** switch (reduced-motion — disables the slide-ins, pulses and
-camera shake), and a controls legend.
+camera shake), **PILOT INTRO** (FIRST RACE / ALWAYS / OFF) and **RIVAL
+BANTER** (ON / OFF), and a controls legend.
 
 **Controls** is a live key-rebinding screen: a list of the driving actions
-(steer left/right, accelerate, brake, airbrake) plus respawn and pause, each
-showing its current key. Press Enter on a row and a **PRESS A KEY** overlay
+(steer left/right, accelerate, brake, airbrake) plus fire weapon, respawn and
+pause, each showing its current key. Press Enter on a row and a **PRESS A KEY** overlay
 captures the next keypress as the new binding (Esc cancels); binding a key that
 another action already uses moves it off the old action, and a **RESET TO
 DEFAULTS** row restores everything. Bindings persist to localStorage. Menu
@@ -160,10 +172,11 @@ unlock the next, and win the OVERDRIVE cup for a prestige gold champion
 livery. Progress persists. `src/worlds/classes.js`.
 
 **Rival difficulty:** the RIVALS row picks how hard the field drives —
-**ROOKIE** (forgiving), **PRO** (the default, a real fight) and **ACE**
-(brutal). It is independent of which track you pick and raises only *driver*
-skill — corner confidence, line tightness, boost-pad use — never ship speed,
-so the no-rubber-band rule holds. Every tier is open from the start (it's a
+**ROOKIE** (forgiving), **PRO** (the default, a real fight), **ACE** (brutal)
+and **APEX** ("the field races like it hates you"). It is independent of which
+track you pick and raises only *driver* skill — corner confidence, line
+tightness, boost-pad use, weapon reaction time — never ship speed, so the
+no-rubber-band rule holds. Every tier is open from the start (it's a
 challenge you choose, not a reward you earn) and the choice persists.
 `src/worlds/difficulty.js`.
 
@@ -204,6 +217,56 @@ the leader forward; riding a bumper holds you at their pace.
 `src/worlds/teams.js`, `src/ship/aiDriver.js`, `src/race.js`, `src/ui/menu.js`,
 `src/ui/podium.js`.
 
+## Weapons
+
+Five gold pads per lap arm a random weapon (`src/weapons/weaponSystem.js`).
+Cross a live pad empty-handed and the HUD slot fills; fire with **Space**
+(rebindable) or gamepad **Y**. Grabbing a pad spends it *globally* for ~4 s —
+the decal dims and a gold charge line sweeps back up as it recharges, so pad
+denial is a real tactic. The roll is seeded and **never looks at race
+position**: same odds in P1 as in P8.
+
+- **Missiles** — a 3-shot salvo, fired straight ahead at +25 m/s.
+- **Homing** — locks the nearest ship ahead within 90 m and tracks laterally;
+  fires straight if nothing locks. A thick smoke-and-flame trail marks both.
+- **Mine** — dropped behind; arms after 0.5 s and lives 25 s. After a short
+  grace window it hits *anyone* who crosses it — including whoever dropped it.
+- **Boost** — a 1.6 s surge through the normal boost pipeline.
+- **Shield** — a fresnel bubble that absorbs exactly one hit, and expires on
+  its own after 6 s so nobody rides permanently bubbled.
+
+A hit **disables** the victim for 1.7 s — throttle dies, steering goes mushy,
+brakes still work, and the ship coasts on honest momentum (never a scripted
+stop). Hits detonate with a pooled fireball, rising smoke, a debris burst and
+an expanding shockwave ring, all governed by distance so the fill budget
+holds. Getting hit yourself adds a white flash, an FOV kick, controller rumble
+and a paralysis hum until control returns.
+
+**AI combat is skill-gated, never position-gated** — the fairness rule
+extends to weapons. Every rival fires from the same trigger conditions the
+player would (target windows, straightaways for boost); lower driver skill
+only reacts *slower*. There is no gap-to-leader term anywhere in the weapon
+code: weapons are combat, never catch-up. Weapons are off in Time Trial.
+
+## Rivals with faces
+
+Race events feed a corner **comms feed** (`src/ui/banter.js`): get hit and the
+shooter gloats, block a shot with your shield and the victim celebrates,
+overtake someone and they seethe. Each chip shows the pilot's face in one of
+three expressions — **glad**, **arg** (angry) or the neutral portrait — with a
+per-pilot line bank (`LINES`, the single source of truth the game, the labs
+and the voice generator all import). Pacing keeps it tasteful: one chip per
+1.1 s, 3.7 s on screen, a 4 s per-pilot cooldown, max three visible. The
+player never speaks — the feed is the field reacting to *you*. Toggle: OPTIONS
+→ RIVAL BANTER.
+
+Before each race your **pilot hails you on video** in the same comms frame
+(Grok-generated intro clips per pilot, with a static-portrait fallback if
+video can't play). OPTIONS → PILOT INTRO picks FIRST RACE / ALWAYS / OFF.
+Groundwork for real *voices* is in place — `tools/generate-voices.mjs`
+batch-generates ElevenLabs TTS for the whole line bank from a voice config
+exported by `pilot-expression-lab.html` — but no voice audio ships yet.
+
 Three.js (CDN import map), plain ES modules, no build step.
 
 ## Run
@@ -218,8 +281,8 @@ python3 -m http.server 8741
 ## Controls
 
 The driving keys below are defaults — **remap them in the Controls menu section**
-(steer, accelerate, brake, airbrake, respawn, pause). Menu navigation, confirm/
-back and fullscreen are fixed.
+(steer, accelerate, brake, airbrake, fire weapon, respawn, pause). Menu
+navigation, confirm/back and fullscreen are fixed.
 
 | Key | Action |
 |---|---|
@@ -228,6 +291,7 @@ back and fullscreen are fixed.
 | `↑ ↓` / `W S` | move the nav rail / section rows |
 | `↓` / `S` | brake |
 | `Shift` | airbrake drift — release after >0.7 s for a mini-boost |
+| `Space` | fire the held weapon |
 | `Enter` | confirm · enter a section · start · advance |
 | `Backspace` | back (menu section → rail, pause) |
 | `Esc` | pause (in race) — also leaves fullscreen, so menu back is Backspace |
@@ -244,6 +308,7 @@ back and fullscreen are fixed.
 | RT / A / stick-up | thrust |
 | LT / D-pad-down / stick-down | brake |
 | LB / RB | airbrake drift |
+| Y | fire the held weapon |
 | A / Start | confirm / start / advance |
 | B | back / abort to menu |
 | X | respawn · Select pauses |
@@ -267,29 +332,43 @@ src/
   main.js                  boot, fixed-step loop (120 Hz), state machine, modes, world building
   config.js                ONE flat TUNING object — every constant lives here
   race.js                  the AI field: opponents, grid, contact, positions, results/standings
-  core/input.js            keyboard -> smoothed analog axes
-  core/audio.js            procedural WebAudio: engine, FX, fanfares + 4 music slots
-  worlds/themes.js         one theme per world: palette + scenery parameters
+  core/input.js            keyboard/gamepad -> smoothed analog axes; data-driven rebinding
+  core/audio.js            procedural WebAudio: engine, FX, weapons, fanfares + music slots
+  worlds/themes.js         one theme per world: palette, light mood + composition knobs
   worlds/teams.js          4 teams (ship variant, liveries, stats, driver skill) + callsigns
+  worlds/classes.js        speed classes: PULSE / SURGE / OVERDRIVE + unlock ladder
+  worlds/difficulty.js     RIVALS tiers: ROOKIE / PRO / ACE / APEX (driver skill only)
+  weapons/weaponSystem.js  pads, 5 weapons, projectiles + trails, hit/disable, AI fire policy
+  weapons/icons.js         HUD weapon glyphs
   track/tracks/            one data file per track + index.js roster (the "add a track" seam)
   track/spline.js          Catmull-Rom -> arc-length LUT -> parallel-transport frames -> frameAt(s)
   track/trackMesh.js       surface shader, walls, neon strips + fake-bloom ribbons, pad decals
-  track/scenery.js         themed sky/ground shaders, mesas, pylons, gates, props + the
-                           liveliness layer (drones, ambient motes, traffic, bridges, birds)
+  track/scenery.js         themed sky/ground shaders, mesas, landmarks, monument zones,
+                           rock cut, strata bake, pylons, gates, props + the liveliness
+                           layer (drones, ambient motes, traffic, bridges, birds)
   ship/shipPhysics.js      spline-domain arcade physics; ZERO three.js imports (AI/replay seam)
-  ship/shipVisual.js       procedural "Pronghorn GX-R" (+ team variants), lean/bob, engine FX
+  ship/shipVisual.js       cel-shaded team hulls (liveries, turbines, shield bubble, engine FX)
   ship/aiDriver.js         AI: racing line + brake points -> player-shaped input; ZERO three.js
   fx/cameraRig.js          chase cam (gap smoothing, FOV map, trauma shake, loop-aware up)
   fx/juice.js              feel event bus: trauma, boost envelope, hitstop, flash, contact
-  fx/particles.js          speed-line tunnel, sparks, exhaust ribbons
+  fx/particles.js          sparks, exhaust ribbons, projectile trails
   fx/postfx.js             composer + one JuicePass (vignette/chroma/radial blur/flash)
-  ui/hud.js                DOM speed/laps/position/boost, countdown, results & standings boards
+  fx/ghost.js              time-trial ghost record/playback
+  ui/hud.js                DOM speed/laps/position/boost/weapon slot, countdown, results boards
   ui/menu.js               "THE BAY" console controller: nav rail + section focus, thumbnails
+  ui/banter.js             the rival comms feed + LINES bank (single source of truth)
+  ui/achievements.js       31 trophies: unlock logic, persistence, toasts, gallery
   ui/minimap.js            canvas minimap: track outline, pads, start line, ship + rivals
   ui/podium.js             spinning 3D ship model for the Garage display bay
   ui/podiumScene.js        full-screen 3D championship podium ceremony
   ui/pauseMenu.js          in-race pause menu (resume/restart/options/quit)
-assets/music/              drop-in music slots (see Sound & music)
+  ui/logos.js              team logo glyphs
+assets/music/              Martin's soundtrack (see Sound & music)
+assets/pilots/             Grok portraits, glad/arg expression faces, intro videos
+tools/generate-voices.mjs  idempotent ElevenLabs batch TTS for the LINES bank
+pilot-expression-lab.html  pilot face/expression + voice-casting lab
+*-lab.html / *-editor.html standalone tuning labs (atmosphere, ship, fleet,
+                           livery, weapon icons) — need the import map in <head>
 ```
 
 Adding content: a new track is a data file in `src/track/tracks/` registered
@@ -328,27 +407,36 @@ file — silence, no error.
 
 ## Debug
 
-`window.__game` exposes `ship`, `rig`, `spline`, `trackDef`, `race`, `juice`,
-`audio`, `hud`, `input`, plus helpers: `state()`, `start()`, `setTrack(i)`,
-`menuKey(code)`, `enter()`, `escape()`, and `warp(seconds, {steer, throttle,
-brake, airbrake, ai})` — steps the sim (and the AI field unless `ai:false`)
-deterministically, independent of rAF.
+`window.__game` exposes `ship`, `rig`, `spline`, `trackDef`, `race`,
+`weapons`, `juice`, `audio`, `hud`, `input`, plus helpers: `state()`,
+`start()`, `setTrack(i)`, `menuKey(code)`, `enter()`, `escape()`,
+`podiumDemo(rank)`, and `warp(seconds, {steer, throttle, brake, airbrake,
+ai})` — steps the sim (and the AI field unless `ai:false`) deterministically,
+independent of rAF.
 
 ## Roadmap
 
-Done: 3 worlds × 2 tracks (two with F-Zero loops), 8-ship AI field (4 teams ×
-2 liveries, no rubber-banding), Championship / Single Race / Time Trial, three
-speed classes with an unlock ladder + prestige livery, a chosen RIVALS
-difficulty (decoupled from the track), full menu + ship select, keyboard +
-gamepad input, fullscreen, procedural audio + Martin's original soundtrack,
-launch boosts, solid collisions, records, trackside liveliness.
+Done: 3 worlds × 2 tracks with loops/corkscrews/jumps, 8-ship AI field (no
+rubber-banding, ever), full **weapons combat** with AI that fights back,
+rival **banter feed** + pilot intro videos + expression faces, Championship /
+Single Race / Time Trial, three speed classes with an unlock ladder +
+prestige livery, four RIVALS tiers up to APEX, "THE BAY" console menu with
+rebindable controls, keyboard + gamepad, procedural audio + Martin's original
+soundtrack + a rocket-launch/explosion SFX layer, 31 trophies, records,
+world-uplift pass 1 (landmarks, directed horizons, monument zones, rock cut,
+light moods per world).
 
-Not yet built (rough priority):
-- **Weapons** — under discussion; WipEout-style pad pickups (no position
-  weighting, to protect the no-rubber-band rule), optionally with a hull
-  energy/shield bar. Cheap in the spline domain. A natural Eliminator mode
-  would pair with it.
-- **Performance pass** — merge the AI field's flame/glow sprites (draws climb
-  to ~90–115 with 8 ships + city props).
-- **Championship persistence** — in-progress standings reset on reload (unlock
-  progress already persists).
+Next (rough priority):
+- **Pilot voices** — cast 8 ElevenLabs voices in the lab, batch-generate the
+  LINES bank, play clips from the comms feed (music duck, queue, an OPTIONS
+  TEXT / TEXT+VOICE / OFF switch).
+- **Missile lock-on warning** — rising beeps → constant tone + a warning
+  triangle ~1 s before impact.
+- **Post-race flow** — clearer results → next-step path (and menu guidance
+  for new players).
+- **Content block** — a 4th world and one new track per world → 12 tracks,
+  two 6-track cups. World uplift stages 2–4 land first so every new track is
+  born prettier.
+- **Online leaderboards**, graphics quality tiers for weaker laptops, an
+  Eliminator mode built on the weapon kit, packaging/trailer for a possible
+  Steam release.

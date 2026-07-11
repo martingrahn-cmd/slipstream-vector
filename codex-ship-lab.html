@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Codex Try - Coherent Ship Form</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cyan: #65f3ff;
+      --magenta: #ff3158;
+      --hot: #ff9d2e;
+      --ink: #05030d;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+    body {
+      font-family: "Rajdhani", system-ui, sans-serif;
+      color: #fff;
+      background:
+        radial-gradient(circle at 48% 22%, rgba(101, 243, 255, 0.13), transparent 21%),
+        radial-gradient(circle at 78% 62%, rgba(255, 157, 46, 0.07), transparent 32%),
+        linear-gradient(180deg, #0d1120 0%, #070914 64%, #020106 100%);
+    }
+
+    body[data-env="light"] {
+      color: #10131b;
+      background:
+        radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.86), transparent 22%),
+        radial-gradient(circle at 72% 62%, rgba(101, 243, 255, 0.15), transparent 34%),
+        linear-gradient(180deg, #f7f9fb 0%, #e6ebf1 62%, #d5dce5 100%);
+    }
+
+    #stage { position: fixed; inset: 0; }
+    canvas { display: block; }
+
+    .scan {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.034) 0 1px, transparent 1px 4px),
+        radial-gradient(ellipse at 50% 48%, transparent 42%, rgba(0,0,0,0.38) 100%);
+      opacity: 0.42;
+      mix-blend-mode: screen;
+    }
+
+    body[data-env="light"] .scan {
+      opacity: 0.16;
+      mix-blend-mode: multiply;
+      background:
+        repeating-linear-gradient(0deg, rgba(20,28,42,0.025) 0 1px, transparent 1px 5px),
+        radial-gradient(ellipse at 50% 48%, transparent 52%, rgba(50,60,76,0.18) 100%);
+    }
+
+    .title {
+      position: fixed;
+      left: 28px;
+      top: 22px;
+      pointer-events: none;
+      transform: skewX(-8deg);
+    }
+
+    .title .tag {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.36em;
+      color: var(--cyan);
+      text-shadow: 0 0 14px rgba(0,240,255,0.8);
+    }
+
+    body[data-env="light"] .title .tag {
+      color: #0d7f90;
+      text-shadow: none;
+    }
+
+    .title h1 {
+      margin-top: 5px;
+      font-family: "Orbitron", monospace;
+      font-size: clamp(34px, 5vw, 74px);
+      line-height: 0.9;
+      letter-spacing: 0.12em;
+      background: linear-gradient(180deg, #fff 20%, var(--cyan) 57%, var(--magenta) 96%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(5px 5px 0 rgba(255,49,88,0.14))
+              drop-shadow(0 0 24px rgba(101,243,255,0.26));
+    }
+
+    body[data-env="light"] .title h1 {
+      background: linear-gradient(180deg, #10131b 18%, #22566a 58%, #b72641 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      filter: drop-shadow(4px 4px 0 rgba(255,255,255,0.62));
+    }
+
+    .panel {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      width: min(420px, calc(100vw - 48px));
+      padding: 17px 18px 18px;
+      pointer-events: auto;
+      background: rgba(7, 9, 18, 0.80);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-top: 2px solid var(--cyan);
+      clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+      box-shadow: 0 0 38px rgba(0,240,255,0.1);
+      backdrop-filter: blur(9px);
+    }
+
+    body[data-env="light"] .panel {
+      color: #10131b;
+      background: rgba(246, 248, 251, 0.82);
+      border-color: rgba(16, 22, 34, 0.18);
+      box-shadow: 0 18px 60px rgba(52, 68, 90, 0.16);
+    }
+
+    .panel h2 {
+      font-family: "Orbitron", monospace;
+      font-size: 18px;
+      letter-spacing: 0.2em;
+      margin-bottom: 7px;
+    }
+
+    .panel p {
+      font-size: 15px;
+      line-height: 1.32;
+      color: rgba(255,255,255,0.68);
+      margin-bottom: 15px;
+    }
+
+    body[data-env="light"] .panel p {
+      color: rgba(16, 19, 27, 0.68);
+    }
+
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    .env-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .ship-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid rgba(255,255,255,0.16);
+      color: rgba(255,255,255,0.82);
+      background: rgba(255,255,255,0.04);
+      font-family: "Orbitron", monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.13em;
+      cursor: pointer;
+      transform: skewX(-12deg);
+    }
+
+    body[data-env="light"] button {
+      color: rgba(16, 19, 27, 0.74);
+      background: rgba(16, 22, 34, 0.045);
+      border-color: rgba(16, 22, 34, 0.16);
+    }
+
+    button span {
+      display: inline-block;
+      transform: skewX(12deg);
+    }
+
+    button.active {
+      color: #090417;
+      background: var(--cyan);
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(101,243,255,0.38);
+    }
+
+    .readout {
+      position: fixed;
+      left: 30px;
+      bottom: 25px;
+      width: 310px;
+      display: grid;
+      gap: 8px;
+      pointer-events: none;
+      transform: skewX(-7deg);
+    }
+
+    .meter {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.25em;
+      color: rgba(255,255,255,0.62);
+    }
+
+    body[data-env="light"] .meter {
+      color: rgba(16, 19, 27, 0.58);
+    }
+
+    .meter .bar {
+      height: 7px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.09);
+      overflow: hidden;
+    }
+
+    .meter i {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--hot));
+      box-shadow: 0 0 14px rgba(101,243,255,0.48);
+    }
+
+    @media (max-width: 780px) {
+      .title { left: 18px; top: 16px; }
+      .panel { left: 16px; right: 16px; bottom: 16px; width: auto; }
+      .readout { display: none; }
+    }
+  </style>
+</head>
+<body data-env="dark">
+  <main id="stage" aria-label="Codex Try ship concept viewer"></main>
+  <div class="scan" aria-hidden="true"></div>
+  <section class="title" aria-label="Concept title">
+    <div class="tag">CODEX TRY MK V</div>
+    <h1 id="shipTitle">VECTOR<br />MANTA</h1>
+  </section>
+  <aside class="readout" aria-hidden="true">
+    <div class="meter"><span>SILH</span><span class="bar"><i style="width: 94%"></i></span></div>
+    <div class="meter"><span>FLOW</span><span class="bar"><i style="width: 89%"></i></span></div>
+    <div class="meter"><span>THEME</span><span class="bar"><i style="width: 82%"></i></span></div>
+  </aside>
+  <section class="panel">
+    <h2 id="panelTitle">VECTOR MANTA R-03</h2>
+    <p id="panelCopy">A cleaner race-team livery pass: pearl shell, graphite mechanics, controlled markings and glow reserved for active systems.</p>
+    <div class="controls">
+      <div class="swatches">
+        <button data-livery="pearl" class="active"><span>PEARL</span></button>
+        <button data-livery="navy"><span>NAVY</span></button>
+        <button data-livery="amber"><span>AMBER</span></button>
+        <button data-livery="cobalt"><span>COBALT</span></button>
+      </div>
+      <div class="ship-switch">
+        <button data-ship="manta" class="active"><span>MANTA</span></button>
+        <button data-ship="spear"><span>SPEAR</span></button>
+      </div>
+      <div class="env-switch">
+        <button data-environment="dark" class="active"><span>DARK</span></button>
+        <button data-environment="light"><span>LIGHT</span></button>
+      </div>
+    </div>
+  </section>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+    import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+    const palettes = {
+      pearl: {
+        hull: 0xe8edf2, plate: 0xb4bdc9, trim: 0x303846, belly: 0x0e1118,
+        dark: 0x05070b, metal: 0xa4adb8, accent: 0x00d6e8, glow: 0x65f3ff,
+        glass: 0x06182b, mark: 0x121822,
+      },
+      navy: {
+        hull: 0x101729, plate: 0xf1eee6, trim: 0x2a3142, belly: 0x080b12,
+        dark: 0x03050a, metal: 0x9ba3ad, accent: 0xff3158, glow: 0x78f6ff,
+        glass: 0x071325, mark: 0xf1eee6,
+      },
+      amber: {
+        hull: 0x20252d, plate: 0xebe7dc, trim: 0x59616c, belly: 0x090b10,
+        dark: 0x040507, metal: 0xa9a79f, accent: 0xff9d2e, glow: 0xffc45a,
+        glass: 0x151218, mark: 0xebe7dc,
+      },
+      cobalt: {
+        hull: 0xedf4ff, plate: 0x0d4fd6, trim: 0x12141d, belly: 0x090b13,
+        dark: 0x03040a, metal: 0xaab5c4, accent: 0xff2ec8, glow: 0x58f2ff,
+        glass: 0x08071c, mark: 0x10131d,
+      },
+    };
+
+    const environments = {
+      dark: {
+        clear: 0x050711, fog: 0x07030f, fogNear: 16, fogFar: 58,
+        exposure: 1.15, bloomStrength: 0.14, bloomRadius: 0.42, bloomThreshold: 0.94,
+        hemiSky: 0xaed9ff, hemiGround: 0x090912, hemiIntensity: 0.94,
+        keyColor: 0xffffff, keyIntensity: 3.20,
+        rimColor: 0x9db7ff, rimIntensity: 0.82,
+        techColor: 0x65f3ff, techIntensity: 5.80,
+        warmColor: 0xff9d2e, warmIntensity: 2.20,
+        fillColor: 0xffffff, fillIntensity: 3.50,
+      },
+      light: {
+        clear: 0xf3f6fa, fog: 0xe5ebf2, fogNear: 18, fogFar: 68,
+        exposure: 1.04, bloomStrength: 0.035, bloomRadius: 0.22, bloomThreshold: 0.98,
+        hemiSky: 0xffffff, hemiGround: 0xd6dde7, hemiIntensity: 1.35,
+        keyColor: 0xffffff, keyIntensity: 3.75,
+        rimColor: 0xc7d8ff, rimIntensity: 1.25,
+        techColor: 0x9af7ff, techIntensity: 1.45,
+        warmColor: 0xffd8a6, warmIntensity: 0.75,
+        fillColor: 0xffffff, fillIntensity: 2.20,
+      },
+    };
+
+    const shipTypes = {
+      manta: {
+        key: "manta",
+        title: "VECTOR<br />MANTA",
+        panelTitle: "VECTOR MANTA R-03",
+        panelCopy: "A cleaner race-team livery pass: pearl shell, graphite mechanics, controlled markings and glow reserved for active systems.",
+        z0: -6.0, z1: 4.85,
+        baseWidth: 0.09, widthGain: 1.28, widthScale: 1.0,
+        noseStart: 0.02, noseEnd: 0.18,
+        rearTaper: 0.28, rearStart: 0.74,
+        shoulderAmp: 0.25, shoulderPos: 0.72, shoulderWidth: 0.18,
+        waistDip: 0.15, waistPos: 0.48, waistWidth: 0.12,
+        topScale: 1.0, bellyScale: 1.0, camberLift: 0.04, camberArc: 0.08, camberBack: 0.07,
+        wingSpan: 1.0, wingChord: 1.0, wingSweep: 1.0, engineSpread: 1.0, engineScale: 1.0,
+        finHeight: 1.0, canopyScale: 1.0,
+      },
+      spear: {
+        key: "spear",
+        title: "VECTOR<br />SPEAR",
+        panelTitle: "VECTOR SPEAR R-07",
+        panelCopy: "A second hull type in the same design language: longer blade nose, pinched monocoque, compact crescent wings and wider rear thrust hardware.",
+        z0: -6.85, z1: 5.18,
+        baseWidth: 0.055, widthGain: 1.06, widthScale: 0.88,
+        noseStart: 0.03, noseEnd: 0.27,
+        rearTaper: 0.16, rearStart: 0.80,
+        shoulderAmp: 0.42, shoulderPos: 0.66, shoulderWidth: 0.13,
+        waistDip: 0.27, waistPos: 0.48, waistWidth: 0.10,
+        topScale: 0.86, bellyScale: 0.82, camberLift: 0.035, camberArc: 0.060, camberBack: 0.085,
+        wingSpan: 0.72, wingChord: 0.78, wingSweep: 1.45, engineSpread: 1.24, engineScale: 0.86,
+        finHeight: 1.18, canopyScale: 0.82,
+      },
+    };
+
+    let activeShipProfile = shipTypes.manta;
+
+    const stage = document.getElementById("stage");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    stage.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x07030f, 16, 58);
+
+    const camera = new THREE.PerspectiveCamera(43, window.innerWidth / window.innerHeight, 0.1, 150);
+    camera.position.set(6.7, 3.0, 8.6);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.065;
+    controls.minDistance = 5.2;
+    controls.maxDistance = 18;
+    controls.target.set(0, 0.33, 0.0);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.14, 0.42, 0.94);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
+    const lights = {
+      hemi: new THREE.HemisphereLight(0xaed9ff, 0x090912, 0.94),
+      key: addDir(0xffffff, 3.20, [-4.4, 7.2, 5.2]),
+      rim: addDir(0x9db7ff, 0.82, [5.4, 2.4, -5.2]),
+      tech: addPoint(0x65f3ff, 5.8, [4.2, 1.2, 3.5]),
+      warm: addPoint(0xff9d2e, 2.2, [-4.6, 1.6, -3.6]),
+      fill: addPoint(0xffffff, 3.5, [0, 3.4, -5.5]),
+    };
+    scene.add(lights.hemi);
+
+    const hangar = buildHangar();
+    scene.add(hangar.root);
+
+    let environmentMode = "dark";
+    let active = "pearl";
+    let activeShip = "manta";
+    let craft = buildCraft(palettes[active], shipTypes[activeShip]);
+    scene.add(craft.root);
+    updateShipLabels(shipTypes[activeShip]);
+    applyEnvironment(environmentMode);
+
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(() => {
+      const dt = clock.getDelta();
+      const t = clock.elapsedTime;
+      controls.update();
+      craft.update(dt, t);
+      hangar.update(t);
+      composer.render();
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+      bloom.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    document.querySelectorAll("[data-livery]").forEach((button) => {
+      button.addEventListener("click", () => {
+        active = button.dataset.livery;
+        document.querySelectorAll("[data-livery]").forEach((b) => b.classList.toggle("active", b === button));
+        rebuildCraft();
+      });
+    });
+
+    document.querySelectorAll("[data-ship]").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeShip = button.dataset.ship;
+        document.querySelectorAll("[data-ship]").forEach((b) => b.classList.toggle("active", b === button));
+        updateShipLabels(shipTypes[activeShip]);
+        rebuildCraft();
+      });
+    });
+
+    document.querySelectorAll("[data-environment]").forEach((button) => {
+      button.addEventListener("click", () => {
+        environmentMode = button.dataset.environment;
+        document.querySelectorAll("[data-environment]").forEach((b) => b.classList.toggle("active", b === button));
+        applyEnvironment(environmentMode);
+      });
+    });
+
+    function rebuildCraft() {
+      scene.remove(craft.root);
+      craft.dispose();
+      craft = buildCraft(palettes[active], shipTypes[activeShip]);
+      scene.add(craft.root);
+    }
+
+    function updateShipLabels(profile) {
+      document.getElementById("shipTitle").innerHTML = profile.title;
+      document.getElementById("panelTitle").textContent = profile.panelTitle;
+      document.getElementById("panelCopy").textContent = profile.panelCopy;
+    }
+
+    function applyEnvironment(mode) {
+      const env = environments[mode];
+      document.body.dataset.env = mode;
+      renderer.setClearColor(env.clear, 1);
+      renderer.toneMappingExposure = env.exposure;
+      scene.fog.color.setHex(env.fog);
+      scene.fog.near = env.fogNear;
+      scene.fog.far = env.fogFar;
+      bloom.strength = env.bloomStrength;
+      bloom.radius = env.bloomRadius;
+      bloom.threshold = env.bloomThreshold;
+
+      lights.hemi.color.setHex(env.hemiSky);
+      lights.hemi.groundColor.setHex(env.hemiGround);
+      lights.hemi.intensity = env.hemiIntensity;
+      setLight(lights.key, env.keyColor, env.keyIntensity);
+      setLight(lights.rim, env.rimColor, env.rimIntensity);
+      setLight(lights.tech, env.techColor, env.techIntensity);
+      setLight(lights.warm, env.warmColor, env.warmIntensity);
+      setLight(lights.fill, env.fillColor, env.fillIntensity);
+      hangar.setEnvironment(mode);
+    }
+
+    function setLight(light, color, intensity) {
+      light.color.setHex(color);
+      light.intensity = intensity;
+    }
+
+    function addDir(color, intensity, pos) {
+      const d = new THREE.DirectionalLight(color, intensity);
+      d.position.set(...pos);
+      scene.add(d);
+      return d;
+    }
+
+    function addPoint(color, intensity, pos) {
+      const p = new THREE.PointLight(color, intensity, 18);
+      p.position.set(...pos);
+      scene.add(p);
+      return p;
+    }
+
+    function buildCraft(c, profile = shipTypes.manta) {
+      activeShipProfile = profile;
+      const mats = makeMaterials(c);
+      const root = new THREE.Group();
+      root.rotation.y = -0.28;
+      root.rotation.x = 0.035;
+      const disposables = [];
+      const extraMaterials = [];
+      const textures = [];
+      const animated = [];
+
+      const add = (mesh, parent = root) => {
+        parent.add(mesh);
+        if (mesh.geometry) disposables.push(mesh.geometry);
+        mesh.traverse?.((child) => {
+          if (child !== mesh && child.geometry) disposables.push(child.geometry);
+        });
+        return mesh;
+      };
+
+      add(makeBodyShell(mats.hull));
+      add(makeBellyShell(mats.belly));
+      add(makeTopSpine(mats.trim));
+      add(makeCanopy(mats.glass));
+      add(makeCanopyFrame(mats));
+      add(makeNoseInset(mats.dark));
+      add(makeRearDeck(mats.dark));
+      add(makePaintBlocks(mats));
+      add(makeAccessPanels(mats));
+      add(makeFasteners(mats));
+      add(makeMechanicalUndercut(mats.dark));
+      if (profile.key === "spear") {
+        add(makeSpearBladeNose(mats));
+        add(makeSpearCanards(mats));
+      }
+      for (const side of [-1, 1]) {
+        add(makeWingSurface(side, mats.hull, false));
+        add(makeWingSurface(side, mats.belly, true));
+        add(makeEngineLobe(side, mats.hull));
+        add(makeSideSkirt(side, mats.trim));
+        add(makeWingTip(side, mats));
+        add(makeWingDetailCluster(side, mats));
+        add(makeShoulderInset(side, mats.dark));
+        add(makeIntakeSlats(side, mats));
+        add(makeFinletCluster(side, mats));
+        add(makeEngineHardware(side, mats, animated, extraMaterials));
+        add(makeEngineRibbing(side, mats));
+        add(makeUndersidePiping(side, mats));
+        add(makeHoverCoils(side, mats, animated));
+        if (profile.key === "spear") add(makeSpearAuxThruster(side, mats, animated, extraMaterials));
+      }
+      add(makeDorsalFin(mats));
+      if (profile.key === "spear") add(makeSpearSplitTail(mats));
+      addPanelLines(root, disposables, extraMaterials, c);
+      textures.push(...addDecals(root, disposables, extraMaterials, c));
+      add(makeShadow());
+
+      const noseLight = add(new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 8), mats.glow));
+      noseLight.position.set(0, 0.045, plan(0).z + 0.08);
+      animated.push({ mesh: noseLight, kind: "pulse", phase: 0.1 });
+
+      root.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.castShadow = false;
+          obj.receiveShadow = false;
+        }
+      });
+
+      return {
+        root,
+        update(dt, t) {
+          root.position.y = Math.sin(t * 1.5) * 0.045;
+          root.rotation.z = Math.sin(t * 1.02) * 0.012;
+          root.rotation.x = 0.035 + Math.sin(t * 0.82) * 0.008;
+          for (const a of animated) {
+            const p = 0.68 + 0.32 * Math.sin(t * 7.2 + a.phase * Math.PI);
+            if (a.kind === "engine") {
+              a.mesh.material.opacity = 0.42 + p * 0.17;
+              a.mesh.scale.setScalar(0.86 + p * 0.2);
+            } else if (a.kind === "plume") {
+              a.mesh.material.opacity = a.baseOpacity + p * a.pulseOpacity;
+              a.mesh.scale.set(
+                a.baseScale[0] * (0.94 + p * 0.12),
+                a.baseScale[1] * (0.94 + p * 0.12),
+                a.baseScale[2],
+              );
+            } else if (a.kind === "hover") {
+              a.mesh.rotation.z += dt * (1.5 + a.phase * 0.04);
+              a.mesh.material.opacity = 0.30 + p * 0.16;
+            } else {
+              a.mesh.scale.setScalar(0.82 + p * 0.32);
+            }
+          }
+        },
+        dispose() {
+          disposables.forEach((g) => g.dispose());
+          textures.forEach((t) => t.dispose());
+          [...Object.values(mats), ...extraMaterials].forEach((m) => {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        },
+      };
+    }
+
+    function makeMaterials(c) {
+      const std = (opts) => new THREE.MeshStandardMaterial({
+        roughness: 0.38,
+        metalness: 0.25,
+        side: THREE.DoubleSide,
+        ...opts,
+      });
+      const lacquer = (opts) => new THREE.MeshPhysicalMaterial({
+        roughness: 0.30,
+        metalness: 0.20,
+        clearcoat: 0.82,
+        clearcoatRoughness: 0.14,
+        side: THREE.DoubleSide,
+        ...opts,
+      });
+      return {
+        hull: lacquer({ color: c.hull, roughness: 0.27, metalness: 0.18 }),
+        plate: lacquer({ color: c.plate, roughness: 0.36, metalness: 0.20, clearcoat: 0.64 }),
+        trim: std({ color: c.trim, roughness: 0.46, metalness: 0.38 }),
+        belly: std({ color: c.belly, roughness: 0.58, metalness: 0.34 }),
+        dark: std({ color: c.dark, roughness: 0.66, metalness: 0.38 }),
+        metal: std({ color: c.metal ?? 0x9ea8b4, roughness: 0.28, metalness: 0.78 }),
+        accent: std({ color: c.accent, roughness: 0.36, metalness: 0.34, emissive: c.accent, emissiveIntensity: 0.015 }),
+        glass: new THREE.MeshPhysicalMaterial({
+          color: c.glass,
+          roughness: 0.05,
+          metalness: 0.0,
+          transparent: true,
+          opacity: 0.72,
+          transmission: 0.22,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+          emissive: 0x071731,
+          emissiveIntensity: 0.36,
+          side: THREE.DoubleSide,
+        }),
+        stripe: std({ color: c.hull, roughness: 0.50, metalness: 0.14 }),
+        glow: new THREE.MeshBasicMaterial({ color: c.glow, transparent: true, opacity: 0.30 }),
+        glowDisc: new THREE.MeshBasicMaterial({ color: c.glow, transparent: true, opacity: 0.24, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
+        plume: new THREE.SpriteMaterial({
+          map: makeSoftGlowTexture(),
+          color: c.glow,
+          transparent: true,
+          opacity: 0.20,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      };
+    }
+
+    function plan(t) {
+      const p = activeShipProfile ?? shipTypes.manta;
+      const nose = smooth(p.noseStart, p.noseEnd, t);
+      const rear = 1 - p.rearTaper * smooth(p.rearStart, 1.0, t);
+      const shoulder = p.shoulderAmp * gauss(t, p.shoulderPos, p.shoulderWidth);
+      const waist = 1 - p.waistDip * gauss(t, p.waistPos, p.waistWidth);
+      const bladePinch = p.key === "spear" ? 1 - 0.12 * gauss(t, 0.23, 0.08) : 1;
+      const width = (p.baseWidth + p.widthGain * nose * rear * waist * bladePinch + shoulder) * p.widthScale * (1 - 0.18 * smooth(0.92, 1, t));
+      const top = (0.12 + 0.46 * gauss(t, 0.34, 0.24) + 0.20 * gauss(t, 0.62, 0.28)) * p.topScale;
+      const bottom = (-0.10 - 0.30 * gauss(t, 0.50, 0.36)) * p.bellyScale;
+      const camber = p.camberLift + p.camberArc * Math.sin(Math.PI * t) - p.camberBack * t;
+      return { z: lerp(p.z0, p.z1, t), width, top, bottom, camber };
+    }
+
+    function bodyPoint(t, u, layer = 0) {
+      const p = plan(t);
+      const a = Math.abs(u);
+      const crown = Math.pow(Math.max(0, 1 - Math.pow(a, 1.85)), 0.55);
+      const shoulderDrop = 0.16 * Math.pow(a, 2.1);
+      const x = u * p.width;
+      const y = p.camber + p.top * crown - shoulderDrop + layer;
+      return [x, y, p.z];
+    }
+
+    function bellyPoint(t, u) {
+      const p = plan(t);
+      const a = Math.abs(u);
+      const bulge = Math.pow(Math.max(0, 1 - Math.pow(a, 1.5)), 0.7);
+      const x = u * p.width * 0.88;
+      const y = p.camber + p.bottom * (0.70 + 0.30 * bulge) - 0.02;
+      return [x, y, p.z];
+    }
+
+    function makeBodyShell(mat) {
+      const rows = 34;
+      const cols = 18;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const t = i / rows;
+        for (let j = 0; j <= cols; j++) {
+          const u = -1 + (j / cols) * 2;
+          verts.push(...bodyPoint(t, u));
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function surfacePatch(t0, t1, u0, u1, mat, lift = 0.02, rows = 8, cols = 4) {
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const t = lerp(t0, t1, i / rows);
+        for (let j = 0; j <= cols; j++) {
+          const u = lerp(u0, u1, j / cols);
+          verts.push(...bodyPoint(t, u, lift));
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeBellyShell(mat) {
+      const rows = 30;
+      const cols = 16;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const t = 0.05 + (i / rows) * 0.90;
+        for (let j = 0; j <= cols; j++) {
+          const u = -1 + (j / cols) * 2;
+          verts.push(...bellyPoint(t, u));
+        }
+      }
+      gridIndices(idx, rows, cols, true);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeWingSurface(side, mat, underside) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const rows = 24;
+      const cols = 8;
+      const verts = [];
+      const idx = [];
+      const tStart = profile.key === "spear" ? 0.31 : 0.24;
+      const tRange = profile.key === "spear" ? 0.56 : 0.64;
+      for (let i = 0; i <= rows; i++) {
+        const t = tStart + (i / rows) * tRange;
+        const p = plan(t);
+        const span = (1.20 * gauss(t, 0.56, 0.28) + 0.82 * gauss(t, 0.76, 0.16)) * profile.wingSpan * smooth(tStart + 0.01, tStart + 0.16, t) * (1 - 0.25 * smooth(0.82, 0.92, t));
+        for (let j = 0; j <= cols; j++) {
+          const v = j / cols;
+          const inner = p.width * (profile.key === "spear" ? 0.62 : 0.72);
+          const outer = p.width + span * (profile.key === "spear" ? 0.92 + 0.18 * Math.sin(Math.PI * i / rows) : 1);
+          const x = side * lerp(inner, outer, Math.pow(v, 0.82));
+          const sweep = side * 0.10 * profile.wingSweep * v;
+          const chordPhase = Math.sin(Math.PI * (t - tStart) / tRange);
+          const z = p.z + lerp(0, 0.54 * profile.wingChord * chordPhase, v) + (profile.key === "spear" ? 0.24 * v * smooth(0.50, 0.78, t) : 0);
+          const baseY = p.camber + lerp(p.top * 0.22, profile.key === "spear" ? -0.19 : -0.24, v) - 0.03 * Math.sin(v * Math.PI);
+          const y = underside ? baseY - 0.10 - 0.03 * v : baseY + 0.03;
+          verts.push(x, y, z + sweep);
+        }
+      }
+      gridIndices(idx, rows, cols, underside);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeEngineLobe(side, mat) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const rings = [];
+      const seg = 14;
+      for (let i = 0; i <= 14; i++) {
+        const q = i / 14;
+        const t = 0.58 + q * 0.37;
+        const p = plan(t);
+        const cx = side * (p.width * 0.80 + 0.42 * profile.engineSpread + 0.22 * profile.engineSpread * q);
+        const cy = p.camber - 0.10 - 0.06 * q;
+        const z = p.z + 0.36 * q + (profile.key === "spear" ? 0.20 * q : 0);
+        const rx = (0.26 + 0.28 * smooth(0.15, 0.82, q)) * profile.engineScale;
+        const ry = (0.17 + 0.14 * smooth(0.10, 0.75, q)) * profile.engineScale;
+        const ring = [];
+        for (let j = 0; j < seg; j++) {
+          const a = (j / seg) * Math.PI * 2;
+          const x = cx + Math.cos(a) * rx * (0.78 + 0.22 * Math.max(0, Math.sin(a)));
+          const y = cy + Math.sin(a) * ry;
+          ring.push([x, y, z]);
+        }
+        rings.push(ring);
+      }
+      return new THREE.Mesh(loftRings(rings), mat);
+    }
+
+    function makeSideSkirt(side, mat) {
+      const pts = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = 0.25 + (i / 12) * 0.58;
+        const p = plan(t);
+        pts.push([side * (p.width + 0.08), p.camber - 0.05, p.z]);
+      }
+      const width = 0.055;
+      const verts = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const o = [side * width, -0.10, 0];
+        pushTri(verts, a, b, add3(b, o));
+        pushTri(verts, a, add3(b, o), add3(a, o));
+      }
+      const geo = makeGeo(verts);
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeWingTip(side, mats) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const spear = profile.key === "spear";
+      const group = new THREE.Group();
+      group.add(curvedWinglet(side, mats.trim, {
+        t0: spear ? 0.36 : 0.39, t1: spear ? 0.76 : 0.82,
+        inner: spear ? 0.62 : 0.84, outer: spear ? 1.25 : 1.72,
+        lift: spear ? -0.02 : -0.05,
+        rake: spear ? 0.56 : 0.36,
+        curl: spear ? 0.24 : 0.18,
+        rows: 18, cols: 7,
+      }));
+      group.add(curvedWinglet(side, mats.dark, {
+        t0: spear ? 0.40 : 0.43, t1: spear ? 0.70 : 0.77,
+        inner: spear ? 0.78 : 1.00, outer: spear ? 0.82 : 1.14,
+        lift: spear ? -0.010 : -0.025,
+        rake: spear ? 0.46 : 0.30,
+        curl: spear ? 0.16 : 0.12,
+        rows: 14, cols: 5,
+      }));
+      group.add(curvedWinglet(side, mats.accent, {
+        t0: spear ? 0.47 : 0.48, t1: spear ? 0.68 : 0.73,
+        inner: spear ? 1.08 : 1.42, outer: spear ? 0.20 : 0.28,
+        lift: 0.005,
+        rake: spear ? 0.42 : 0.24,
+        curl: spear ? 0.10 : 0.08,
+        rows: 10, cols: 2,
+      }));
+      return group;
+    }
+
+    function makeWingDetailCluster(side, mats) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const spear = profile.key === "spear";
+      const group = new THREE.Group();
+      const outerRail = [];
+      const innerRail = [];
+      for (let i = 0; i <= 13; i++) {
+        const t = (spear ? 0.38 : 0.35) + (i / 13) * (spear ? 0.34 : 0.45);
+        const p = plan(t);
+        const local = i / 13;
+        const rounded = Math.pow(Math.sin(Math.PI * local), 0.48);
+        const span = (spear ? 0.42 : 0.58) + (spear ? 0.72 : 1.05) * rounded * smooth(spear ? 0.38 : 0.35, spear ? 0.58 : 0.62, t);
+        outerRail.push([side * (p.width + span), p.camber - 0.145, p.z + 0.16]);
+        innerRail.push([side * (p.width + span * 0.48), p.camber - 0.082, p.z + 0.08]);
+      }
+      addTubePath(group, outerRail, 0.020, mats.dark);
+      addTubePath(group, innerRail, 0.014, mats.metal);
+
+      for (let i = 0; i < 5; i++) {
+        const t = (spear ? 0.42 : 0.40) + i * (spear ? 0.058 : 0.075);
+        const p = plan(t);
+        const span = (spear ? 0.52 : 0.66) + (spear ? 0.35 : 0.56) * Math.sin((i / 4) * Math.PI);
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.050, 0.48), i % 2 ? mats.metal : mats.dark);
+        rib.position.set(side * (p.width + span), p.camber - 0.135, p.z + 0.12);
+        rib.rotation.y = side * (0.38 - i * 0.035);
+        rib.rotation.z = side * -0.24;
+        group.add(rib);
+      }
+
+      const panelSpecs = [
+        { t: spear ? 0.42 : 0.39, width: spear ? 0.28 : 0.34, span: spear ? 0.50 : 0.72, mat: mats.dark },
+        { t: spear ? 0.55 : 0.53, width: spear ? 0.34 : 0.42, span: spear ? 0.78 : 1.02, mat: mats.plate },
+        { t: spear ? 0.66 : 0.69, width: spear ? 0.26 : 0.30, span: spear ? 0.68 : 0.86, mat: mats.dark },
+      ];
+      for (const spec of panelSpecs) {
+        const p = plan(spec.t);
+        const baseX = side * (p.width + spec.span);
+        const panel = thinPanel([
+          [baseX - side * 0.05, p.camber - 0.110, p.z - spec.width * 0.45],
+          [baseX + side * 0.34, p.camber - 0.145, p.z - spec.width * 0.26],
+          [baseX + side * 0.38, p.camber - 0.155, p.z + spec.width * 0.26],
+          [baseX + side * 0.03, p.camber - 0.105, p.z + spec.width * 0.47],
+        ], 0.018, spec.mat);
+        group.add(panel);
+      }
+
+      for (let i = 0; i < 4; i++) {
+        const t = (spear ? 0.46 : 0.45) + i * (spear ? 0.052 : 0.075);
+        const p = plan(t);
+        const light = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.018, 0.38), mats.glow);
+        light.position.set(side * (p.width + (spear ? 0.86 : 1.22) + 0.04 * i), p.camber - 0.115, p.z + 0.05);
+        light.rotation.y = side * 0.24;
+        light.rotation.z = side * -0.28;
+        group.add(light);
+      }
+      return group;
+    }
+
+    function curvedWinglet(side, mat, cfg) {
+      const rows = cfg.rows ?? 16;
+      const cols = cfg.cols ?? 6;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const q = i / rows;
+        const t = lerp(cfg.t0, cfg.t1, q);
+        const p = plan(t);
+        const rounded = Math.pow(Math.sin(Math.PI * q), 0.42);
+        const span = cfg.inner + cfg.outer * rounded * (0.78 + 0.22 * smooth(0.20, 0.72, q));
+        const centerZ = p.z + cfg.rake * Math.sin(Math.PI * (q - 0.18));
+        const chord = (0.18 + 0.48 * rounded) * (1 - 0.25 * q);
+        const baseY = p.camber - 0.12 - 0.10 * smooth(0, 1, q) + cfg.lift;
+        for (let j = 0; j <= cols; j++) {
+          const v = j / cols;
+          const vv = smooth(0, 1, v);
+          const edgeSoft = Math.sin(Math.PI * v);
+          const x = side * (p.width * 0.82 + span * vv);
+          const z = centerZ + (v - 0.5) * chord + cfg.curl * edgeSoft * Math.sin(Math.PI * q);
+          const y = baseY + 0.10 * edgeSoft * rounded - 0.05 * vv * vv;
+          verts.push(x, y, z);
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function curvedFinlet(side, tBase, mat, offset = 0) {
+      const rows = 10;
+      const cols = 5;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const q = i / rows;
+        const t = tBase + (q - 0.5) * 0.10;
+        const p = plan(t);
+        const round = Math.pow(Math.sin(Math.PI * q), 0.55);
+        for (let j = 0; j <= cols; j++) {
+          const v = j / cols;
+          const raised = Math.sin(Math.PI * v);
+          const rootX = p.width + 0.34 + offset * 0.10;
+          const span = (0.24 + offset * 0.04) * round;
+          const x = side * (rootX + span * smooth(0, 1, v));
+          const y = p.camber - 0.20 + raised * (0.23 + offset * 0.035) - 0.025 * v;
+          const z = p.z + (q - 0.5) * (0.70 + offset * 0.10) + 0.10 * raised;
+          verts.push(x, y, z);
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeTopSpine(mat) {
+      const rows = 16;
+      const cols = 2;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const t = 0.17 + (i / rows) * 0.66;
+        const w = 0.12 + 0.11 * Math.sin(Math.PI * i / rows);
+        for (let j = 0; j <= cols; j++) {
+          const u = -1 + (j / cols) * 2;
+          const p = bodyPoint(t, u * w / plan(t).width, 0.035);
+          verts.push(...p);
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeCanopy(mat) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const rings = [];
+      const seg = 12;
+      const stations = profile.key === "spear"
+        ? [
+          { t: 0.27, rx: 0.05, ry: 0.04, lift: 0.04 },
+          { t: 0.34, rx: 0.18, ry: 0.13, lift: 0.13 },
+          { t: 0.44, rx: 0.29, ry: 0.21, lift: 0.22 },
+          { t: 0.56, rx: 0.24, ry: 0.17, lift: 0.18 },
+          { t: 0.64, rx: 0.08, ry: 0.06, lift: 0.07 },
+        ]
+        : [
+          { t: 0.22, rx: 0.07, ry: 0.05, lift: 0.05 },
+          { t: 0.28, rx: 0.25, ry: 0.17, lift: 0.15 },
+          { t: 0.38, rx: 0.39, ry: 0.25, lift: 0.25 },
+          { t: 0.50, rx: 0.32, ry: 0.20, lift: 0.20 },
+          { t: 0.58, rx: 0.11, ry: 0.08, lift: 0.08 },
+        ];
+      for (const s of stations) {
+        const p = bodyPoint(s.t, 0, 0.07);
+        const ring = [];
+        for (let j = 0; j < seg; j++) {
+          const a = (j / seg) * Math.PI * 2;
+          ring.push([
+            p[0] + Math.cos(a) * s.rx,
+            p[1] + s.lift + Math.sin(a) * s.ry * (Math.sin(a) > 0 ? 1.0 : 0.45),
+            p[2],
+          ]);
+        }
+        rings.push(ring);
+      }
+      return new THREE.Mesh(loftRings(rings), mat);
+    }
+
+    function makeCanopyFrame(mats) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const spear = profile.key === "spear";
+      const group = new THREE.Group();
+      const leftRail = [
+        bodyPoint(spear ? 0.285 : 0.235, -0.15, 0.135),
+        bodyPoint(spear ? 0.365 : 0.315, spear ? -0.30 : -0.36, 0.245),
+        bodyPoint(spear ? 0.535 : 0.465, spear ? -0.27 : -0.32, 0.200),
+        bodyPoint(spear ? 0.645 : 0.575, -0.12, 0.115),
+      ];
+      const rightRail = leftRail.map((p) => [-p[0], p[1], p[2]]);
+      addTubePath(group, leftRail, 0.030, mats.dark);
+      addTubePath(group, rightRail, 0.030, mats.dark);
+      addTubePath(group, [leftRail[0], rightRail[0]], 0.026, mats.dark);
+      addTubePath(group, [leftRail[2], rightRail[2]], 0.022, mats.metal);
+      addTubePath(group, [leftRail[3], rightRail[3]], 0.026, mats.dark);
+      const centerRail = [
+        bodyPoint(spear ? 0.310 : 0.255, 0, 0.175),
+        bodyPoint(spear ? 0.450 : 0.380, 0, 0.295),
+        bodyPoint(spear ? 0.610 : 0.535, 0, 0.150),
+      ];
+      addTubePath(group, centerRail, 0.018, mats.metal);
+      return group;
+    }
+
+    function makeNoseInset(mat) {
+      const group = new THREE.Group();
+      group.add(surfacePatch(0.12, 0.28, -0.30, 0.30, mat, 0.038, 8, 5));
+      group.add(surfacePatch(0.18, 0.34, -0.72, -0.50, mat, 0.032, 8, 3));
+      group.add(surfacePatch(0.18, 0.34, 0.50, 0.72, mat, 0.032, 8, 3));
+      return group;
+    }
+
+    function makePaintBlocks(mats) {
+      const group = new THREE.Group();
+      group.add(surfacePatch(0.22, 0.42, -0.26, 0.26, mats.plate, 0.050, 10, 4));
+      group.add(surfacePatch(0.40, 0.66, -0.38, 0.38, mats.plate, 0.047, 12, 5));
+      group.add(surfacePatch(0.16, 0.32, -0.92, -0.72, mats.trim, 0.044, 8, 3));
+      group.add(surfacePatch(0.16, 0.32, 0.72, 0.92, mats.trim, 0.044, 8, 3));
+      group.add(surfacePatch(0.50, 0.77, -0.96, -0.75, mats.trim, 0.038, 10, 3));
+      group.add(surfacePatch(0.50, 0.77, 0.75, 0.96, mats.trim, 0.038, 10, 3));
+      group.add(surfacePatch(0.66, 0.86, -0.24, 0.24, mats.trim, 0.052, 8, 3));
+      group.add(surfacePatch(0.20, 0.48, -0.58, -0.50, mats.accent, 0.060, 10, 2));
+      group.add(surfacePatch(0.20, 0.48, 0.50, 0.58, mats.accent, 0.060, 10, 2));
+      group.add(surfacePatch(0.54, 0.76, -0.44, -0.38, mats.accent, 0.058, 8, 2));
+      return group;
+    }
+
+    function makeAccessPanels(mats) {
+      const group = new THREE.Group();
+      const panelSpecs = [
+        [0.285, 0.355, -0.18, 0.18, mats.dark, 0.066],
+        [0.465, 0.545, -0.24, 0.24, mats.dark, 0.062],
+        [0.570, 0.660, -0.64, -0.42, mats.plate, 0.048],
+        [0.570, 0.660, 0.42, 0.64, mats.plate, 0.048],
+        [0.720, 0.790, -0.49, -0.30, mats.dark, 0.052],
+        [0.720, 0.790, 0.30, 0.49, mats.dark, 0.052],
+        [0.805, 0.870, -0.18, 0.18, mats.plate, 0.058],
+      ];
+      for (const [t0, t1, u0, u1, mat, lift] of panelSpecs) {
+        group.add(surfacePatch(t0, t1, u0, u1, mat, lift, 5, 3));
+      }
+      for (const side of [-1, 1]) {
+        group.add(surfacePatch(0.335, 0.405, side * 0.70, side * 0.92, mats.dark, 0.050, 5, 3));
+        group.add(surfacePatch(0.455, 0.520, side * 0.84, side * 0.98, mats.trim, 0.046, 5, 2));
+      }
+      return group;
+    }
+
+    function makeFasteners(mats) {
+      const group = new THREE.Group();
+      const boltGeo = new THREE.SphereGeometry(0.020, 8, 5);
+      const addBolt = (t, u, lift = 0.072, mat = mats.metal, scale = 1) => {
+        const p = bodyPoint(t, u, lift);
+        const bolt = new THREE.Mesh(boltGeo.clone(), mat);
+        bolt.position.set(p[0], p[1], p[2]);
+        bolt.scale.setScalar(scale);
+        group.add(bolt);
+      };
+      for (const t of [0.20, 0.28, 0.36, 0.48, 0.60, 0.72, 0.84]) {
+        for (const u of [-0.72, -0.46, 0.46, 0.72]) addBolt(t, u, 0.060, mats.metal, 0.88);
+      }
+      for (const t of [0.31, 0.50, 0.68]) {
+        for (const u of [-0.22, 0.22]) addBolt(t, u, 0.082, mats.dark, 0.72);
+      }
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 6; i++) {
+          const t = 0.33 + i * 0.075;
+          addBolt(t, side * 0.96, 0.040, mats.metal, 0.80);
+        }
+      }
+      return group;
+    }
+
+    function makeRearDeck(mat) {
+      const group = new THREE.Group();
+      group.add(surfacePatch(0.60, 0.88, -0.34, 0.34, mat, 0.034, 12, 5));
+      group.add(surfacePatch(0.68, 0.90, -0.78, -0.54, mat, 0.026, 9, 3));
+      group.add(surfacePatch(0.68, 0.90, 0.54, 0.78, mat, 0.026, 9, 3));
+      return group;
+    }
+
+    function makeMechanicalUndercut(mat) {
+      const group = new THREE.Group();
+      const center = thinPanel([
+        [-0.42, -0.42, -1.10],
+        [0.42, -0.42, -1.10],
+        [0.54, -0.45, 2.72],
+        [-0.54, -0.45, 2.72],
+      ], 0.040, mat);
+      group.add(center);
+      for (const side of [-1, 1]) {
+        const duct = thinPanel([
+          [side * 0.72, -0.25, -2.55],
+          [side * 1.18, -0.31, -1.64],
+          [side * 1.08, -0.34, 0.58],
+          [side * 0.62, -0.26, -0.12],
+        ], 0.045, mat);
+        group.add(duct);
+      }
+      return group;
+    }
+
+    function makeSpearBladeNose(mats) {
+      const group = new THREE.Group();
+      group.add(surfacePatch(0.06, 0.30, -0.16, 0.16, mats.trim, 0.060, 10, 3));
+      group.add(surfacePatch(0.11, 0.36, -0.045, 0.045, mats.accent, 0.078, 10, 2));
+
+      for (const side of [-1, 1]) {
+        const rail = [];
+        for (let i = 0; i <= 7; i++) {
+          const t = 0.06 + (i / 7) * 0.32;
+          const p = bodyPoint(t, side * (0.18 + 0.12 * i / 7), 0.082);
+          rail.push([p[0], p[1], p[2] - 0.02 * i]);
+        }
+        addTubePath(group, rail, 0.014, mats.metal);
+      }
+      return group;
+    }
+
+    function makeSpearCanards(mats) {
+      const group = new THREE.Group();
+      for (const side of [-1, 1]) {
+        group.add(curvedCanard(side, mats.trim, 1.00));
+        group.add(curvedCanard(side, mats.accent, 0.26));
+      }
+      return group;
+    }
+
+    function curvedCanard(side, mat, widthScale) {
+      const rows = 10;
+      const cols = 5;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const q = i / rows;
+        const t = lerp(0.245, 0.405, q);
+        const p = plan(t);
+        const lobe = Math.pow(Math.sin(Math.PI * q), 0.52);
+        for (let j = 0; j <= cols; j++) {
+          const v = j / cols;
+          const vv = smooth(0, 1, v);
+          const span = (0.18 + 0.54 * lobe) * widthScale;
+          const x = side * (p.width * 0.72 + span * vv);
+          const y = p.camber - 0.035 + 0.070 * Math.sin(Math.PI * v) * lobe - 0.025 * vv;
+          const z = p.z - 0.20 * vv + 0.16 * lobe * vv;
+          verts.push(x, y, z);
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function makeSpearSplitTail(mats) {
+      const group = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const rail = [
+          bodyPoint(0.68, side * 0.20, 0.100),
+          bodyPoint(0.78, side * 0.24, 0.145),
+          bodyPoint(0.90, side * 0.20, 0.120),
+          [side * 0.34, 0.34, plan(0.98).z + 0.18],
+        ];
+        addTubePath(group, rail, 0.030, mats.dark);
+        addTubePath(group, rail.map((p) => [p[0] + side * 0.12, p[1] - 0.03, p[2] + 0.05]), 0.018, mats.metal);
+        group.add(thinPanel([
+          bodyPoint(0.76, side * 0.18, 0.110),
+          bodyPoint(0.84, side * 0.40, 0.090),
+          [side * 0.62, 0.38, plan(0.98).z + 0.28],
+          [side * 0.30, 0.48, plan(0.88).z + 0.12],
+        ], 0.024, mats.trim));
+      }
+      return group;
+    }
+
+    function makeSpearAuxThruster(side, mats, animated, extraMaterials) {
+      const group = new THREE.Group();
+      const nozzle = engineNozzle(side);
+      const x = nozzle.x + side * 0.44;
+      const y = nozzle.y + 0.31;
+      const z = nozzle.z - 0.18;
+
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.66, 18), mats.dark);
+      pod.position.set(x, y, z - 0.22);
+      pod.rotation.x = Math.PI / 2;
+      pod.rotation.z = side * 0.08;
+      group.add(pod);
+
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.024, 8, 32), mats.glow);
+      ring.position.set(x, y, z + 0.12);
+      group.add(ring);
+
+      const core = new THREE.Mesh(new THREE.CircleGeometry(0.17, 30), mats.glowDisc);
+      core.position.set(x, y, z + 0.145);
+      group.add(core);
+      animated.push({ mesh: core, kind: "engine", phase: side > 0 ? 0.7 : 0.2 });
+
+      const plumeMat = mats.plume.clone();
+      extraMaterials.push(plumeMat);
+      const plume = new THREE.Sprite(plumeMat);
+      plume.position.set(x, y, z + 0.50);
+      plume.scale.set(0.42, 0.24, 1);
+      group.add(plume);
+      animated.push({
+        mesh: plume,
+        kind: "plume",
+        phase: 2 + side,
+        baseScale: [0.42, 0.24, 1],
+        baseOpacity: 0.07,
+        pulseOpacity: 0.025,
+      });
+
+      return group;
+    }
+
+    function makeShoulderInset(side, mat) {
+      const u0 = side < 0 ? -0.82 : 0.50;
+      const u1 = side < 0 ? -0.50 : 0.82;
+      return surfacePatch(0.36, 0.70, u0, u1, mat, 0.030, 14, 4);
+    }
+
+    function makeIntakeSlats(side, mats) {
+      const group = new THREE.Group();
+      for (let i = 0; i < 7; i++) {
+        const t = 0.25 + i * 0.045;
+        const p = bodyPoint(t, side * 0.76, 0.055);
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.030, 0.050), mats.metal);
+        slat.position.set(p[0] + side * 0.07, p[1] - 0.015, p[2] + 0.02);
+        slat.rotation.y = side * 0.18;
+        slat.rotation.z = side * 0.24;
+        group.add(slat);
+      }
+      for (let i = 0; i < 6; i++) {
+        const t = 0.58 + i * 0.038;
+        const p = plan(t);
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.028, 0.052), mats.dark);
+        slat.position.set(side * (p.width * 0.77 + 0.28), p.camber - 0.24, p.z + 0.04);
+        slat.rotation.y = side * -0.10;
+        slat.rotation.z = side * -0.18;
+        group.add(slat);
+      }
+      return group;
+    }
+
+    function makeFinletCluster(side, mats) {
+      const group = new THREE.Group();
+      const baseT = [0.48, 0.58, 0.70];
+      for (let i = 0; i < baseT.length; i++) {
+        group.add(curvedFinlet(side, baseT[i], i === 1 ? mats.accent : mats.dark, i));
+      }
+      return group;
+    }
+
+    function makeDorsalFin(mats) {
+      const group = new THREE.Group();
+      group.add(surfacePatch(0.61, 0.86, -0.18, 0.18, mats.dark, 0.052, 8, 3));
+      for (const side of [-1, 1]) {
+        group.add(curvedVerticalFin(side, mats.trim, 1.00, 0.00));
+        group.add(curvedVerticalFin(side, mats.dark, 0.62, -0.015));
+        group.add(curvedVerticalFin(side, mats.accent, 0.18, 0.020));
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.045, 1.02), mats.metal);
+        cap.position.set(side * 0.38, 0.82, 2.82);
+        cap.rotation.x = -0.18;
+        cap.rotation.z = side * 0.18;
+        group.add(cap);
+      }
+      return group;
+    }
+
+    function curvedVerticalFin(side, mat, scale = 1, lift = 0) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const rows = 15;
+      const cols = 5;
+      const verts = [];
+      const idx = [];
+      for (let i = 0; i <= rows; i++) {
+        const q = i / rows;
+        const t = lerp(0.61, 0.88, q);
+        const p = bodyPoint(t, side * 0.10, 0.045);
+        const height = (0.22 + 0.92 * Math.pow(Math.sin(Math.PI * q), 0.62)) * scale * profile.finHeight;
+        const sweep = (profile.key === "spear" ? 0.50 : 0.34) * Math.sin(Math.PI * (q - 0.12));
+        for (let j = 0; j <= cols; j++) {
+          const v = j / cols;
+          const eased = smooth(0, 1, v);
+          const taper = 1 - 0.22 * eased;
+          const x = p[0] + side * (0.05 + 0.30 * eased * scale + (profile.key === "spear" ? 0.12 : 0.07) * q);
+          const y = p[1] + height * Math.sin(eased * Math.PI * 0.5) * taper + lift;
+          const z = p[2] + sweep * eased + (eased - 0.5) * 0.14 * Math.sin(Math.PI * q);
+          verts.push(x, y, z);
+        }
+      }
+      gridIndices(idx, rows, cols);
+      const geo = geoFrom(verts, idx);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function engineNozzle(side) {
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const tail = plan(0.94);
+      return {
+        x: side * (tail.width * 0.80 + 0.42 * profile.engineSpread + 0.22 * profile.engineSpread),
+        y: tail.camber - 0.155,
+        z: tail.z + (profile.key === "spear" ? 0.68 : 0.42),
+      };
+    }
+
+    function makeEngineHardware(side, mats, animated, extraMaterials) {
+      const group = new THREE.Group();
+      const nozzle = engineNozzle(side);
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.47, 0.045, 12, 42), mats.glow);
+      ring.position.set(nozzle.x, nozzle.y, nozzle.z);
+      ring.scale.setScalar(profile.engineScale);
+      group.add(ring);
+      const core = new THREE.Mesh(new THREE.CircleGeometry(0.38, 42), mats.glowDisc);
+      core.position.set(nozzle.x, nozzle.y, nozzle.z + 0.03);
+      core.scale.setScalar(profile.engineScale);
+      group.add(core);
+      animated.push({ mesh: core, kind: "engine", phase: side > 0 ? 0.45 : 0 });
+      const plumeSpecs = [
+        { z: 5.20, sx: 0.54, sy: 0.34, o: 0.18 },
+        { z: 5.58, sx: 0.80, sy: 0.44, o: 0.14 },
+        { z: 6.02, sx: 1.10, sy: 0.56, o: 0.10 },
+        { z: 6.55, sx: 1.46, sy: 0.72, o: 0.065 },
+      ];
+      for (const spec of plumeSpecs) {
+        const plumeMat = mats.plume.clone();
+        extraMaterials.push(plumeMat);
+        const plume = new THREE.Sprite(plumeMat);
+        plume.position.set(nozzle.x, nozzle.y, nozzle.z + (spec.z - 4.92) * (profile.key === "spear" ? 0.92 : 1));
+        plume.scale.set(spec.sx * profile.engineScale, spec.sy * profile.engineScale, 1);
+        group.add(plume);
+        animated.push({
+          mesh: plume,
+          kind: "plume",
+          phase: spec.z + side,
+          baseScale: [spec.sx * profile.engineScale, spec.sy * profile.engineScale, 1],
+          baseOpacity: spec.o,
+          pulseOpacity: spec.o * 0.32,
+        });
+      }
+      return group;
+    }
+
+    function makeEngineRibbing(side, mats) {
+      const group = new THREE.Group();
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const nozzle = engineNozzle(side);
+      const rings = [
+        { dz: -1.44, r: 0.31, y: 0.050, mat: mats.dark },
+        { dz: -1.06, r: 0.36, y: 0.025, mat: mats.metal },
+        { dz: -0.67, r: 0.41, y: 0.005, mat: mats.dark },
+        { dz: -0.30, r: 0.44, y: -0.005, mat: mats.metal },
+      ];
+      for (const spec of rings) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(spec.r * profile.engineScale, 0.026, 8, 42), spec.mat);
+        ring.position.set(nozzle.x, nozzle.y + spec.y, nozzle.z + spec.dz);
+        ring.scale.set(1.12, 0.72, 1);
+        group.add(ring);
+      }
+
+      for (let i = 0; i < 8; i++) {
+        const q = i / 7;
+        const z = lerp(nozzle.z - 1.60, nozzle.z - 0.34, q);
+        const p = plan(0.62 + q * 0.25);
+        const casing = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.055, 0.30), i % 2 ? mats.dark : mats.plate);
+        casing.position.set(side * (p.width * 0.82 + 0.63 * profile.engineSpread + 0.08 * q), p.camber - 0.02 - 0.08 * q, z);
+        casing.rotation.y = side * -0.18;
+        casing.rotation.z = side * 0.28;
+        group.add(casing);
+      }
+
+      for (let i = 0; i < 6; i++) {
+        const angle = -2.15 + i * 0.32;
+        const x = nozzle.x + side * Math.cos(angle) * 0.47 * profile.engineScale;
+        const y = nozzle.y + Math.sin(angle) * 0.30 * profile.engineScale;
+        const vane = new THREE.Mesh(new THREE.BoxGeometry(0.050, 0.034, 0.52), mats.dark);
+        vane.position.set(x, y, nozzle.z - 0.22);
+        vane.rotation.x = angle * 0.18;
+        vane.rotation.y = side * 0.22;
+        vane.rotation.z = side * -0.20;
+        group.add(vane);
+      }
+
+      const sideArmor = thinPanel([
+        [nozzle.x + side * 0.28, nozzle.y + 0.14, nozzle.z - 1.86],
+        [nozzle.x + side * 0.56, nozzle.y + 0.04, nozzle.z - 1.39],
+        [nozzle.x + side * 0.52, nozzle.y - 0.02, nozzle.z - 0.63],
+        [nozzle.x + side * 0.24, nozzle.y + 0.10, nozzle.z - 0.39],
+      ], 0.030, mats.dark);
+      group.add(sideArmor);
+
+      return group;
+    }
+
+    function makeUndersidePiping(side, mats) {
+      const group = new THREE.Group();
+      const mainLine = [
+        [side * 0.24, -0.455, -1.32],
+        [side * 0.58, -0.520, -0.26],
+        [side * 0.88, -0.500, 1.18],
+        [side * 1.12, -0.390, 2.88],
+      ];
+      const returnLine = [
+        [side * 0.42, -0.500, -0.54],
+        [side * 0.78, -0.545, 0.72],
+        [side * 1.26, -0.415, 3.18],
+      ];
+      addTubePath(group, mainLine, 0.025, mats.metal);
+      addTubePath(group, returnLine, 0.017, mats.dark);
+
+      for (let i = 0; i < 5; i++) {
+        const q = i / 4;
+        const z = lerp(-0.62, 2.58, q);
+        const x = side * lerp(0.54, 1.04, q);
+        const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.045, 0.055), mats.dark);
+        clamp.position.set(x, -0.505 + 0.080 * q, z);
+        clamp.rotation.y = side * 0.16;
+        clamp.rotation.z = side * -0.14;
+        group.add(clamp);
+      }
+
+      for (let i = 0; i < 4; i++) {
+        const exchanger = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.032, 0.050), mats.metal);
+        exchanger.position.set(side * (0.44 + i * 0.10), -0.425, 1.00 + i * 0.28);
+        exchanger.rotation.z = side * -0.34;
+        exchanger.rotation.y = side * 0.10;
+        group.add(exchanger);
+      }
+
+      return group;
+    }
+
+    function makeHoverCoils(side, mats, animated) {
+      const group = new THREE.Group();
+      for (const t of [0.28, 0.43, 0.60, 0.76]) {
+        const p = plan(t);
+        const coil = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.026, 8, 30), mats.glow);
+        coil.position.set(side * p.width * 0.66, p.camber + p.bottom - 0.16, p.z);
+        coil.rotation.x = Math.PI / 2;
+        group.add(coil);
+        animated.push({ mesh: coil, kind: "hover", phase: t + side });
+      }
+      return group;
+    }
+
+    function makeShadow() {
+      const mesh = new THREE.Mesh(
+        new THREE.CircleGeometry(3.45, 56),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false }),
+      );
+      mesh.position.set(0, -0.93, 0.26);
+      mesh.rotation.x = -Math.PI / 2;
+      return mesh;
+    }
+
+    function addPanelLines(root, disposables, extraMaterials, c) {
+      const darkMat = new THREE.LineBasicMaterial({ color: c.mark ?? c.dark, transparent: true, opacity: 0.52 });
+      const glowMat = new THREE.LineBasicMaterial({ color: c.glow, transparent: true, opacity: 0.16 });
+      const accentMat = new THREE.LineBasicMaterial({ color: c.accent, transparent: true, opacity: 0.24 });
+      extraMaterials.push(darkMat, glowMat, accentMat);
+      const addLine = (points, mat) => {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
+        const line = new THREE.Line(geo, mat);
+        root.add(line);
+        disposables.push(geo);
+      };
+      for (const u of [-0.46, 0.46]) {
+        addLine(sampleBodyLine(0.18, 0.83, u, 26, 0.026), darkMat);
+      }
+      for (const u of [-0.72, 0.72]) {
+        addLine(sampleBodyLine(0.25, 0.78, u, 22, 0.02), glowMat);
+      }
+      for (const t of [0.24, 0.36, 0.52, 0.68, 0.82]) {
+        addLine(sampleCrossLine(t, -0.66, 0.66, 22, 0.028), darkMat);
+      }
+      for (const t of [0.31, 0.44, 0.57, 0.73]) {
+        addLine(sampleCrossLine(t, -0.32, 0.32, 14, 0.045), accentMat);
+      }
+      for (const side of [-1, 1]) {
+        addLine(sampleWingEdge(side, 0.30, 0.82, 24), glowMat);
+        addLine(sampleWingInterior(side, 0.34, 0.78, 18), accentMat);
+        addLine(sampleBodyLine(0.42, 0.84, side * 0.86, 20, 0.024), darkMat);
+        addLine(sampleBodyLine(0.16, 0.55, side * 0.18, 18, 0.060), darkMat);
+        addLine(sampleBodyLine(0.58, 0.88, side * 0.28, 18, 0.052), darkMat);
+      }
+    }
+
+    function sampleBodyLine(t0, t1, u, n, lift) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const t = lerp(t0, t1, i / n);
+        pts.push(bodyPoint(t, u, lift));
+      }
+      return pts;
+    }
+
+    function sampleCrossLine(t, u0, u1, n, lift) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        pts.push(bodyPoint(t, lerp(u0, u1, i / n), lift));
+      }
+      return pts;
+    }
+
+    function sampleWingEdge(side, t0, t1, n) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const t = lerp(t0, t1, i / n);
+        const p = plan(t);
+        const span = 1.00 * gauss(t, 0.58, 0.28) + 0.60 * gauss(t, 0.76, 0.16);
+        pts.push([side * (p.width + span), p.camber - 0.20, p.z + 0.18]);
+      }
+      return pts;
+    }
+
+    function sampleWingInterior(side, t0, t1, n) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const t = lerp(t0, t1, i / n);
+        const p = plan(t);
+        const span = 0.55 * gauss(t, 0.62, 0.25);
+        pts.push([side * (p.width + span), p.camber - 0.11, p.z + 0.08]);
+      }
+      return pts;
+    }
+
+    function addDecals(root, disposables, extraMaterials, c) {
+      const textures = [];
+      const profile = activeShipProfile ?? shipTypes.manta;
+      const raceNo = profile.key === "spear" ? "07" : "03";
+      const modelName = profile.key === "spear" ? "SPEAR" : "MANTA";
+      const subName = profile.key === "spear" ? "R-07 WORKS" : "R-03 WORKS";
+      const sideNoX = profile.key === "spear" ? 2.05 : 2.52;
+      const tailMarkX = profile.key === "spear" ? 1.22 : 1.42;
+      const mark = c.mark ?? c.dark;
+      const add = (label, size, pos, rot, color, sub = "") => {
+        const tex = decalTexture(label, color, sub);
+        textures.push(tex);
+        const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide });
+        extraMaterials.push(mat);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]), mat);
+        mesh.position.set(...pos);
+        mesh.rotation.set(...rot);
+        root.add(mesh);
+        disposables.push(mesh.geometry);
+      };
+      add(raceNo, [0.58,0.32], [-sideNoX,-0.135,0.92], [-Math.PI/2,0,0.10], c.accent);
+      add(raceNo, [0.58,0.32], [sideNoX,-0.135,0.92], [-Math.PI/2,0,-0.10], c.accent);
+      add(modelName, [1.10,0.28], [0,0.69, profile.key === "spear" ? -2.75 : -2.10], [-Math.PI/2,0,0], mark, subName);
+      add("SV", [0.54,0.24], [-tailMarkX,0.18,2.48], [-1.35,0.02,1.62], c.accent);
+      add("SV", [0.54,0.24], [tailMarkX,0.18,2.48], [-1.35,0.02,-1.62], c.accent);
+      add("NO STEP", [0.42,0.13], [-0.58,0.54,0.42], [-Math.PI/2,0,0.08], mark);
+      add("NO STEP", [0.42,0.13], [0.58,0.54,0.42], [-Math.PI/2,0,-0.08], mark);
+      add("LIFT", [0.34,0.12], [-0.82,0.37,-3.20], [-Math.PI/2,0,0.18], c.accent);
+      add("LIFT", [0.34,0.12], [0.82,0.37,-3.20], [-Math.PI/2,0,-0.18], c.accent);
+      add("MAG", [0.30,0.11], [-1.58,0.10,-0.95], [-1.42,0.06,1.34], c.accent);
+      add("MAG", [0.30,0.11], [1.58,0.10,-0.95], [-1.42,-0.06,-1.34], c.accent);
+      add("AUX", [0.30,0.11], [-1.74,-0.02,1.78], [-1.40,0.04,1.42], mark);
+      add("AUX", [0.30,0.11], [1.74,-0.02,1.78], [-1.40,-0.04,-1.42], mark);
+      add(`R-${raceNo}`, [0.36,0.13], [-1.16,0.47,3.12], [-Math.PI/2,0,0.20], c.accent);
+      add(`R-${raceNo}`, [0.36,0.13], [1.16,0.47,3.12], [-Math.PI/2,0,-0.20], c.accent);
+      add("VENT", [0.34,0.12], [-0.42,0.63,1.42], [-Math.PI/2,0,0.06], mark);
+      add("CORE", [0.34,0.12], [0.42,0.63,1.42], [-Math.PI/2,0,-0.06], mark);
+      return textures;
+    }
+
+    function decalTexture(label, colorHex, sub = "") {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 180;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = `#${colorHex.toString(16).padStart(6, "0")}`;
+      ctx.font = "700 72px Orbitron, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, 256, sub ? 76 : 90);
+      if (sub) {
+        ctx.font = "700 28px Rajdhani, sans-serif";
+        ctx.fillText(sub, 256, 130);
+      }
+      ctx.globalAlpha = 0.72;
+      ctx.fillRect(52, 150, 408, 7);
+      ctx.fillRect(52, 25, 100, 5);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function makeSoftGlowTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 62);
+      g.addColorStop(0.00, "rgba(255,255,255,0.82)");
+      g.addColorStop(0.18, "rgba(255,255,255,0.40)");
+      g.addColorStop(0.48, "rgba(255,255,255,0.13)");
+      g.addColorStop(1.00, "rgba(255,255,255,0.00)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function buildHangar() {
+      const root = new THREE.Group();
+      const animated = [];
+      let pulseBase = 0.12;
+      let pulseAmp = 0.07;
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(20, 80),
+        new THREE.MeshBasicMaterial({ color: 0x090c15, transparent: true, opacity: 0.96 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -0.97;
+      root.add(floor);
+
+      const gridGeo = new THREE.BufferGeometry();
+      const verts = [];
+      for (let i = -16; i <= 16; i++) {
+        verts.push(-16,-0.955,i, 16,-0.955,i, i,-0.955,-16, i,-0.955,16);
+      }
+      gridGeo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0x65f3ff, transparent: true, opacity: 0.12 }));
+      root.add(grid);
+
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x65f3ff, transparent: true, opacity: 0.18, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(4.0, 0.025, 8, 128), ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -0.94;
+      root.add(ring);
+      animated.push(ring);
+
+      const archMat = new THREE.MeshBasicMaterial({ color: 0x9db7ff, transparent: true, opacity: 0.16 });
+      for (let i = 0; i < 6; i++) {
+        const arch = new THREE.Mesh(new THREE.TorusGeometry(5.6 + i * 1.35, 0.013, 6, 96, Math.PI), archMat);
+        arch.position.set(0, -0.83, -4.6 - i * 1.18);
+        arch.rotation.x = Math.PI / 2;
+        root.add(arch);
+        animated.push(arch);
+      }
+
+      return {
+        root,
+        setEnvironment(mode) {
+          const light = mode === "light";
+          floor.material.color.setHex(light ? 0xe5eaf1 : 0x090c15);
+          floor.material.opacity = light ? 0.94 : 0.96;
+          grid.material.color.setHex(light ? 0x7f8fa3 : 0x65f3ff);
+          grid.material.opacity = light ? 0.20 : 0.12;
+          ringMat.color.setHex(light ? 0x7f8fa3 : 0x65f3ff);
+          ringMat.opacity = light ? 0.10 : 0.18;
+          archMat.color.setHex(light ? 0xb9c4d6 : 0x9db7ff);
+          archMat.opacity = light ? 0.10 : 0.16;
+          pulseBase = light ? 0.08 : 0.12;
+          pulseAmp = light ? 0.035 : 0.07;
+        },
+        update(t) {
+          ring.rotation.z = t * 0.08;
+          for (let i = 1; i < animated.length; i++) animated[i].material.opacity = pulseBase + pulseAmp * Math.sin(t * 1.2 + i);
+        },
+      };
+    }
+
+    function addTubePath(group, points, radius, mat) {
+      for (let i = 0; i < points.length - 1; i++) {
+        group.add(cylinderBetween(points[i], points[i + 1], radius, mat));
+      }
+    }
+
+    function cylinderBetween(a, b, radius, mat) {
+      const start = new THREE.Vector3(...a);
+      const end = new THREE.Vector3(...b);
+      const dir = end.clone().sub(start);
+      const len = Math.max(dir.length(), 0.0001);
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, len, 10), mat);
+      mesh.position.copy(start.add(end).multiplyScalar(0.5));
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      return mesh;
+    }
+
+    function thinPanel(points, thickness, mat) {
+      const a = new THREE.Vector3(...points[0]);
+      const b = new THREE.Vector3(...points[1]);
+      const c = new THREE.Vector3(...points[2]);
+      const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+      if (normal.lengthSq() < 0.0001) normal.set(0, 1, 0);
+      normal.multiplyScalar(thickness / 2);
+      const top = points.map((p) => [p[0] + normal.x, p[1] + normal.y, p[2] + normal.z]);
+      const bot = points.map((p) => [p[0] - normal.x, p[1] - normal.y, p[2] - normal.z]);
+      const verts = [];
+      for (let i = 1; i < top.length - 1; i++) pushTri(verts, top[0], top[i], top[i + 1]);
+      for (let i = 1; i < bot.length - 1; i++) pushTri(verts, bot[0], bot[i + 1], bot[i]);
+      for (let i = 0; i < top.length; i++) {
+        const j = (i + 1) % top.length;
+        pushTri(verts, top[i], bot[i], bot[j]);
+        pushTri(verts, top[i], bot[j], top[j]);
+      }
+      const geo = makeGeo(verts);
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function loftRings(rings) {
+      const verts = [];
+      const n = rings[0].length;
+      for (let i = 0; i < rings.length - 1; i++) {
+        for (let j = 0; j < n; j++) {
+          const k = (j + 1) % n;
+          pushTri(verts, rings[i][j], rings[i + 1][j], rings[i + 1][k]);
+          pushTri(verts, rings[i][j], rings[i + 1][k], rings[i][k]);
+        }
+      }
+      const geo = makeGeo(verts);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function gridIndices(idx, rows, cols, flip = false) {
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+          const a = i * (cols + 1) + j;
+          const b = a + cols + 1;
+          if (flip) idx.push(a, b, a + 1, a + 1, b, b + 1);
+          else idx.push(a, a + 1, b, a + 1, b + 1, b);
+        }
+      }
+    }
+
+    function geoFrom(verts, idx) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function makeGeo(verts) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+      return geo;
+    }
+
+    function pushTri(out, a, b, c) {
+      out.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    }
+
+    function add3(a, b) {
+      return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function smooth(a, b, x) {
+      const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    }
+    function gauss(x, m, s) {
+      const d = (x - m) / s;
+      return Math.exp(-d * d);
+    }
+  </script>
+</body>
+</html>

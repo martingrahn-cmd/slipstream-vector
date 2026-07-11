@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>SHIP INSPECTOR</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #07060f; overflow: hidden; font-family: 'Rajdhani', system-ui, sans-serif; }
+  #c { display: block; width: 100vw; height: 100vh; }
+  #hud { position: absolute; top: 14px; left: 16px; color: #cfe; font-size: 13px; letter-spacing: 0.12em; line-height: 1.6; opacity: 0.8; }
+  #hud b { color: #7df9ff; }
+</style>
+<script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  } }
+</script>
+</head>
+<body>
+<div id="hud"></div>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { buildShipMesh } from './src/ship/shipVisual.js';
+import { TEAMS } from './src/worlds/teams.js';
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07060f);
+const W = innerWidth, H = innerHeight;
+renderer.setSize(W, H, false);
+const camera = new THREE.PerspectiveCamera(32, W / H, 0.1, 200);
+
+// reference grid + centreline so wing/engine placement is judgeable
+const grid = new THREE.GridHelper(20, 20, 0x2a2050, 0x161033);
+grid.position.y = -0.9; scene.add(grid);
+const axis = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 12),
+  new THREE.MeshBasicMaterial({ color: 0x3a3060 })); scene.add(axis); // z centreline
+
+let current = null, ti = 1, pi = 0, viewName = '3q', spin = false, spinT = 0;
+function build() {
+  if (current) { scene.remove(current); current.traverse(o => { o.geometry && o.geometry.dispose(); }); }
+  const team = TEAMS[ti];
+  current = buildShipMesh({ ...team.variant, ...team.liveries[pi] });
+  scene.add(current);
+  hud();
+}
+const VIEWS = {
+  '3q':   { p: [5.2, 3.4, -6.6], look: [0, 0.15, 0], up: [0, 1, 0] },
+  top:    { p: [0, 9, -0.4],     look: [0, 0, 0],    up: [0, 0, -1] }, // nose(-z) points UP in image
+  side:   { p: [9, 1.1, 0],      look: [0, 0.25, 0], up: [0, 1, 0] },
+  front:  { p: [0, 1.1, -9],     look: [0, 0.25, 0], up: [0, 1, 0] }, // nose is -z
+  rear:   { p: [0, 1.6, 9],      look: [0, 0.25, 0], up: [0, 1, 0] },
+};
+function setView(n) { viewName = VIEWS[n] ? n : '3q'; const v = VIEWS[viewName]; camera.up.set(...v.up); camera.position.set(...v.p); camera.lookAt(...v.look); hud(); }
+function hud() {
+  const team = TEAMS[ti];
+  document.getElementById('hud').innerHTML =
+    `<b>${team.name}</b> · ${team.pilots[pi]} <span style="opacity:.6">(${team.variant.arch})</span><br>view: <b>${viewName}</b> &nbsp; team ${ti} pilot ${pi}`;
+}
+window.__insp = {
+  ship(t, p = 0) { ti = ((t % 4) + 4) % 4; pi = p & 1; build(); if (spin) {} else setView(viewName); },
+  view(n) { setView(n); }, spin(on) { spin = !!on; },
+  arch(name) { const i = TEAMS.findIndex(t => t.variant.arch === name); if (i >= 0) { ti = i; build(); setView(viewName); } },
+};
+
+build(); setView('3q');
+function tick() {
+  if (spin) { spinT += 0.01; current.rotation.y = spinT; } else if (current) current.rotation.y = 0;
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

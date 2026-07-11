@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slipstream Vector — Ship Pimp A/B</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --cyan:#65f3ff; --magenta:#ff3158; --hot:#ff9d2e; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body { width:100%; height:100%; overflow:hidden; background:#04030b; }
+    body {
+      font-family:"Rajdhani",system-ui,sans-serif; color:#fff;
+      background:
+        radial-gradient(circle at 26% 26%, rgba(101,243,255,0.12), transparent 30%),
+        radial-gradient(circle at 74% 28%, rgba(255,49,88,0.10), transparent 30%),
+        radial-gradient(ellipse at 50% 92%, rgba(101,243,255,0.07), transparent 46%),
+        linear-gradient(180deg,#0e1426 0%,#070a16 60%,#020106 100%);
+    }
+    #stage { position:fixed; inset:0; }
+    canvas { display:block; }
+    .scan {
+      position:fixed; inset:0; pointer-events:none; opacity:.36; mix-blend-mode:screen;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.026) 0 1px, transparent 1px 4px),
+        radial-gradient(ellipse at 50% 44%, transparent 46%, rgba(0,0,0,.5) 100%);
+    }
+    .title { position:fixed; left:26px; top:20px; pointer-events:none; transform:skewX(-8deg); }
+    .title .tag { font-size:11px; font-weight:700; letter-spacing:.34em; color:var(--cyan); text-shadow:0 0 12px rgba(101,243,255,.7); }
+    .title h1 {
+      margin-top:4px; font-family:"Orbitron",monospace; font-size:clamp(26px,3.6vw,46px); line-height:.9; letter-spacing:.1em;
+      background:linear-gradient(180deg,#fff 22%,var(--cyan) 58%,var(--magenta) 96%);
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+      filter:drop-shadow(4px 4px 0 rgba(255,49,88,.14)) drop-shadow(0 0 20px rgba(101,243,255,.24));
+    }
+    .labels { position:fixed; inset:0; pointer-events:none; }
+    .lab { position:absolute; bottom:7.5%; width:42%; text-align:center; }
+    .lab.L { left:4%; } .lab.R { right:4%; }
+    .lab .h { font-family:"Orbitron",monospace; font-weight:800; letter-spacing:.16em; font-size:clamp(15px,1.7vw,22px); }
+    .lab.L .h { color:#aeb9cc; text-shadow:0 0 18px rgba(120,150,190,.35); }
+    .lab.R .h { color:var(--cyan); text-shadow:0 0 24px rgba(101,243,255,.7); }
+    .lab .s { margin-top:5px; font-weight:600; letter-spacing:.06em; font-size:12px; color:rgba(223,230,255,.62); }
+    .lab.R .s b { color:var(--cyan); }
+    .divider { position:fixed; left:50%; top:12%; bottom:16%; width:1px; transform:translateX(-.5px);
+      background:linear-gradient(180deg,transparent,rgba(101,243,255,.30),transparent); pointer-events:none; }
+    .note { position:fixed; right:24px; top:22px; max-width:290px; text-align:right; pointer-events:none;
+      font-weight:600; font-size:12px; line-height:1.5; color:rgba(223,230,255,.66); }
+    .note b { color:#fff; } .note .c { color:var(--cyan); }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="scan"></div>
+  <div class="divider"></div>
+  <div class="title"><div class="tag">SLIPSTREAM VECTOR · SHIP LAB</div><h1>STOCK&nbsp;/&nbsp;PIMPAD</h1></div>
+  <div class="note"><b>Samma skepp, samma stil.</b><br>Höger = flat-neon-looken behållen, bara <span class="c">form · tvåton · rim · tända motorer</span>.<br>Fortfarande obelyst — inget PBR, inget bloom.</div>
+  <div class="labels">
+    <div class="lab L"><div class="h">STOCK</div><div class="s" id="statL">—</div></div>
+    <div class="lab R"><div class="h">PIMPAD</div><div class="s" id="statR">—</div></div>
+  </div>
+
+  <script type="importmap">
+  { "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  } }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+    import { buildShipMesh } from "./src/ship/shipVisual.js";
+
+    const TEAM = { scaleX: 1, scaleZ: 1, finScale: 1, bellScale: 1, hull: 0xe8e4f0, accent: 0xff2e88 };
+    const FLOOR_Y = -1.15;
+
+    const stage = document.getElementById("stage");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // demo crispness
+    renderer.setSize(innerWidth, innerHeight);
+    stage.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x06091a, 13, 42); // depth: the floor grid melts into the dark
+    const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 1.62, 10.6);
+    camera.lookAt(0, 0.52, 0);
+
+    // ---- soft radial sprite texture (engine glow / halos) ----
+    function radialTex(stops) {
+      const s = 128, cv = document.createElement("canvas"); cv.width = cv.height = s;
+      const c = cv.getContext("2d"); const g = c.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+      for (const [o, col] of stops) g.addColorStop(o, col);
+      c.fillStyle = g; c.fillRect(0, 0, s, s);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+    }
+    const GLOW = radialTex([[0, "rgba(255,255,255,1)"], [0.22, "rgba(255,255,255,0.65)"], [1, "rgba(255,255,255,0)"]]);
+    const glowSprite = (color, scale, opacity) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      s.scale.setScalar(scale); return s;
+    };
+
+    // Lightweight unlit cel material for greebles (flat 3-step form + AO + rim) —
+    // same per-fragment cheapness as the hull, no vertex colours needed.
+    function celMat(hex, opts = {}) {
+      return new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color(hex) }, uRim: { value: new THREE.Color(opts.rim ?? 0x65f3ff) }, uRimS: { value: opts.rimS ?? 0.32 } },
+        vertexShader: /* glsl */`
+          varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){ vN=normalize(normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vNv=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }
+        `,
+        fragmentShader: /* glsl */`
+          uniform vec3 uColor; uniform vec3 uRim; uniform float uRimS; varying vec3 vN; varying vec3 vNv; varying vec3 vV;
+          void main(){
+            vec3 N=normalize(vN);
+            float k=max(dot(N,normalize(vec3(0.34,0.86,0.38))),0.0);
+            float kq=floor(k*3.0+0.5)/3.0; float sh=mix(0.70,1.18,kq);
+            float ao=mix(0.64,1.0,clamp(N.y*0.5+0.5,0.0,1.0));
+            float rim=pow(1.0-max(dot(normalize(vNv),normalize(vV)),0.0),2.6);
+            gl_FragColor=vec4(uColor*sh*ao + uRim*rim*uRimS, 1.0);
+          }
+        `,
+        side: THREE.DoubleSide,
+      });
+    }
+
+    // ---- environment ----
+    const grid = new THREE.GridHelper(140, 70, 0x2c5a6e, 0x15303c);
+    grid.position.y = FLOOR_Y + 0.005; grid.material.transparent = true; grid.material.opacity = 0.5; grid.material.fog = true;
+    scene.add(grid);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 140),
+      new THREE.MeshBasicMaterial({ color: 0x05070f, transparent: true, opacity: 0.62, depthWrite: false, fog: true }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = FLOOR_Y; floor.renderOrder = 2; scene.add(floor);
+    // horizon glow band, low and far
+    const horizon = glowSprite(0x4fd8ff, 1, 0.30); horizon.scale.set(64, 11, 1); horizon.position.set(0, -0.4, -24); scene.add(horizon);
+
+    function platform(x, color) {
+      const g = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.16, 72),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, FLOOR_Y + 0.012, 0);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(2.0, 72),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      disc.rotation.x = -Math.PI / 2; disc.position.set(x, FLOOR_Y + 0.011, 0);
+      g.add(ring, disc); g.renderOrder = 3; return g;
+    }
+    scene.add(platform(-2.6, 0x5e84a6), platform(2.6, 0x65f3ff));
+    // portrait halo behind each ship
+    const haloL = glowSprite(0x6f86a6, 7.5, 0.16); haloL.position.set(-2.6, 0.7, -3.2); scene.add(haloL);
+    const haloR = glowSprite(0x65f3ff, 8.0, 0.22); haloR.position.set(2.6, 0.7, -3.2); scene.add(haloR);
+
+    const triCount = (g) => { let t = 0; g.traverse(o => { if (o.isMesh && o.geometry) { const ge = o.geometry; t += (ge.index ? ge.index.count : ge.attributes.position.count) / 3; } }); return Math.round(t); };
+    const drawCount = (g) => { let d = 0; g.traverse(o => { if (o.isMesh) d++; }); return d; };
+
+    // lit engine glow at the two nozzles; pimped gets a hot core + a backward plume.
+    const NOZ = [[-1.05, 0.06, 2.46], [1.05, 0.06, 2.46]];
+    const plumeGeo = new THREE.ConeGeometry(0.15, 1, 16); plumeGeo.rotateX(-Math.PI / 2); plumeGeo.translate(0, 0, 0.5);
+    function addEngines(ship, pimped) {
+      for (const n of NOZ) {
+        const g = glowSprite(0x65f3ff, pimped ? 1.5 : 1.05, 0.85); g.position.set(n[0], n[1], n[2] + 0.15); ship.add(g);
+        if (pimped) {
+          const core = glowSprite(0xe6ffff, 0.66, 0.92); core.position.set(n[0], n[1], n[2] + 0.12); ship.add(core);
+          const plume = new THREE.Mesh(plumeGeo, new THREE.MeshBasicMaterial({ color: 0x65f3ff, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+          plume.position.set(n[0], n[1], n[2] + 0.06); plume.scale.set(1, 1, 1.5); ship.add(plume);
+        }
+      }
+    }
+
+    // faint mirrored copy below the floor — a glossy-floor reflection (hull + glow only).
+    function addReflection(pivot, ship, tint) {
+      const refl = new THREE.Group(); refl.scale.set(1, -1, 1);
+      refl.position.y = 2 * (FLOOR_Y - pivot.position.y);
+      const hull = ship.children[0], glow = ship.children[1];
+      refl.add(new THREE.Mesh(hull.geometry, new THREE.MeshBasicMaterial({ vertexColors: true, color: tint, transparent: true, opacity: 0.18, depthWrite: false, fog: true, side: THREE.DoubleSide })));
+      refl.add(new THREE.Mesh(glow.geometry, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, fog: true, side: THREE.DoubleSide })));
+      refl.renderOrder = 0; pivot.add(refl);
+    }
+
+    // ---------- LEFT: the real game ship, untouched ----------
+    const stock = buildShipMesh(TEAM);
+    addEngines(stock, false);
+    const stockPivot = new THREE.Group(); stockPivot.add(stock);
+    stockPivot.position.set(-2.42, 0.42, 0); stockPivot.scale.setScalar(0.8);
+    scene.add(stockPivot);
+    addReflection(stockPivot, stock, 0x90a4c4);
+
+    // ---------- RIGHT: same geometry, style-preserving glow-up ----------
+    const pimp = buildShipMesh(TEAM);
+    const hull = pimp.children[0];
+    hull.material = new THREE.ShaderMaterial({
+      uniforms: {
+        rimCol: { value: new THREE.Color(TEAM.accent) }, rim2Col: { value: new THREE.Color(0x65f3ff) },
+        rimStrength: { value: 0.66 }, uBoost: { value: 0 },
+      },
+      vertexShader: /* glsl */`
+        attribute vec3 color;
+        varying vec3 vColor; varying vec3 vNobj; varying vec3 vNview; varying vec3 vView; varying float vPosY;
+        void main() {
+          vColor = color; vNobj = normalize(normal); vPosY = position.y;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vNview = normalize(normalMatrix * normal); vView = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform vec3 rimCol; uniform vec3 rim2Col; uniform float rimStrength; uniform float uBoost;
+        varying vec3 vColor; varying vec3 vNobj; varying vec3 vNview; varying vec3 vView; varying float vPosY;
+        void main() {
+          vec3 No = normalize(vNobj);
+          vec3 L = normalize(vec3(0.34, 0.86, 0.38));     // soft baked key (object space)
+          float key = max(dot(No, L), 0.0);
+          float keyQ = floor(key * 3.0 + 0.5) / 3.0;       // 3-step cel form
+          float shade = mix(0.82, 1.20, keyQ);
+          float ao = mix(0.72, 1.0, clamp(No.y * 0.5 + 0.5, 0.0, 1.0));
+          vec3 base = vColor * shade * ao;
+          // two-tone livery: pearl shell up top, cool graphite underbelly (flat, no light)
+          float belly = smoothstep(0.16, -0.10, vPosY);
+          base = mix(base, base * vec3(0.40, 0.46, 0.60), belly * 0.66);
+          // soft gloss kiss on the most up-facing panels — reads polished, not PBR
+          float gloss = smoothstep(0.88, 0.99, key);
+          base += gloss * 0.16;
+          // dual fresnel rim: hot accent + cool cyan underside kiss
+          float rim = pow(1.0 - max(dot(normalize(vNview), normalize(vView)), 0.0), 2.4);
+          vec3 rc = mix(rimCol, vec3(1.0), uBoost * 0.4);
+          float rs = rimStrength * mix(1.0, 1.6, uBoost);
+          float coolMask = clamp(-No.y * 1.4, 0.0, 1.0);
+          vec3 col = base + rc * rim * rs + rim2Col * rim * coolMask * 0.5;
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+      side: THREE.DoubleSide,
+    });
+    const pglow = pimp.children[1]; pglow.material = pglow.material.clone(); pglow.material.opacity = 1.0;
+
+    // ---- detail layer: high-poly engines (anchored to the real nozzles) +
+    // SMOOTH rounded fins laid over the sharp originals + a canopy dome. No
+    // rivets. Merged per material → lots of triangles, few draws. ----
+    const greebles = (() => {
+      const B = { graphite: [], accent: [], glow: [] };
+      const o = new THREE.Object3D();
+      const put = (geo, b, x, y, z, rx = 0, ry = 0, rz = 0) => {
+        o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(1, 1, 1); o.updateMatrix();
+        const g = geo.clone(); g.applyMatrix4(o.matrix); g.deleteAttribute("uv"); B[b].push(g);
+      };
+      // ENGINE nacelles + turbines — anchored to the real nozzles (±1.05, z≈2.4)
+      for (const sx of [-1, 1]) {
+        const ex = sx * 1.05;
+        put(new THREE.CylinderGeometry(0.27, 0.32, 0.52, 64, 1, true), "graphite", ex, 0.06, 2.16, Math.PI / 2);
+        put(new THREE.CylinderGeometry(0.20, 0.27, 0.18, 64, 1, true), "graphite", ex, 0.06, 1.90, Math.PI / 2);
+        put(new THREE.TorusGeometry(0.295, 0.045, 28, 96), "accent", ex, 0.06, 2.44);
+        put(new THREE.TorusGeometry(0.235, 0.030, 24, 90), "glow", ex, 0.06, 2.40);
+        put(new THREE.TorusGeometry(0.30, 0.020, 14, 72), "graphite", ex, 0.06, 1.97);
+        put(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 32), "graphite", ex, 0.06, 2.30, Math.PI / 2);
+        for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; put(new THREE.BoxGeometry(0.02, 0.2, 0.045), "graphite", ex + Math.cos(a) * 0.135, 0.06 + Math.sin(a) * 0.135, 2.33, 0, 0, a); }
+        put(new THREE.TorusGeometry(0.15, 0.012, 16, 80), "graphite", ex, 0.06, 2.36);
+        put(new THREE.TorusGeometry(0.10, 0.010, 14, 64), "glow", ex, 0.06, 2.405);
+        put(new THREE.CircleGeometry(0.185, 64), "glow", ex, 0.06, 2.45);
+      }
+
+      const g = new THREE.Group();
+      const mats = {
+        graphite: celMat(0x6b7488, { rim: 0x9fb6d8, rimS: 0.30 }),
+        accent: new THREE.MeshBasicMaterial({ color: TEAM.accent }),
+        glow: new THREE.MeshBasicMaterial({ color: 0x8ff0ff, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      };
+      for (const k in B) if (B[k].length) g.add(new THREE.Mesh(mergeGeometries(B[k], false), mats[k]));
+
+      // ---- SMOOTH fins: rounded corners + beveled edges, built from the real
+      // fin-corner coordinates and laid slightly larger over the sharp slabs ----
+      const V = (x, y, z) => new THREE.Vector3(x, y, z);
+      const roundedShape = (pts, r) => {
+        const sh = new THREE.Shape(); const n = pts.length;
+        const sub = (a, b) => [a[0]-b[0], a[1]-b[1]], L = (v) => Math.hypot(v[0],v[1]) || 1, nz = (v) => { const l = L(v); return [v[0]/l, v[1]/l]; };
+        for (let i = 0; i < n; i++) {
+          const cur = pts[i], prev = pts[(i-1+n)%n], next = pts[(i+1)%n];
+          const v1 = nz(sub(prev,cur)), v2 = nz(sub(next,cur));
+          const rr = Math.min(r, L(sub(prev,cur))*0.45, L(sub(next,cur))*0.45);
+          const p1 = [cur[0]+v1[0]*rr, cur[1]+v1[1]*rr], p2 = [cur[0]+v2[0]*rr, cur[1]+v2[1]*rr];
+          if (i === 0) sh.moveTo(p1[0], p1[1]); else sh.lineTo(p1[0], p1[1]);
+          sh.quadraticCurveTo(cur[0], cur[1], p2[0], p2[1]);
+        }
+        sh.closePath(); return sh;
+      };
+      const quadFin = (p0, p1, p2, p3, expand = 0.05, r = 0.13, thick = 0.06) => {
+        const corners = [p0, p1, p2, p3];
+        const cen = new THREE.Vector3(); corners.forEach((p) => cen.add(p)); cen.multiplyScalar(0.25);
+        const E = corners.map((p) => p.clone().add(p.clone().sub(cen).normalize().multiplyScalar(expand)));
+        const ex = new THREE.Vector3().subVectors(E[1], E[0]).normalize();
+        const nrm = new THREE.Vector3().crossVectors(ex, new THREE.Vector3().subVectors(E[3], E[0])).normalize();
+        const ey = new THREE.Vector3().crossVectors(nrm, ex).normalize();
+        const to2 = (p) => { const d = new THREE.Vector3().subVectors(p, E[0]); return [d.dot(ex), d.dot(ey)]; };
+        const geo = new THREE.ExtrudeGeometry(roundedShape(E.map(to2), r), { depth: thick, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 3, steps: 1, curveSegments: 16 });
+        const m = new THREE.Matrix4().makeBasis(ex, ey, nrm); m.setPosition(E[0].clone().addScaledVector(nrm, -thick / 2));
+        geo.applyMatrix4(m); return geo;
+      };
+      const finMat = celMat(TEAM.accent, { rim: 0xffd6e8, rimS: 0.42 });
+      const fins = new THREE.Group();
+      // centre tail fin
+      fins.add(new THREE.Mesh(quadFin(V(0, 0.42, 0.95), V(0, 0.94, 2.22), V(0, 0.30, 2.42), V(0, 0.32, 1.05), 0.05, 0.18), finMat));
+      // splayed airbrake winglets (both sides)
+      for (const sx of [-1, 1]) {
+        fins.add(new THREE.Mesh(quadFin(V(sx*1.20, 0.30, 0.95), V(sx*1.66, 0.62, 1.75), V(sx*1.62, 0.58, 2.15), V(sx*1.18, 0.26, 2.05), 0.05, 0.12), finMat));
+      }
+      g.add(fins);
+
+      // ---- soften more hard edges: rounded nose caps, wing bridges, canards ----
+      const hullCel = celMat(0xe6e9f3, { rim: TEAM.accent, rimS: 0.26 });
+      // rounded nose caps over the pointed prong tips (SPONSON front station: x=±0.62, z=-2.60)
+      for (const sx of [-1, 1]) {
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.09, 28, 20), hullCel);
+        cap.scale.set(1.0, 0.85, 1.85); cap.position.set(sx * 0.62, 0.05, -2.62); g.add(cap);
+      }
+      // wing bridges (hull colour) — rounded plates over the flat connectors
+      for (const sx of [-1, 1]) {
+        g.add(new THREE.Mesh(quadFin(V(sx*0.32, 0.12, -0.05), V(sx*0.95, 0.12, 0.55), V(sx*0.95, 0.10, 1.45), V(sx*0.32, 0.12, 0.80), 0.03, 0.16, 0.075), hullCel));
+      }
+      // canards (accent) near the nose — rounded
+      for (const sx of [-1, 1]) {
+        g.add(new THREE.Mesh(quadFin(V(sx*0.84, 0.03, -1.82), V(sx*1.18, 0.11, -1.50), V(sx*1.16, 0.09, -1.34), V(sx*0.84, 0.01, -1.60), 0.02, 0.06, 0.05), finMat));
+      }
+
+      // smooth tinted canopy dome
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.23, 80, 52, 0, Math.PI * 2, 0, Math.PI * 0.55),
+        celMat(0x33405e, { rim: 0x9fe0ff, rimS: 0.8 }));
+      dome.scale.set(0.9, 0.72, 1.5); dome.position.set(0, 0.37, 0.2); g.add(dome);
+      return g;
+    })();
+    pimp.add(greebles);
+    addEngines(pimp, true);
+
+    const pimpPivot = new THREE.Group(); pimpPivot.add(pimp);
+    pimpPivot.position.set(2.42, 0.42, 0); pimpPivot.scale.setScalar(0.8);
+    scene.add(pimpPivot);
+    addReflection(pimpPivot, pimp, 0x9fd6e6);
+
+    document.getElementById("statL").innerHTML = `~${triCount(stock)} tris · ${drawCount(stock)} draws`;
+    document.getElementById("statR").innerHTML = `~${triCount(pimp)} tris · <b>${drawCount(pimp)} draws</b> · obelyst`;
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    let t = 0;
+    function frame() {
+      requestAnimationFrame(frame);
+      t += 0.0045;
+      const a = 2.25 + Math.sin(t) * 0.26; // hold a flattering side-front 3/4, slow sway
+      stockPivot.rotation.y = a; pimpPivot.rotation.y = a;
+      stock.position.y = Math.sin(t * 2.0) * 0.04;
+      pimp.position.y = Math.sin(t * 2.0) * 0.04;
+      renderer.render(scene, camera);
+    }
+    frame();
+    window.__lab = { scene, camera, renderer, stock, pimp };
+  </script>
+</body>
+</html>
