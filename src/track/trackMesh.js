@@ -654,14 +654,20 @@ function buildWeaponPads(spline) {
         float frame = smoothstep(0.12, 0.02, abs(max(abs(x), abs(y)) - 0.92)); // thin outer border
         float edge = smoothstep(1.0, 0.85, abs(x));
         vec3 col = baseCol * 1.5 + glowCol * (0.22 + ring * 1.7 + core * 1.2 + frame * 0.8);
-        // Dim to a ghost when you CAN'T grab it: while recharging (kept clearly
-        // dim until nearly ready, so a "lit" pad always means grabbable), or
-        // while the player already holds a weapon (uFull) — no free pad reads
-        // as available when it isn't.
-        float cdBlock = clamp(vCd * 12.0, 0.0, 1.0);
-        float block = max(cdBlock, uFull);
-        float live = 1.0 - block;
-        col = mix(baseCol * 0.35, col, live);
+        // Spent state: not just a dead brown slab — a RECHARGE readout. The pad
+        // goes dark, then a bright gold charge-line sweeps bottom-to-top as the
+        // cooldown runs out (vCd 1->0), soft-filling behind it; at 0 it pops
+        // back to the live pulsing diamond. "Lit = grabbable" stays true.
+        float spent = clamp(vCd * 8.0, 0.0, 1.0);
+        float chargeUp = 1.0 - vCd;            // fill level 0..1 while recharging
+        float yn = vLocal.y;                    // 0..1 along the decal
+        float fillLine = smoothstep(0.07, 0.0, abs(yn - chargeUp));
+        float filled = step(yn, chargeUp);
+        vec3 spentCol = baseCol * 0.55
+          + glowCol * (0.05 + 0.12 * filled + 0.95 * fillLine + frame * 0.3);
+        col = mix(col, spentCol, spent);
+        // Holding a weapon dims the LIVE pads (spent ones already read busy).
+        col = mix(col, baseCol * 0.35, uFull * (1.0 - spent));
         gl_FragColor = vec4(col * edge, 1.0);
       }
     `,

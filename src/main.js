@@ -746,6 +746,92 @@ const _f = makeFrame();
 const _v = new THREE.Vector3();
 const _vel = new THREE.Vector3();
 
+// Impact FIREBALL + SMOKE — pooled billboards: a hot core that balloons and
+// whites out, then 2-3 dark puffs that rise and fade. Plus the shockwave ring.
+const _impactTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx2 = c.getContext('2d');
+  const g = ctx2.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx2.fillStyle = g; ctx2.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+})();
+const _fireball = (() => {
+  const pool = [];
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+      map: _impactTex, color: 0xffffff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
+    }));
+    m.visible = false; m.frustumCulled = false; scene.add(m);
+    pool.push({ m, t: -1, scale: 1 });
+  }
+  const LIFE = 0.42;
+  const hot = new THREE.Color(0xffffff), mid = new THREE.Color(0xffa63d), late = new THREE.Color(0xff4426);
+  return {
+    burst(pos, scale) {
+      const f = pool.find((x) => x.t < 0) || pool[0];
+      f.t = 0; f.scale = scale; f.m.visible = true; f.m.position.copy(pos);
+    },
+    update(dt, camera) {
+      for (const f of pool) {
+        if (f.t < 0) continue;
+        f.t += dt;
+        const u = f.t / LIFE;
+        if (u >= 1) { f.t = -1; f.m.visible = false; continue; }
+        f.m.quaternion.copy(camera.quaternion);
+        const s = (1.8 + u * 7.5) * f.scale;
+        f.m.scale.set(s, s, s);
+        // White flash only for the first instant, then FIRE orange fast — the
+        // orange phase is what reads as an explosion, so it owns most of the life.
+        f.m.material.color.copy(hot).lerp(u < 0.25 ? mid : late, Math.min(1, u * 3.2));
+        f.m.material.opacity = (1 - u * u) * 0.95;
+      }
+    },
+  };
+})();
+const _smoke = (() => {
+  const pool = [];
+  for (let i = 0; i < 8; i++) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+      map: _impactTex, color: 0x241a30, transparent: true, opacity: 0,
+      depthWrite: false, fog: true, side: THREE.DoubleSide,
+    }));
+    m.visible = false; m.frustumCulled = false; scene.add(m);
+    pool.push({ m, t: -1, scale: 1, vx: 0, vy: 2, vz: 0 });
+  }
+  const LIFE = 1.1;
+  return {
+    burst(pos, scale) {
+      for (let k = 0; k < 3; k++) {
+        const p = pool.find((x) => x.t < 0); if (!p) return;
+        p.t = k * -0.06; p.scale = scale * (0.8 + Math.random() * 0.5);
+        p.m.position.copy(pos);
+        p.vx = (Math.random() - 0.5) * 4; p.vy = 2.5 + Math.random() * 2; p.vz = (Math.random() - 0.5) * 4;
+        p.m.visible = true;
+      }
+    },
+    update(dt, camera) {
+      for (const p of pool) {
+        if (p.t < -0.5 && p.t !== -1) { /* staggered start */ }
+        if (p.t === -1) continue;
+        p.t += dt;
+        if (p.t < 0) continue;
+        const u = p.t / LIFE;
+        if (u >= 1) { p.t = -1; p.m.visible = false; continue; }
+        p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt;
+        p.m.quaternion.copy(camera.quaternion);
+        const s = (2.2 + u * 5.5) * p.scale;
+        p.m.scale.set(s, s, s);
+        p.m.material.opacity = 0.4 * (1 - u);
+      }
+    },
+  };
+})();
+
 // AAA impact shockwave — a small pool of camera-facing rings that snap out and
 // fade on weapon hits. Cheap: 5 additive rings, only active during an impact.
 const _shock = (() => {
@@ -809,10 +895,12 @@ juice.on('weaponHit', ({ victim, victimIsPlayer }) => {
   _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.0);
   const k = Math.max(0.25, Math.min(1, 70 / Math.max(camera.position.distanceTo(_v), 1)));
   _vel.copy(_f.T).multiplyScalar(victim.v * 0.35);
-  // Bigger, hotter burst + a snapping shockwave ring = real impact weight.
-  sparks.spawn(_v, _vel, 27, Math.round(48 * k), _explCore, _explHot, undefined, _f.pos.y);
-  sparks.spawn(_v, _vel, 13, Math.round(30 * k), _explHot, _explTail, undefined, _f.pos.y);
-  _shock.burst(_v, victimIsPlayer ? 0xffffff : 0xffdca0, 1 + k * 0.7);
+  // Real impact weight: fireball core + smoke + hot debris + shockwave ring.
+  _fireball.burst(_v, 0.8 + k * 0.9);
+  _smoke.burst(_v, 0.8 + k * 0.6);
+  sparks.spawn(_v, _vel, 30, Math.round(60 * k), _explCore, _explHot, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 14, Math.round(36 * k), _explHot, _explTail, undefined, _f.pos.y);
+  _shock.burst(_v, victimIsPlayer ? 0xffffff : 0xffdca0, 1.4 + k * 0.8);
   if (victimIsPlayer && state === 'race') {
     audio.playerHitBang();                                   // fat close BANG + paralysis hum
     juice.fovSpike = Math.max(juice.fovSpike, 0.55);         // a lens punch on top of the trauma spike
@@ -1380,6 +1468,8 @@ function tick(now) {
   if (debugCam) applyDebugCam();
   sparks.update(dt);
   _shock.update(dt, camera);
+  _fireball.update(dt, camera);
+  _smoke.update(dt, camera);
   audio.disableHum(state === 'race' && ship.disabledT > 0); // paralysis buzz while you're hit
   trails.update(dt, camera, juice.boostFactor, sn);
   // Engine light-pool on the road behind the ship (throttle + boost, cyan->white).

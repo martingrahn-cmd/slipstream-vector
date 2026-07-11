@@ -67,6 +67,7 @@ export const THEMES = {
     groundStyle: 'dunes',
     scrubCount: 210,      // low desert bushes near the track
     flora: 'cacti',
+    floraCol: 0x3f7a5c,   // sage-green cacti — pops against the bright sand
     floraCount: 120,
     rockCount: 340,
     billboardEvery: 220,

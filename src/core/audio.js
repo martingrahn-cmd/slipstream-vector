@@ -215,14 +215,15 @@ export class AudioEngine {
     osc.stop(t0 + dur + 0.02);
   }
 
-  burst(filterFreq, dur, gain, type = 'bandpass', q = 1) {
+  burst(filterFreq, dur, gain, type = 'bandpass', q = 1, freqTo = null) {
     if (!this.ctx) return;
     const t0 = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const f = this.ctx.createBiquadFilter();
     f.type = type;
-    f.frequency.value = filterFreq;
+    f.frequency.setValueAtTime(filterFreq, t0);
+    if (freqTo) f.frequency.exponentialRampToValueAtTime(Math.max(freqTo, 20), t0 + dur);
     f.Q.value = q;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(gain, t0);
@@ -300,9 +301,12 @@ export class AudioEngine {
 
   weaponFire(type) {
     if (type === 'missiles' || type === 'homing') {
-      // sharp launch: falling saw + a hiss of exhaust
-      this.blip(300, 0.28, { type: 'sawtooth', gain: 0.13, slideTo: 70 });
-      this.burst(2200, 0.22, 0.12, 'bandpass', 0.9);
+      // ROCKET launch: ignition thump + throaty falling saw + a long exhaust
+      // tail sweeping down as the rocket leaves the ship.
+      this.blip(130, 0.09, { type: 'sine', gain: 0.18, slideTo: 55 });          // ignition thump
+      this.blip(360, 0.5, { type: 'sawtooth', gain: 0.12, slideTo: 55 });        // motor drop
+      this.burst(2800, 0.55, 0.2, 'bandpass', 1.1, 350);                          // exhaust tail, sweeping away
+      this.burst(5200, 0.12, 0.1, 'highpass', 0.8);                               // launch crack
     } else if (type === 'mine') {
       this.blip(190, 0.1, { type: 'square', gain: 0.1 });
       this.blip(120, 0.12, { type: 'square', gain: 0.09, delay: 0.07 });

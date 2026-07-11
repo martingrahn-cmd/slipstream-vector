@@ -817,6 +817,37 @@ function buildRockCut(rng, spline, groundY, theme) {
   return mesh;
 }
 
+// ------------------------------------------------------------ rock strata
+// "Texture" for big rock masses, for free: after the flat bake, modulate the
+// vertex colours in horizontal sediment bands (random per-band brightness +
+// occasional rim/sand accent band). Kills the untextured-block look up close.
+function bakeStrata(geom, rng2, baseY, bandH, accentA, accentB) {
+  const pos = geom.getAttribute('position');
+  const col = geom.getAttribute('color');
+  if (!col) return geom;
+  const ca = new THREE.Color(accentA), cb = new THREE.Color(accentB), c = new THREE.Color();
+  const bands = [];
+  for (let i = 0; i < 28; i++) {
+    bands.push({ m: 0.8 + rng2() * 0.32, acc: rng2() < 0.3 ? (rng2() < 0.5 ? 1 : 2) : 0 });
+  }
+  // Per-FACE banding (centroid Y): per-vertex bands interpolate into a muddy
+  // gradient across the big low-poly faces — flat faces read as crisp strata.
+  const step = geom.index ? 1 : 3;
+  for (let i = 0; i + step - 1 < pos.count; i += step) {
+    let yc = 0;
+    for (let k = 0; k < step; k++) yc += pos.getY(i + k);
+    yc /= step;
+    const bi = Math.max(0, Math.min(27, Math.floor((yc - baseY) / bandH)));
+    const b = bands[bi];
+    for (let k = i; k < i + step; k++) {
+      c.setRGB(col.getX(k), col.getY(k), col.getZ(k)).multiplyScalar(b.m);
+      if (b.acc === 1) c.lerp(ca, 0.38); else if (b.acc === 2) c.lerp(cb, 0.26);
+      col.setXYZ(k, c.r, c.g, c.b);
+    }
+  }
+  return geom;
+}
+
 // -------------------------------------------------------------- lap zones
 // Monument-valley rhythm: a few dense CLUSTERS around the lap with genuinely
 // empty flats between them. Deterministic (own seed) so mesas, cacti and
@@ -858,11 +889,13 @@ function buildMesas(rng, spline, groundY, theme) {
     [() => new THREE.ConeGeometry(1, 0.55, 6), 0.55, 0],        // low hill
     [() => new THREE.CylinderGeometry(0.55, 1, 0.4, 7), 0.4, 0],// flat atoll
   ] : [
-    [() => new THREE.ConeGeometry(1, 2.2, 4), 2.2, 0],          // pyramid spire
-    [() => new THREE.CylinderGeometry(0.55, 1, 1.4, 6), 1.4, 0],// frustum mesa
-    [() => new THREE.CylinderGeometry(0.18, 0.42, 3.2, 5), 3.2, 0], // needle
-    [() => new THREE.BoxGeometry(1.4, 1.1, 1), 1.1, 0],         // block
-    [() => new THREE.CylinderGeometry(0.9, 1.05, 0.7, 7), 0.7, 0],  // flat-top
+    // Height segments matter: strata bands are vertex colours, so the side
+    // walls need vertex rows to band across (1 segment = one giant flat quad).
+    [() => new THREE.ConeGeometry(1, 2.2, 4, 6), 2.2, 0],          // pyramid spire
+    [() => new THREE.CylinderGeometry(0.55, 1, 1.4, 6, 5), 1.4, 0],// frustum mesa
+    [() => new THREE.CylinderGeometry(0.18, 0.42, 3.2, 5, 7), 3.2, 0], // needle
+    [() => new THREE.BoxGeometry(1.4, 1.1, 1, 1, 4, 1), 1.1, 0],   // block
+    [() => new THREE.CylinderGeometry(0.9, 1.05, 0.7, 7, 3), 0.7, 0],  // flat-top
   ];
   const geoms = [];
   const glows = [];
@@ -933,12 +966,14 @@ function buildMesas(rng, spline, groundY, theme) {
           if (dx * dx + dz * dz < need) { ok = false; break; }
         }
         if (!ok) continue;
-        const g = new THREE.CylinderGeometry(0.62, 1, 1.1, 7);
+        const g = new THREE.CylinderGeometry(0.62, 1, 1.1, 7, 8);
         g.scale(scale, scale * (0.55 + rng() * 0.2), scale);
         g.rotateY(rng() * Math.PI * 2);
         const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
         g.translate(px, groundY - bb.min.y - 0.5, pz);
-        geoms.push(bakeFlatColors(g, theme.mesaLit, { shadow: theme.mesaShadow }));
+        const baked = bakeFlatColors(g, theme.mesaLit, { shadow: theme.mesaShadow });
+        bakeStrata(baked, rng, groundY, Math.max(4, scale * 0.14), theme.mesaRim, theme.ground);
+        geoms.push(baked);
         placed.push([px, pz, scale]);
       }
     }
@@ -949,12 +984,12 @@ function buildMesas(rng, spline, groundY, theme) {
     if (zones && rng() > zoneDensity(zones, s, spline.length)) continue;
     spline.frameAt(s, f);
     const side = rng() < 0.5 ? -1 : 1;
-    const dist = 35 + rng() * 215;
+    // Big forms keep their distance: min distance grows with footprint so a
+    // scale-50 monolith never looms right over the verge.
+    const scale = towers ? 8 + rng() * 26 : 10 + rng() * 42;
+    const dist = 28 + scale * 0.9 + rng() * 200;
     const px = f.pos.x + f.R.x * side * dist + (rng() - 0.5) * 30;
     const pz = f.pos.z + f.R.z * side * dist + (rng() - 0.5) * 30;
-    // The clearance must include the mesa's own footprint: archetype base
-    // radii are ~1 unit, so the world-space radius is ~scale meters.
-    const scale = towers ? 8 + rng() * 26 : 10 + rng() * 42;
     const clearance = scale + 24;
     let ok = true;
     for (let i = 0; i < spline.n; i += 12) {
@@ -985,7 +1020,9 @@ function buildMesas(rng, spline, groundY, theme) {
     g.translate(px, ty, pz);
     const colorPick = rng();
     const base = colorPick < 0.6 ? theme.mesaLit : theme.mesaShadow;
-    geoms.push(bakeFlatColors(g, base, { shadow: theme.mesaShadow }));
+    const bakedMesa = bakeFlatColors(g, base, { shadow: theme.mesaShadow });
+    if (!towers) bakeStrata(bakedMesa, rng, groundY, Math.max(3, scale * ys * 0.16), theme.mesaRim, theme.ground);
+    geoms.push(bakedMesa);
     if (islands) {
       // A beach ring at the waterline.
       const beach = new THREE.CylinderGeometry(scale * 1.12, scale * 1.22, 0.6, 8);
@@ -1043,10 +1080,13 @@ function buildPylons(spline) {
     spline.frameAt(s, f);
     for (const side of [-1, 1]) {
       const off = f.width + TUNING.PYLON_OFFSET;
-      v.copy(f.pos).addScaledVector(f.R, side * off);
-      m.makeTranslation(v.x, v.y + 1.0, v.z);
+      // Bolted to the shoulder: follow the road frame (bank and all), base
+      // sunk slightly into the verge instead of hovering world-vertical.
+      v.copy(f.pos).addScaledVector(f.R, side * off).addScaledVector(f.U, -0.25);
+      m.makeBasis(f.R, f.U, f.T);
+      m.setPosition(v.x + f.U.x * 1.0, v.y + f.U.y * 1.0, v.z + f.U.z * 1.0);
       body.setMatrixAt(i, m);
-      m.makeTranslation(v.x, v.y + 2.35, v.z);
+      m.setPosition(v.x + f.U.x * 2.35, v.y + f.U.y * 2.35, v.z + f.U.z * 2.35);
       tip.setMatrixAt(i, m);
       tip.setColorAt(i, side < 0 ? cl : cr);
       i++;
@@ -1388,7 +1428,7 @@ function buildFlora(rng, spline, groundY, theme) {
       const g = new THREE.CylinderGeometry(r0, r1, h, 5);
       if (rotZ) g.rotateZ(rotZ);
       g.translate(x, y, 0);
-      parts.push(bakeFlatColors(g, 0x3a2a75, { rim: false }));
+      parts.push(bakeFlatColors(g, theme.floraCol ?? 0x3a2a75, { rim: false }));
     };
     seg(0.13, 0.18, 1.8, 0, 0.9);
     seg(0.09, 0.11, 0.55, -0.34, 0.95, Math.PI / 2);
