@@ -14,6 +14,12 @@ export class AudioEngine {
     this.scrapeLevel = 0;
     this.lastBump = 0;
 
+    // Rival voice-over: load the manifest of generated clips (if present). No
+    // manifest / no clip -> the feed just uses the comms chirp, as before.
+    this.voiceManifest = null;
+    this._voiceBuf = new Map();   // key -> decoded AudioBuffer (lazy)
+    this._loadVoiceManifest();
+
     window.addEventListener('keydown', () => this.unlock());
 
     juice.on('boost', () => this.boostWhoosh(1));
@@ -42,7 +48,18 @@ export class AudioEngine {
     this.sfx.connect(this.master);
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = (this.musicVolume / 10) * 0.6;
-    this.musicBus.connect(this.master);
+    // A transparent duck node between the music sum and master (base 1.0), so a
+    // pilot voice can dip the music without touching musicBus (the volume knob)
+    // or fighting the crossfade logic.
+    this.musicDuck = ctx.createGain();
+    this.musicDuck.gain.value = 1;
+    this.musicBus.connect(this.musicDuck);
+    this.musicDuck.connect(this.master);
+    // Voice bus: rival VO rides the SFX bus (so it follows the SFX volume) with
+    // its own trim on top.
+    this.voiceBus = ctx.createGain();
+    this.voiceBus.gain.value = 1.0;
+    this.voiceBus.connect(this.sfx);
 
     // Shared noise source material.
     const len = ctx.sampleRate;
@@ -361,6 +378,66 @@ export class AudioEngine {
     // short radio-chatter chirp — two quick square blips, quiet
     this.blip(1180, 0.05, { type: 'square', gain: 0.05 });
     this.blip(1480, 0.06, { type: 'square', gain: 0.045, delay: 0.045 });
+  }
+
+  // ---- rival voice-over ---------------------------------------------------
+  // Fetch the manifest of generated clips once. Absent -> voices stay silent
+  // (the comms chirp still fires); this is a pure enhancement layer.
+  async _loadVoiceManifest() {
+    try {
+      const r = await fetch('assets/voice/manifest.json', { cache: 'no-cache' });
+      if (r.ok) this.voiceManifest = await r.json();
+    } catch { /* not generated yet — fine */ }
+  }
+
+  // Play the clip for a specific line (slug/bucket-i). Lazy-fetches + decodes on
+  // first use, then caches. No-ops (returns false) when audio is locked, the
+  // manifest/clip is missing, or the ctx can't decode. Ducks the music briefly.
+  playVoice(slug, bucket, i, { pan = 0 } = {}) {
+    if (!this.ctx || !this.voiceBus || !this.voiceManifest) return false;
+    const key = `${slug}/${bucket}-${i}`;
+    if (!(key in this.voiceManifest)) return false;
+    const cached = this._voiceBuf.get(key);
+    if (cached) { this._spawnVoice(cached, pan); return true; }
+    fetch(`assets/voice/${key}.mp3`)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('404'))))
+      .then((ab) => this.ctx.decodeAudioData(ab))
+      .then((buf) => { this._voiceBuf.set(key, buf); this._spawnVoice(buf, pan); })
+      .catch(() => { /* missing/undecodable clip — the comms chirp already covered it */ });
+    return true;
+  }
+
+  _spawnVoice(buf, pan = 0) {
+    const t0 = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.value = 1.0;
+    src.connect(g);
+    if (this.ctx.createStereoPanner && pan) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      g.connect(p); p.connect(this.voiceBus);
+    } else {
+      g.connect(this.voiceBus);
+    }
+    src.start(t0);
+    src.stop(t0 + buf.duration + 0.05);
+    this._duckMusic(buf.duration);
+  }
+
+  // Dip the music under a voice line, then release. Overlapping voices extend
+  // the dip (each call reschedules from the current value).
+  _duckMusic(dur) {
+    if (!this.musicDuck) return;
+    const now = this.ctx.currentTime;
+    const g = this.musicDuck.gain;
+    const hold = Math.max(0.2, dur);
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0.42, now + 0.08);
+    g.setValueAtTime(0.42, now + hold);
+    g.linearRampToValueAtTime(1.0, now + hold + 0.28);
   }
 
   weaponPickup() {

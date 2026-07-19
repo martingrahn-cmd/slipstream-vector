@@ -76,7 +76,10 @@ everything, zero per-frame allocations in hot paths.
   source of truth** for pilot lines (game, labs and the voice generator all
   import it).
 - `tools/generate-voices.mjs` — idempotent ElevenLabs batch TTS (manifest-
-  based; voices not yet generated/committed).
+  based; voices not yet generated/committed). Playback is wired: the banter
+  feed calls `audio.playVoice(slug, bucket, idx)`, which lazy-loads
+  `assets/voice/<slug>/<bucket>-<idx>.mp3` (from `manifest.json`), ducks the
+  music, and falls back to just the comms chirp until the clips exist.
 - `src/ship/shipPhysics.js`, `src/ship/aiDriver.js` — zero three.js imports
   (AI/replay seam). Keep it that way.
 

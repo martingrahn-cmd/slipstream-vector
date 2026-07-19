@@ -54,8 +54,6 @@ const TTL = 3.7;        // s a chip stays up
 const PILOT_CD = 4.0;   // s before the same rival can speak again
 const MAX_QUEUE = 3;
 
-function pick(a, rng) { return a[(rng ? Math.floor(rng() * a.length) : Math.floor(Math.random() * a.length))]; }
-
 export class BanterFeed {
   constructor(feedEl, audio) {
     this.el = feedEl;
@@ -121,7 +119,10 @@ export class BanterFeed {
     if ((this._pilotCd.get(rival.name) || 0) > 0) return; // this rival is on cooldown
     const bank = (LINES[rival.name] && LINES[rival.name][bucket]) || null;
     if (!bank || !bank.length) return;
-    this._queue.push({ rival, bucket, tag, line: pick(bank) });
+    // Keep the line's INDEX so the generated clip (slug/bucket-i) matches the
+    // exact line shown. Render-path randomness (Math.random) is allowed here.
+    const idx = Math.floor(Math.random() * bank.length);
+    this._queue.push({ rival, bucket, tag, line: bank[idx], idx });
     if (this._queue.length > MAX_QUEUE) this._queue.shift(); // drop the stalest
   }
 
@@ -150,7 +151,7 @@ export class BanterFeed {
     }
   }
 
-  _render({ rival, bucket, line, tag }) {
+  _render({ rival, bucket, line, tag, idx }) {
     const s = rival.slug;
     // generated expression face -> profile fallback (png then jpg at each step)
     const img = `<img alt="" src="assets/pilots/${s}-${bucket}.png"`
@@ -170,6 +171,9 @@ export class BanterFeed {
       const old = this._chips.shift();
       old.node.remove();
     }
-    if (this.audio && this.audio.commsBlip) this.audio.commsBlip();
+    if (this.audio) {
+      if (this.audio.commsBlip) this.audio.commsBlip();            // radio-open chirp (always)
+      if (this.audio.playVoice) this.audio.playVoice(rival.slug, bucket, idx); // the VO, when generated
+    }
   }
 }
