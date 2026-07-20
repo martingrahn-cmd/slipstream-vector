@@ -393,51 +393,82 @@ export class AudioEngine {
   // Play the clip for a specific line (slug/bucket-i). Lazy-fetches + decodes on
   // first use, then caches. No-ops (returns false) when audio is locked, the
   // manifest/clip is missing, or the ctx can't decode. Ducks the music briefly.
-  playVoice(slug, bucket, i, { pan = 0 } = {}) {
+  playVoice(slug, bucket, i) {
     if (!this.ctx || !this.voiceBus || !this.voiceManifest) return false;
     const key = `${slug}/${bucket}-${i}`;
     if (!(key in this.voiceManifest)) return false;
     const cached = this._voiceBuf.get(key);
-    if (cached) { this._spawnVoice(cached, pan); return true; }
+    if (cached) { this._spawnVoice(cached); return true; }
     fetch(`assets/voice/${key}.mp3`)
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('404'))))
       .then((ab) => this.ctx.decodeAudioData(ab))
-      .then((buf) => { this._voiceBuf.set(key, buf); this._spawnVoice(buf, pan); })
+      .then((buf) => { this._voiceBuf.set(key, buf); this._spawnVoice(buf); })
       .catch(() => { /* missing/undecodable clip — the comms chirp already covered it */ });
     return true;
   }
 
-  _spawnVoice(buf, pan = 0) {
-    const t0 = this.ctx.currentTime;
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const g = this.ctx.createGain();
-    g.gain.value = 1.0;
-    src.connect(g);
-    if (this.ctx.createStereoPanner && pan) {
-      const p = this.ctx.createStereoPanner();
-      p.pan.value = Math.max(-1, Math.min(1, pan));
-      g.connect(p); p.connect(this.voiceBus);
-    } else {
-      g.connect(this.voiceBus);
-    }
-    src.start(t0);
-    src.stop(t0 + buf.duration + 0.05);
-    this._duckMusic(buf.duration);
+  _spawnVoice(buf) {
+    const ctx = this.ctx, now = ctx.currentTime;
+    // SERIALISE: queue behind the previous line so rivals never talk over each
+    // other — start after it ends (small gap). If the backlog is already deep,
+    // drop this one (the chip + squelch still fired) rather than lag forever.
+    const busy = (this._voiceEndsAt || 0) > now;
+    const startAt = Math.max(now, this._voiceEndsAt || 0) + (busy ? 0.16 : 0);
+    if (startAt - now > 2.2) return;
+    const dur = buf.duration;
+    this._voiceEndsAt = startAt + dur + 0.16;
+    // RADIO EQ: band-limit to a comms band + a mid honk, so it reads as a
+    // squawk-box transmission rather than a clean studio VO.
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 380; hp.Q.value = 0.7;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.7;
+    const pk = ctx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 1700; pk.gain.value = 4; pk.Q.value = 0.9;
+    const g = ctx.createGain(); g.gain.value = 1.2;
+    src.connect(hp); hp.connect(lp); lp.connect(pk); pk.connect(g); g.connect(this.voiceBus);
+    src.start(startAt); src.stop(startAt + dur + 0.05);
+    this._squelch(startAt, dur);
+    this._duckMusic();
   }
 
-  // Dip the music under a voice line, then release. Overlapping voices extend
-  // the dip (each call reschedules from the current value).
-  _duckMusic(dur) {
+  // Radio texture around a transmission: a faint static bed for its whole
+  // length + a short filtered-noise squelch "kss" as it keys open and closed.
+  _squelch(t, dur) {
+    const ctx = this.ctx;
+    const bed = ctx.createBufferSource(); bed.buffer = this.noiseBuf; bed.loop = true;
+    const bf = ctx.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 1800; bf.Q.value = 0.5;
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(0.0001, t);
+    bg.gain.linearRampToValueAtTime(0.02, t + 0.05);
+    bg.gain.setValueAtTime(0.02, t + dur);
+    bg.gain.linearRampToValueAtTime(0.0001, t + dur + 0.07);
+    bed.connect(bf); bf.connect(bg); bg.connect(this.voiceBus);
+    bed.start(t); bed.stop(t + dur + 0.12);
+    const kss = (bt, gain) => {
+      if (bt < ctx.currentTime) bt = ctx.currentTime;
+      const b = ctx.createBufferSource(); b.buffer = this.noiseBuf;
+      const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2100;
+      const gg = ctx.createGain();
+      gg.gain.setValueAtTime(gain, bt);
+      gg.gain.exponentialRampToValueAtTime(0.0004, bt + 0.09);
+      b.connect(f); f.connect(gg); gg.connect(this.voiceBus);
+      b.start(bt); b.stop(bt + 0.11);
+    };
+    kss(t, 0.05);            // key open
+    kss(t + dur + 0.02, 0.04); // key close
+  }
+
+  // Dip the music while any voice is queued/playing, releasing after the last
+  // scheduled line ends.
+  _duckMusic() {
     if (!this.musicDuck) return;
     const now = this.ctx.currentTime;
+    const end = Math.max(now + 0.1, this._voiceEndsAt || now);
     const g = this.musicDuck.gain;
-    const hold = Math.max(0.2, dur);
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
     g.linearRampToValueAtTime(0.42, now + 0.08);
-    g.setValueAtTime(0.42, now + hold);
-    g.linearRampToValueAtTime(1.0, now + hold + 0.28);
+    g.setValueAtTime(0.42, end);
+    g.linearRampToValueAtTime(1.0, end + 0.28);
   }
 
   weaponPickup() {

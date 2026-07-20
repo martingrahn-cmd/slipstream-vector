@@ -1,23 +1,41 @@
 {
   "model_id": "eleven_multilingual_v2",
   "voice_settings": {
-    "stability": 0.4,
-    "similarity_boost": 0.8,
-    "style": 0.3,
+    "stability": 0.3,
+    "similarity_boost": 0.85,
+    "style": 0.5,
     "use_speaker_boost": true
   },
   "voices": {
     "JUNO VEX": {
       "voice_id": "SOYHLrjzK2X1ezoPC6cr",
-      "_name": "Harry - Fierce Warrior"
+      "_name": "Harry - Fierce Warrior",
+      "voice_settings": {
+        "stability": 0.22,
+        "similarity_boost": 0.85,
+        "style": 0.6,
+        "use_speaker_boost": true
+      }
     },
     "KAIDE SORO": {
       "voice_id": "Tar3VOTqUrIW205XlnAi",
-      "_name": "Sekou - Deep, Raspy, & Calm"
+      "_name": "Sekou - Deep, Raspy, & Calm",
+      "voice_settings": {
+        "stability": 0.45,
+        "similarity_boost": 0.85,
+        "style": 0.35,
+        "use_speaker_boost": true
+      }
     },
     "MERIDIAN BLUE": {
       "voice_id": "Z3R5wn05IrDiVCyEkUrK",
-      "_name": "Arabella"
+      "_name": "Arabella",
+      "voice_settings": {
+        "stability": 0.45,
+        "similarity_boost": 0.85,
+        "style": 0.32,
+        "use_speaker_boost": true
+      }
     },
     "SOL ANARA": {
       "voice_id": "pFZP5JQG7iQjIQuC4Bku",
@@ -25,7 +43,13 @@
     },
     "VOSS KRAIT": {
       "voice_id": "pNInz6obpgDQGcFmaJgB",
-      "_name": "Adam - Dominant, Firm"
+      "_name": "Adam - Dominant, Firm",
+      "voice_settings": {
+        "stability": 0.26,
+        "similarity_boost": 0.85,
+        "style": 0.58,
+        "use_speaker_boost": true
+      }
     },
     "KIRA NOX": {
       "voice_id": "weA4Q36twV5kwSaTEL0Q",
@@ -33,11 +57,23 @@
     },
     "LYRA STORM": {
       "voice_id": "XrExE9yKIg1WjnnlVkGX",
-      "_name": "Matilda - Knowledgable, Professional"
+      "_name": "Matilda - Knowledgable, Professional",
+      "voice_settings": {
+        "stability": 0.18,
+        "similarity_boost": 0.85,
+        "style": 0.68,
+        "use_speaker_boost": true
+      }
     },
     "ECHO TANE": {
       "voice_id": "nPczCjzI2devNBz1zQrb",
-      "_name": "Brian - Deep, Resonant and Comforting"
+      "_name": "Brian - Deep, Resonant and Comforting",
+      "voice_settings": {
+        "stability": 0.42,
+        "similarity_boost": 0.85,
+        "style": 0.38,
+        "use_speaker_boost": true
+      }
     }
   }
 }

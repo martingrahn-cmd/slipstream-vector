@@ -53,7 +53,9 @@ for (const [pilot, buckets] of Object.entries(LINES)) {
       const key = `${slug}/${bucket}-${i}`;
       const file = path.join(OUT, slug, `${bucket}-${i}.mp3`);
       if (!FORCE && manifest[key] === text && fs.existsSync(file)) { skipped++; return; }
-      jobs.push({ pilot, slug, bucket, i, text, key, file, voice_id: voice.voice_id });
+      // Per-pilot voice_settings override the global default (excitable rivals
+      // run looser/more expressive; the stoic ones stay composed).
+      jobs.push({ pilot, slug, bucket, i, text, key, file, voice_id: voice.voice_id, settings: voice.voice_settings || cfg.voice_settings });
       chars += text.length;
     });
   }
@@ -67,7 +69,7 @@ async function tts(job, attempt = 1) {
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${job.voice_id}?output_format=mp3_44100_128`, {
     method: 'POST',
     headers: { 'xi-api-key': KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: job.text, model_id: cfg.model_id, voice_settings: cfg.voice_settings }),
+    body: JSON.stringify({ text: job.text, model_id: cfg.model_id, voice_settings: job.settings }),
   });
   if (res.status === 429 && attempt <= 4) {
     const wait = attempt * 3000;

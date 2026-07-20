@@ -172,8 +172,10 @@ export class BanterFeed {
       old.node.remove();
     }
     if (this.audio) {
-      if (this.audio.commsBlip) this.audio.commsBlip();            // radio-open chirp (always)
-      if (this.audio.playVoice) this.audio.playVoice(rival.slug, bucket, idx); // the VO, when generated
+      // The VO now keys its own squelch open/closed; only fall back to the bare
+      // comms chirp when there's no clip to play (so we never double-blip).
+      const spoke = this.audio.playVoice && this.audio.playVoice(rival.slug, bucket, idx);
+      if (!spoke && this.audio.commsBlip) this.audio.commsBlip();
     }
   }
 }
