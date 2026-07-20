@@ -1,0 +1,43 @@
+{
+  "model_id": "eleven_multilingual_v2",
+  "voice_settings": {
+    "stability": 0.4,
+    "similarity_boost": 0.8,
+    "style": 0.3,
+    "use_speaker_boost": true
+  },
+  "voices": {
+    "JUNO VEX": {
+      "voice_id": "SOYHLrjzK2X1ezoPC6cr",
+      "_name": "Harry - Fierce Warrior"
+    },
+    "KAIDE SORO": {
+      "voice_id": "Tar3VOTqUrIW205XlnAi",
+      "_name": "Sekou - Deep, Raspy, & Calm"
+    },
+    "MERIDIAN BLUE": {
+      "voice_id": "Z3R5wn05IrDiVCyEkUrK",
+      "_name": "Arabella"
+    },
+    "SOL ANARA": {
+      "voice_id": "pFZP5JQG7iQjIQuC4Bku",
+      "_name": "Lily - Velvety Actress"
+    },
+    "VOSS KRAIT": {
+      "voice_id": "pNInz6obpgDQGcFmaJgB",
+      "_name": "Adam - Dominant, Firm"
+    },
+    "KIRA NOX": {
+      "voice_id": "weA4Q36twV5kwSaTEL0Q",
+      "_name": "Ava - Female Robot or AI Assistant"
+    },
+    "LYRA STORM": {
+      "voice_id": "XrExE9yKIg1WjnnlVkGX",
+      "_name": "Matilda - Knowledgable, Professional"
+    },
+    "ECHO TANE": {
+      "voice_id": "nPczCjzI2devNBz1zQrb",
+      "_name": "Brian - Deep, Resonant and Comforting"
+    }
+  }
+}
