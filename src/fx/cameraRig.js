@@ -19,10 +19,11 @@ const SC_FOV = 50;          // the cam rides close behind the ship
 const SC_POS_LAMBDA = 5.0;  // smooth the follow between cuts
 const SC_LOOK_LAMBDA = 6.0; // how fast the look settles after a cut
 const SC_FRAME_BIAS = 0.13; // raise the ship into the upper-centre, above the bottom board
+const SC_MIN_CLEAR = 2.6;   // keep the cam this far above the road (no clipping on climbs/crests/loops)
 const SHOWCASE = [
-  { t: -10.5, r: 0.0, u: 5.2 }, // high behind, looking down the road
-  { t: -8.0, r: -4.2, u: 2.4 }, // low 3/4 rear-left
-  { t: -8.0, r: 4.2, u: 2.4 },  // low 3/4 rear-right
+  { t: -10.5, r: 0.0, u: 5.4 }, // high behind, looking down the road
+  { t: -8.0, r: -4.2, u: 3.0 }, // low 3/4 rear-left
+  { t: -8.0, r: 4.2, u: 3.0 },  // low 3/4 rear-right
 ];
 
 export class CameraRig {
@@ -75,6 +76,9 @@ export class CameraRig {
   // Begin/stop the trackside broadcast cam (driven by the 'finished' state).
   startShowcase() { if (this.showcase) return; this.showcase = true; this.scIdx = -1; this.scInit = false; }
   stopShowcase() { this.showcase = false; this.showcaseTarget = null; }
+  // Clean CUT to a fresh angle on a new subject (called when main switches the
+  // followed ship) — snaps instead of swinging the cam across the track.
+  cutShowcase() { if (!this.showcase) return; this.scSnap = true; this.scT = 0; this.scIdx = (Math.max(0, this.scIdx) + 1) % SHOWCASE.length; }
 
   reset(ship) {
     this.gap = T.CAM_BACK_REST;
@@ -219,6 +223,12 @@ export class CameraRig {
       this._lookT.y += p.u;
       if (this.scSnap) { this.scPos.copy(this._lookT); this.scLook.copy(shipPt); this.scSnap = false; }
       else { this.scPos.lerp(this._lookT, k(SC_POS_LAMBDA)); this.scLook.lerp(shipPt, k(SC_LOOK_LAMBDA)); }
+      // Never sink through the deck: clear the road BEHIND the ship (climbs,
+      // crests and loops would otherwise punch the cam through the track).
+      const L = this.spline.length;
+      const behind = this.spline.frameAt((((tgt.s + p.t) % L) + L) % L, this.frame);
+      const floor = Math.max(behind.pos.y, shipPt.y) + SC_MIN_CLEAR;
+      if (this.scPos.y < floor) this.scPos.y = floor;
       this._appPos.copy(this.scPos);
       this._appUp.set(0, 1, 0); // a level horizon
       // Raise the ship into the upper-centre, above the bottom results board.

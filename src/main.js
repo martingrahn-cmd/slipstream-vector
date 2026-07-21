@@ -1118,6 +1118,7 @@ let playerFinishTime = null; // frozen at the line; the live results reuse it
 let resultsRefreshT = 0;
 let lastFinCount = -1;
 let showcaseFocus = null; // the ship the post-race broadcast cam is following (hysteresis)
+let showcaseHoldT = 0;    // seconds on the current subject (paces the broadcast cuts)
 // Post-race: an AI takes the player's wheel too, so its ship keeps racing the
 // line (and boosting on pads) instead of standing still. Rebuilt per spline.
 let postRaceDriver = null;
@@ -1529,19 +1530,31 @@ function tick(now) {
   // (Not behind the championship standings board — finishedView gates it.)
   if (state === 'finished' && finishedView === 'race') {
     rig.startShowcase();
+    showcaseHoldT += realDt;
+    // The car still racing that's nearest the line.
     let best = null, bestProg = -Infinity;
     for (const r of race.racers) {
       if (r.finishTime !== null) continue;
       const p = race.progressOf(r.phys);
       if (p > bestProg) { bestProg = p; best = r.phys; }
     }
-    // Hysteresis: keep the current subject unless another is clearly ahead, so a
-    // wheel-to-wheel pack doesn't flip the camera (and hard-cut) every frame.
     const fr = race.racers.find((r) => r.phys === showcaseFocus);
-    const focusGone = !fr || fr.finishTime !== null;
-    if (focusGone || (best && bestProg > race.progressOf(showcaseFocus) + 8)) showcaseFocus = best;
+    const focusFinished = !!fr && fr.finishTime !== null;
+    // Pace the cuts so a field finishing in a stream doesn't strobe the camera:
+    //  • no subject yet, or it left the grid  → cut now;
+    //  • the subject just crossed the line     → linger ~1.6s on the finish, THEN cut;
+    //  • someone's run away up front           → only cut after a minimum dwell.
+    let switchTo = null;
+    if (!showcaseFocus || !fr) switchTo = best || ship;
+    else if (focusFinished && showcaseHoldT > 1.6) switchTo = best || ship;
+    else if (best && !focusFinished && showcaseHoldT > 3.0
+      && bestProg > race.progressOf(showcaseFocus) + 12) switchTo = best;
+    if (switchTo && switchTo !== showcaseFocus) {
+      showcaseFocus = switchTo; showcaseHoldT = 0;
+      rig.cutShowcase(); // clean broadcast CUT, not a swing across the track
+    }
     rig.showcaseTarget = showcaseFocus || ship;
-  } else { rig.stopShowcase(); showcaseFocus = null; }
+  } else { rig.stopShowcase(); showcaseFocus = null; showcaseHoldT = 0; }
   rig.update(dt, ship, state === 'race' ? input : NULL_INPUT, juice,
     input.airbrake && state === 'race' && ship.v > 5);
   if (debugCam) applyDebugCam();
