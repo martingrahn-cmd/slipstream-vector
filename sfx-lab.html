@@ -1,0 +1,358 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>SFX LAB — code synth vs ElevenLabs</title>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  :root { --cyan: #7df9ff; --mag: #ff6ade; --gold: #ffcf2a; }
+  html, body { margin: 0; background: #07060f; color: #dfe6ff; font-family: 'Rajdhani', system-ui, sans-serif; }
+  #wrap { max-width: 1180px; margin: 0 auto; padding: 20px 24px 90px; }
+  h1 { font-family: 'Orbitron', sans-serif; font-size: 17px; letter-spacing: 0.22em; color: var(--cyan); margin: 2px 0 3px; }
+  .sub { font-size: 13px; letter-spacing: 0.05em; color: #8a93b8; margin-bottom: 16px; max-width: 860px; line-height: 1.5; }
+  .sub b { color: #c8d0ee; font-weight: 700; }
+  h2 { font-family: 'Orbitron', sans-serif; font-size: 12px; letter-spacing: 0.2em; color: #fff; margin: 30px 0 10px; }
+  h2 small { font-family: 'Rajdhani'; font-weight: 600; letter-spacing: 0.05em; color: #6a6a8f; font-size: 12px; margin-left: 8px; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 16px; border: 1px solid #241a3a; background: #0a0714; margin-bottom: 18px;
+         clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+  .grp { display: flex; align-items: center; gap: 8px; }
+  .grp > span { font-size: 10px; letter-spacing: 0.18em; color: #6a6a8f; }
+  input[type=password], input[type=number] { background: #14102a; border: 1px solid #2a2050; color: #dfe6ff; font-family: 'Rajdhani'; font-weight: 600; font-size: 12px; padding: 6px 9px; }
+  input[type=password] { width: 340px; }
+  input[type=number] { width: 62px; }
+  input[type=range] { accent-color: var(--cyan); }
+  #status { font-size: 12px; letter-spacing: 0.05em; color: #6a6a8f; }
+  #status.err { color: #ff6a5a; }
+  #status.ok { color: #59ffa8; }
+
+  .snd { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #241a3a; background: #0a0714; margin-bottom: 12px; }
+  .side { padding: 12px 14px; min-width: 0; }
+  .side.code { border-right: 1px solid #16112b; }
+  .side h3 { font-family: 'Orbitron'; font-size: 10px; letter-spacing: 0.2em; margin: 0 0 3px; }
+  .side.code h3 { color: var(--cyan); }
+  .side.el h3 { color: var(--mag); }
+  .side .desc { font-size: 12px; color: #6a6a8f; margin: 0 0 9px; line-height: 1.35; }
+  .sname { grid-column: 1 / -1; font-family: 'Orbitron'; font-weight: 700; font-size: 11px; letter-spacing: 0.16em; color: #c8d0ee;
+           padding: 8px 14px 7px; border-bottom: 1px solid #16112b; background: linear-gradient(100deg, rgba(125,249,255,0.05), transparent 55%); }
+  .sname .bed { font-size: 8px; letter-spacing: 0.2em; color: var(--gold); border: 1px solid var(--gold); padding: 1px 5px; margin-left: 9px; vertical-align: 2px; }
+
+  button.act { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.08em; font-size: 12px; padding: 7px 13px; background: #14102a; color: #c8d0ee;
+               border: 1px solid #2a2050; cursor: pointer; transition: border-color 120ms, background 120ms; }
+  button.act:hover { border-color: #4a3f78; background: #1a1436; }
+  button.act.play { border-color: #1d4a55; color: var(--cyan); }
+  button.act.play:hover { border-color: var(--cyan); }
+  button.act.gen { border-color: #4a2050; color: var(--mag); }
+  button.act.gen:hover { border-color: var(--mag); }
+  button.act.gen:disabled { opacity: 0.4; cursor: wait; }
+  button.act.on { background: var(--cyan); border-color: var(--cyan); color: #05040c; }
+  .row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+  .row + .row { margin-top: 8px; }
+
+  textarea.prompt { width: 100%; min-height: 52px; resize: vertical; background: #14102a; border: 1px solid #2a2050; color: #dfe6ff;
+                    font-family: 'Rajdhani'; font-weight: 600; font-size: 12.5px; line-height: 1.35; padding: 7px 9px; }
+  .genrow { display: flex; gap: 7px; align-items: center; margin-top: 7px; }
+  .genrow .dur { display: flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.14em; color: #6a6a8f; }
+
+  .takes { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; }
+  .take { display: flex; align-items: center; gap: 7px; padding: 5px 8px; background: #0d0a1c; border: 1px solid #1c1636; font-size: 12px; }
+  .take b { font-family: 'Orbitron'; font-size: 9px; letter-spacing: 0.14em; color: #8a93b8; min-width: 52px; }
+  .take button { font-family: 'Rajdhani'; font-weight: 700; font-size: 11px; letter-spacing: 0.06em; padding: 3px 9px; background: #14102a;
+                 color: #c8d0ee; border: 1px solid #2a2050; cursor: pointer; }
+  .take button:hover { border-color: #4a3f78; }
+  .take button.picked { background: var(--gold); border-color: var(--gold); color: #05040c; }
+  .take a { color: var(--cyan); font-size: 11px; letter-spacing: 0.06em; text-decoration: none; border: 1px solid #1d4a55; padding: 3px 9px; }
+  .take a:hover { border-color: var(--cyan); }
+  .take .len { color: #6a6a8f; font-size: 11px; margin-left: auto; }
+
+  .sliders { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; margin-top: 8px; max-width: 380px; }
+  .sliders span { font-size: 10px; letter-spacing: 0.16em; color: #6a6a8f; }
+  .sliders output { font-family: 'Orbitron'; font-size: 10px; color: var(--cyan); min-width: 34px; text-align: right; }
+
+  @media (max-width: 880px) { .snd { grid-template-columns: 1fr; } .side.code { border-right: 0; border-bottom: 1px solid #16112b; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>SFX LAB</h1>
+  <div class="sub">
+    A/B the <b>in-game procedural synth</b> (left — plays the exact <b>src/core/audio.js</b> calls the game makes)
+    against <b>ElevenLabs sound-generation</b> (right — edit the prompt, GENERATE takes, pick a winner, download).
+    Click anywhere once to unlock audio. The EL side needs your API key (stays in localStorage, never committed).
+    Both sides play through the same SFX bus, so volumes compare fairly.
+  </div>
+
+  <div class="bar">
+    <div class="grp"><span>API KEY</span><input id="key" type="password" placeholder="ElevenLabs API key (sk_…) — stays in localStorage" /></div>
+    <div class="grp"><span>PROMPT INFLUENCE</span><input id="pinf" type="number" min="0" max="1" step="0.05" value="0.45" /></div>
+    <div class="grp"><span>SFX VOL</span><input id="vol" type="range" min="0" max="10" step="1" /></div>
+    <div class="grp"><button class="act" id="export">EXPORT SFX CONFIG</button></div>
+    <div id="status">click anywhere to unlock audio</div>
+  </div>
+
+  <h2>ONE-SHOTS <small>the strongest candidates for baked ElevenLabs takes</small></h2>
+  <div id="oneshots"></div>
+
+  <h2>CONTINUOUS BEDS <small>these follow game state in real time — the code side is the reference; EL takes loop so you can hear the difference</small></h2>
+  <div id="beds"></div>
+</div>
+
+<script type="module">
+import { AudioEngine } from './src/core/audio.js';
+
+// ---- the sound roster: code trigger + a default EL prompt per sound ---------
+const SOUNDS = [
+  { key: 'missile-launch', name: 'MISSILE / HOMING LAUNCH', dur: 2.0,
+    desc: 'Sub kick + chest boom + ignition + exhaust tail.',
+    code: [{ label: '▶ LAUNCH', fn: (a) => a.weaponFire('missiles') }],
+    prompt: 'Sci-fi missile launch from a futuristic anti-gravity race ship: heavy pressurized thump ignition, then a hissing rocket motor streaking away with doppler. Punchy arcade game weapon sound.' },
+  { key: 'explosion', name: 'WEAPON IMPACT (explosion)', dur: 2.5,
+    desc: 'The hit detonation on another ship.',
+    code: [{ label: '▶ IMPACT', fn: (a) => a.weaponImpact(1) }],
+    prompt: 'Arcade sci-fi explosion: punchy deep boom with a fireball whoosh, metallic debris scattering and crackling, short tail. Stylized video game weapon impact, not realistic warfare.' },
+  { key: 'player-hit', name: 'PLAYER HIT (bang + paralysis)', dur: 2.5,
+    desc: 'You get tagged: bang, then the disable hum for 1.7 s.',
+    code: [{ label: '▶ GET HIT', fn: (a) => { a.playerHitBang(); setTimeout(() => a.disableHum(false), 1700); } }],
+    prompt: 'Huge stylized game explosion right on the player: deep sub-bass blast, then electrical crackle and sizzling sparks aftermath, short.' },
+  { key: 'mine-drop', name: 'MINE DROP', dur: 1.0,
+    desc: 'Release clunk + arming beep.',
+    code: [{ label: '▶ DROP', fn: (a) => a.weaponFire('mine') }],
+    prompt: 'A small metallic mine released with a soft mechanical clunk and a quick electronic arming beep, video game.' },
+  { key: 'shield-up', name: 'SHIELD ACTIVATE', dur: 1.5,
+    desc: 'The power-up shimmer when the bubble goes live.',
+    code: [{ label: '▶ SHIELD UP', fn: (a) => a.weaponFire('shield') }],
+    prompt: 'Sci-fi energy shield activating: a rising electric shimmer swelling into a protective bubble, short and bright, video game power-up.' },
+  { key: 'nitro', name: 'NITRO (boost weapon)', dur: 1.5,
+    desc: 'Sub thump + pressurised hiss + swelling saw.',
+    code: [{ label: '▶ NITRO', fn: (a) => a.nitroKick() }],
+    prompt: 'Nitrous boost ignition: a deep pressurized thump and a rising surge of thrust, punchy arcade game boost.' },
+  { key: 'boost-pad', name: 'BOOST PAD', dur: 1.2,
+    desc: 'The chevron-pad whoosh.',
+    code: [{ label: '▶ PAD', fn: (a) => a.boostWhoosh(1) }],
+    prompt: 'Quick energy boost pad whoosh: an accelerating swoosh with a bright electric edge, very short, arcade racer.' },
+  { key: 'near-miss', name: 'NEAR-MISS WHOOSH', dur: 1.2,
+    desc: 'Doppler swish whipping across the stereo field.',
+    code: [{ label: '▶ LEFT', fn: (a) => a.nearMissWhoosh(-1, 1) },
+           { label: '▶ RIGHT', fn: (a) => a.nearMissWhoosh(1, 1) }],
+    prompt: 'Extremely fast near-miss flyby whoosh: a vehicle passing very close at high speed, tight doppler swish, short and punchy.' },
+  { key: 'wall-hit', name: 'WALL HIT', dur: 1.0,
+    desc: 'Full-severity barrier slam.',
+    code: [{ label: '▶ SLAM', fn: (a) => a.wallThud(1) }],
+    prompt: 'A fast hovercraft slamming against a metal barrier: heavy dull impact with a short metallic scrape, video game.' },
+  { key: 'pickup', name: 'WEAPON PICKUP', dur: 0.8,
+    desc: 'The two-note arm chirp on a gold pad.',
+    code: [{ label: '▶ ARM', fn: (a) => a.weaponPickup() }],
+    prompt: 'Bright arcade weapon pickup chirp: two quick ascending electronic notes, clean and short.' },
+  { key: 'fizzle', name: 'WEAPON FIZZLE (use-it-or-lose-it)', dur: 1.0,
+    desc: 'The 6 s fuse ran out — deflating power-down.',
+    code: [{ label: '▶ FIZZLE', fn: (a) => a.weaponFizzle() }],
+    prompt: 'A soft deflating power-down fizzle: descending electronic whine with a little static puff, short, video game.' },
+];
+const BEDS = [
+  { key: 'shield-hum', name: 'SHIELD HUM', dur: 4.0, bed: true,
+    desc: 'Warm beating drone while the bubble is live. Code side ramps with game state; EL takes loop.',
+    prompt: 'Continuous sci-fi energy shield hum: warm electric force field drone, steady subtle pulsing, seamless loop, no melody.' },
+];
+
+// ---- engine wiring ----------------------------------------------------------
+const audio = new AudioEngine({ on() {} });          // juice stub — the lab fires sounds directly
+const saved = JSON.parse(localStorage.getItem('sfx-lab-config') || '{}');
+const takes = new Map();                             // key -> [{bytes, buf, url}]
+const picked = new Map();                            // key -> take index
+let looping = null;                                  // {src, btn} for bed loop playback
+let shieldOn = false, engineOn = false;
+const eng = { sn: 0.6, th: 0.8, bo: 0 };
+
+const $ = (s, el = document) => el.querySelector(s);
+const els = { key: $('#key'), pinf: $('#pinf'), vol: $('#vol'), status: $('#status') };
+els.key.value = localStorage.getItem('el-key') || '';
+els.key.onchange = () => localStorage.setItem('el-key', els.key.value.trim());
+els.vol.value = audio.sfxVolume;
+els.vol.oninput = () => audio.setSfxVolume(parseInt(els.vol.value, 10));
+
+function status(msg, cls = '') { els.status.textContent = msg; els.status.className = cls; }
+function unlock() {
+  audio.unlock();
+  audio.stateScale = 1; // full race-level loudness for a fair audition
+  if (audio.ctx) status('audio unlocked — ' + audio.ctx.state, 'ok');
+}
+document.addEventListener('pointerdown', unlock);
+
+// Per-frame: keep the beds honest (shield ramp + optional engine model).
+let last = performance.now();
+(function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (audio.ctx) {
+    audio.stateScale = 1;
+    audio.updateShield(dt, shieldOn);
+    if (engineOn) { audio.updateEngine(dt, eng.sn, eng.th, eng.bo, true); audio.stateScale = 1; }
+  }
+  requestAnimationFrame(frame);
+})(last);
+
+// ---- ElevenLabs sound-generation -------------------------------------------
+async function generate(snd, btn) {
+  const key = els.key.value.trim();
+  if (!key) { status('enter your ElevenLabs API key first', 'err'); return; }
+  unlock();
+  btn.disabled = true; status(`generating ${snd.key}…`);
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: snd.promptEl.value.trim(), duration_seconds: parseFloat(snd.durEl.value),
+                             prompt_influence: parseFloat(els.pinf.value) || 0.45 }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 140)}`);
+    const bytes = await res.arrayBuffer();
+    const buf = await audio.ctx.decodeAudioData(bytes.slice(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+    const list = takes.get(snd.key) || [];
+    list.push({ buf, url });
+    takes.set(snd.key, list);
+    renderTakes(snd);
+    saveCfg(snd);
+    status(`${snd.key}: take ${list.length} ready (${buf.duration.toFixed(1)}s)`, 'ok');
+  } catch (e) { status(`${snd.key}: ${e.message}`, 'err'); }
+  btn.disabled = false;
+}
+
+function playTake(t, loop, btn) {
+  unlock();
+  if (looping) { looping.src.stop(); looping.btn.classList.remove('on'); const was = looping; looping = null; if (loop && was.btn === btn) return; }
+  const src = audio.ctx.createBufferSource();
+  src.buffer = t.buf; src.loop = !!loop;
+  src.connect(audio.sfx);
+  src.start();
+  if (loop) { looping = { src, btn }; btn.classList.add('on'); }
+}
+
+function saveCfg(snd) {
+  saved[snd.key] = { prompt: snd.promptEl.value.trim(), duration_seconds: parseFloat(snd.durEl.value),
+                     chosen: picked.has(snd.key) ? picked.get(snd.key) : null };
+  localStorage.setItem('sfx-lab-config', JSON.stringify(saved));
+}
+
+// ---- UI ---------------------------------------------------------------------
+function renderTakes(snd) {
+  const list = takes.get(snd.key) || [];
+  snd.takesEl.innerHTML = '';
+  list.forEach((t, i) => {
+    const row = document.createElement('div'); row.className = 'take';
+    const b = document.createElement('b'); b.textContent = `TAKE ${i + 1}`;
+    const play = document.createElement('button'); play.textContent = '▶ PLAY';
+    play.onclick = () => playTake(t, false, play);
+    row.append(b, play);
+    if (snd.bed) { const lp = document.createElement('button'); lp.textContent = '⟳ LOOP'; lp.onclick = () => playTake(t, true, lp); row.append(lp); }
+    const pick = document.createElement('button'); pick.textContent = '✓ PICK';
+    if (picked.get(snd.key) === i) pick.classList.add('picked');
+    pick.onclick = () => { picked.set(snd.key, i); saveCfg(snd); renderTakes(snd); };
+    const dl = document.createElement('a'); dl.textContent = '⬇ MP3'; dl.href = t.url; dl.download = `${snd.key}-${i + 1}.mp3`;
+    const len = document.createElement('span'); len.className = 'len'; len.textContent = `${t.buf.duration.toFixed(1)}s`;
+    row.append(pick, dl, len);
+    snd.takesEl.appendChild(row);
+  });
+}
+
+function buildRow(snd, host) {
+  const box = document.createElement('div'); box.className = 'snd';
+  const title = document.createElement('div'); title.className = 'sname';
+  title.innerHTML = snd.name + (snd.bed ? '<span class="bed">BED</span>' : '');
+  box.appendChild(title);
+
+  const code = document.createElement('div'); code.className = 'side code';
+  code.innerHTML = `<h3>CODE — in-game synth</h3><p class="desc">${snd.desc}</p>`;
+  const crow = document.createElement('div'); crow.className = 'row';
+  for (const c of (snd.code || [])) {
+    const b = document.createElement('button'); b.className = 'act play'; b.textContent = c.label;
+    b.dataset.code = snd.key;
+    b.onclick = () => { unlock(); c.fn(audio); };
+    crow.appendChild(b);
+  }
+  if (snd.key === 'shield-hum') {
+    const b = document.createElement('button'); b.className = 'act play'; b.textContent = '⟳ HUM ON/OFF';
+    b.dataset.code = snd.key;
+    b.onclick = () => { unlock(); shieldOn = !shieldOn; b.classList.toggle('on', shieldOn); };
+    crow.appendChild(b);
+  }
+  code.appendChild(crow);
+  box.appendChild(code);
+
+  const el = document.createElement('div'); el.className = 'side el';
+  el.innerHTML = '<h3>ELEVENLABS — generated</h3>';
+  const prompt = document.createElement('textarea'); prompt.className = 'prompt';
+  prompt.value = (saved[snd.key] && saved[snd.key].prompt) || snd.prompt;
+  const gen = document.createElement('button'); gen.className = 'act gen'; gen.textContent = '⚡ GENERATE';
+  gen.dataset.gen = snd.key;
+  const dur = document.createElement('input'); dur.type = 'number'; dur.min = '0.5'; dur.max = '22'; dur.step = '0.1';
+  dur.value = (saved[snd.key] && saved[snd.key].duration_seconds) || snd.dur;
+  snd.promptEl = prompt; snd.durEl = dur;
+  prompt.onchange = () => saveCfg(snd); dur.onchange = () => saveCfg(snd);
+  gen.onclick = () => generate(snd, gen);
+  const grow = document.createElement('div'); grow.className = 'genrow';
+  const dlab = document.createElement('label'); dlab.className = 'dur'; dlab.append('DUR (s)', dur);
+  grow.append(gen, dlab);
+  const tk = document.createElement('div'); tk.className = 'takes'; snd.takesEl = tk;
+  el.append(prompt, grow, tk);
+  box.appendChild(el);
+  host.appendChild(box);
+}
+
+const oneshots = $('#oneshots'), beds = $('#beds');
+for (const s of SOUNDS) buildRow(s, oneshots);
+for (const s of BEDS) buildRow(s, beds);
+
+// ENGINE bed row — code-only (there is no baked equivalent; that's the point).
+{
+  const box = document.createElement('div'); box.className = 'snd';
+  box.innerHTML = '<div class="sname">ENGINE + WIND<span class="bed">BED</span></div>';
+  const code = document.createElement('div'); code.className = 'side code';
+  code.innerHTML = '<h3>CODE — in-game synth</h3><p class="desc">Pitch follows speed, filter opens with throttle/boost — every frame.</p>';
+  const row = document.createElement('div'); row.className = 'row';
+  const tog = document.createElement('button'); tog.className = 'act play'; tog.textContent = '⟳ ENGINE ON/OFF';
+  tog.onclick = () => {
+    unlock(); engineOn = !engineOn; tog.classList.toggle('on', engineOn);
+    if (!engineOn && audio.engGain) { audio.engGain.gain.value = 0; audio.windGain.gain.value = 0; }
+  };
+  row.appendChild(tog); code.appendChild(row);
+  const sl = document.createElement('div'); sl.className = 'sliders';
+  for (const [k, label] of [['sn', 'SPEED'], ['th', 'THROTTLE'], ['bo', 'BOOST']]) {
+    const span = document.createElement('span'); span.textContent = label;
+    const r = document.createElement('input'); r.type = 'range'; r.min = '0'; r.max = '1'; r.step = '0.01'; r.value = eng[k];
+    const out = document.createElement('output'); out.textContent = eng[k].toFixed(2);
+    r.oninput = () => { eng[k] = parseFloat(r.value); out.textContent = eng[k].toFixed(2); };
+    sl.append(span, r, out);
+  }
+  code.appendChild(sl); box.appendChild(code);
+  const el = document.createElement('div'); el.className = 'side el';
+  el.innerHTML = '<h3>ELEVENLABS</h3><p class="desc">No contest here on purpose: a baked file can’t follow speed and throttle in real time. The engine stays procedural.</p>';
+  box.appendChild(el);
+  beds.appendChild(box);
+}
+
+// EXPORT: the config a future tools/generate-sfx.mjs would consume.
+$('#export').onclick = () => {
+  const sounds = {};
+  for (const s of [...SOUNDS, ...BEDS]) {
+    sounds[s.key] = { prompt: s.promptEl.value.trim(), duration_seconds: parseFloat(s.durEl.value),
+                      chosen_take: picked.has(s.key) ? picked.get(s.key) + 1 : null, loop: !!s.bed };
+  }
+  const cfg = { api: 'sound-generation', prompt_influence: parseFloat(els.pinf.value) || 0.45, sounds };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' }));
+  a.download = 'sfx-config.json';
+  a.click();
+  status('sfx-config.json exported — save it as tools/sfx-config.json', 'ok');
+};
+
+window.__sfxlab = { audio, SOUNDS, BEDS, takes, generate };
+</script>
+</body>
+</html>
