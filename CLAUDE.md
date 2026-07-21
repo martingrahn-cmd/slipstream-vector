@@ -76,10 +76,17 @@ everything, zero per-frame allocations in hot paths.
   source of truth** for pilot lines (game, labs and the voice generator all
   import it).
 - `tools/generate-voices.mjs` — idempotent ElevenLabs batch TTS (manifest-
-  based; voices not yet generated/committed). Playback is wired: the banter
-  feed calls `audio.playVoice(slug, bucket, idx)`, which lazy-loads
-  `assets/voice/<slug>/<bucket>-<idx>.mp3` (from `manifest.json`), ducks the
-  music, and falls back to just the comms chirp until the clips exist.
+  based; clips generated + committed in `assets/voice/`). The banter feed
+  calls `audio.playVoice(slug, bucket, idx)`, which lazy-loads the clip,
+  plays it through a radio-comms chain (band-limit EQ + static + squelch),
+  ducks the music, serialises voices, and falls back to the comms chirp.
+- `tools/generate-sfx.mjs` — idempotent ElevenLabs sound-generation batch
+  (config exported from `sfx-lab.html` → `tools/sfx-config.json`; clips in
+  `assets/sfx/`). `audio.js` layers these one-shots ON TOP of the synth:
+  synth keeps the low-end attack (hitstop/rumble sync), clip adds the
+  organic chaos; missing clip → full synth fallback. Continuous beds
+  (engine/wind/shield/scrape) stay purely procedural — they follow game
+  state per frame, a baked file can't. Re-roll one: `--only <key>`.
 - `src/ship/shipPhysics.js`, `src/ship/aiDriver.js` — zero three.js imports
   (AI/replay seam). Keep it that way.
 

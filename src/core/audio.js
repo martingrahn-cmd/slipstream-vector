@@ -20,6 +20,12 @@ export class AudioEngine {
     this._voiceBuf = new Map();   // key -> decoded AudioBuffer (lazy)
     this._loadVoiceManifest();
 
+    // Baked SFX one-shots (tools/generate-sfx.mjs -> assets/sfx/): layered on
+    // top of the synth. No manifest / no clip -> full synth, as before.
+    this._sfxManifest = null;
+    this._sfxBuf = new Map();     // key -> { buf, norm } (decoded at unlock)
+    this._loadSfxManifest();
+
     window.addEventListener('keydown', () => this.unlock());
 
     juice.on('boost', () => this.boostWhoosh(1));
@@ -71,6 +77,7 @@ export class AudioEngine {
     this._buildShieldHum();
     this._buildOpponentVoices();
     this._tryMusic();
+    this._prefetchSfx();
   }
 
   // A small pool of engine voices reassigned to the nearest opponents each
@@ -221,7 +228,22 @@ export class AudioEngine {
     if (!this.ctx || !this.shieldGain) return;
     const target = active ? 0.11 * this.stateScale : 0;
     this.shieldLevel += (target - this.shieldLevel) * Math.min(1, 5 * dt);
-    this.shieldGain.gain.value = this.shieldLevel;
+    // Baked hum texture looped on top of the synth drone (which keeps the sub
+    // weight and yields a little headroom to the clip). Lazily started once the
+    // clip is decoded; both gains ride the same ramp, so the mix stays honest.
+    const c = this._sfxBuf.get('shield-hum');
+    if (c && !this._shieldLoop) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = c.buf; src.loop = true;
+      src.loopStart = 0.06;                                   // trim the mp3
+      src.loopEnd = Math.max(0.5, c.buf.duration - 0.08);     // encoder padding
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      src.connect(g); g.connect(this.sfx);
+      src.start();
+      this._shieldLoop = { g, norm: c.norm };
+    }
+    this.shieldGain.gain.value = this.shieldLevel * (this._shieldLoop ? 0.6 : 1);
+    if (this._shieldLoop) this._shieldLoop.g.gain.value = this.shieldLevel * 2.4 * this._shieldLoop.norm;
   }
 
   // Called every frame. All values lerped here — no AudioParam event spam.
@@ -288,10 +310,12 @@ export class AudioEngine {
   // crack + debris tail), then the paralysis hum kicks in.
   playerHitBang() {
     if (!this.ctx) return;
-    this.burst(90, 0.7, 0.42, 'lowpass', 0.6);     // deep sub body
-    this.burst(3200, 0.09, 0.24, 'highpass', 0.9); // sharp crack transient
-    this.burst(700, 0.4, 0.2, 'bandpass', 0.7);    // mid debris
-    this.blip(70, 0.6, { type: 'sawtooth', gain: 0.24, slideTo: 30 });
+    this.burst(90, 0.7, 0.42, 'lowpass', 0.6);     // deep sub body — always, the gut punch
+    if (!this._playClip('player-hit', 0.6)) {
+      this.burst(3200, 0.09, 0.24, 'highpass', 0.9); // sharp crack transient
+      this.burst(700, 0.4, 0.2, 'bandpass', 0.7);    // mid debris
+      this.blip(70, 0.6, { type: 'sawtooth', gain: 0.24, slideTo: 30 });
+    }
     this.disableHum(true);
   }
 
@@ -332,15 +356,18 @@ export class AudioEngine {
   // hiss + a low swelling saw. Beefier than the pad boostWhoosh.
   nitroKick() {
     if (!this.ctx) return;
-    this.blip(48, 0.5, { type: 'sine', gain: 0.32, slideTo: 30 });
+    this.blip(48, 0.5, { type: 'sine', gain: 0.32, slideTo: 30 }); // sub thump — always
+    if (this._playClip('nitro', 0.5)) return;
     this.blip(120, 0.55, { type: 'sawtooth', gain: 0.16, slideTo: 520 });
     this.burst(600, 0.6, 0.2, 'bandpass', 0.5);
     this.burst(3000, 0.35, 0.12, 'highpass', 0.8);
   }
 
   weaponImpact(amount = 1) {
-    // heavy two-layer boom: low body + a bright crack on top
+    // heavy two-layer boom: low body (always — synced with the hitstop) + the
+    // baked detonation on top, or the synth crack when no clip is decoded.
     this.burst(240, 0.5, 0.3 * amount, 'lowpass', 0.7);
+    if (this._playClip('explosion', 0.55 * amount)) return;
     this.burst(2400, 0.2, 0.13 * amount, 'bandpass', 1.2);
     this.blip(110, 0.45, { type: 'sawtooth', gain: 0.15 * amount, slideTo: 38 });
   }
@@ -352,19 +379,22 @@ export class AudioEngine {
 
   weaponFire(type) {
     if (type === 'missiles' || type === 'homing') {
-      // ROCKET launch: lead with WEIGHT — a deep sub kick + a chest boom as it
-      // leaves the rail — then the ignition thump, throaty falling saw and a
-      // long exhaust tail sweeping down as the rocket clears the ship.
+      // ROCKET launch: the WEIGHT stays synth — a deep sub kick + chest boom as
+      // it leaves the rail, synced with the fire punch. The baked clip carries
+      // the motor/exhaust chaos; without it the full synth tail plays instead.
       this.blip(96, 0.30, { type: 'sine', gain: 0.5, slideTo: 30 });             // sub kick — the heft
       this.burst(150, 0.30, 0.36, 'lowpass', 0.7);                               // chest boom body
+      if (this._playClip('missile-launch', 0.5)) return;
       this.blip(150, 0.10, { type: 'sine', gain: 0.22, slideTo: 55 });           // ignition thump
       this.blip(360, 0.5, { type: 'sawtooth', gain: 0.13, slideTo: 55 });        // motor drop
       this.burst(2600, 0.55, 0.2, 'bandpass', 1.1, 320);                          // exhaust tail, sweeping away
       this.burst(5200, 0.12, 0.1, 'highpass', 0.8);                              // launch crack
     } else if (type === 'mine') {
+      if (this._playClip('mine-drop', 0.3)) return;
       this.blip(190, 0.1, { type: 'square', gain: 0.1 });
       this.blip(120, 0.12, { type: 'square', gain: 0.09, delay: 0.07 });
     } else if (type === 'shield') {
+      if (this._playClip('shield-up', 0.35)) return;
       // power-up shimmer: rising sine + a soft filtered swell
       this.blip(360, 0.32, { type: 'sine', gain: 0.12, slideTo: 1200 });
       this.blip(540, 0.3, { type: 'triangle', gain: 0.07, slideTo: 1500, delay: 0.04 });
@@ -471,19 +501,80 @@ export class AudioEngine {
     g.linearRampToValueAtTime(1.0, end + 0.28);
   }
 
+  // ---- baked SFX layer ----------------------------------------------------
+  // Generated one-shots (ElevenLabs, tools/generate-sfx.mjs) layered on top of
+  // the synth: the synth keeps the tactile low-end attack (synced with hitstop
+  // and rumble), the clip brings the organic chaos — debris, crackle, exhaust —
+  // the oscillators can't fake. Absent manifest/clip -> full synth, no error.
+  async _loadSfxManifest() {
+    try {
+      const r = await fetch('assets/sfx/manifest.json', { cache: 'no-cache' });
+      if (r.ok) { this._sfxManifest = await r.json(); this._prefetchSfx(); }
+    } catch { /* not generated yet — fine */ }
+  }
+
+  // Decode every clip up front (they're small): one-shots must fire with zero
+  // latency, and decoding on first use would soften the first hit of a race.
+  // Peak-normalise at decode so each clip lands in the mix at a known level.
+  _prefetchSfx() {
+    if (!this.ctx || !this._sfxManifest || this._sfxFetched) return;
+    this._sfxFetched = true;
+    for (const key of Object.keys(this._sfxManifest)) {
+      fetch(`assets/sfx/${key}.mp3`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('404'))))
+        .then((ab) => this.ctx.decodeAudioData(ab))
+        .then((buf) => {
+          let peak = 0;
+          for (let c = 0; c < buf.numberOfChannels; c++) {
+            const d = buf.getChannelData(c);
+            for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+          }
+          this._sfxBuf.set(key, { buf, norm: peak > 0.001 ? 0.95 / peak : 1 });
+        })
+        .catch(() => { /* missing/undecodable — the synth fallback covers it */ });
+    }
+  }
+
+  // Fire a baked clip through the SFX bus. gain is post-normalisation; pan/panTo
+  // ride a StereoPanner ramp (the near-miss whip). Returns false when the clip
+  // isn't available so callers can fall back to the synth voice.
+  _playClip(key, gain = 1, { pan = null, panTo = null, panDur = 0.25 } = {}) {
+    const c = this._sfxBuf.get(key);
+    if (!this.ctx || !c) return false;
+    const t0 = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = c.buf;
+    const g = this.ctx.createGain();
+    g.gain.value = gain * c.norm;
+    src.connect(g);
+    if (pan !== null && this.ctx.createStereoPanner) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.setValueAtTime(pan, t0);
+      if (panTo !== null) p.pan.linearRampToValueAtTime(panTo, t0 + panDur);
+      g.connect(p); p.connect(this.sfx);
+    } else {
+      g.connect(this.sfx);
+    }
+    src.start(t0);
+    return true;
+  }
+
   weaponPickup() {
+    if (this._playClip('pickup', 0.3)) return;
     // rising two-note arm chirp — distinct from the boost whoosh family
     this.blip(620, 0.09, { type: 'square', gain: 0.09 });
     this.blip(930, 0.15, { type: 'square', gain: 0.11, delay: 0.07 });
   }
 
   boostWhoosh(amount) {
+    if (this._playClip('boost-pad', 0.4 * amount)) return;
     this.blip(170, 0.5 * amount + 0.15, { type: 'sawtooth', gain: 0.1 * amount, slideTo: 950 });
     this.burst(1100, 0.45 * amount + 0.1, 0.16 * amount, 'bandpass', 0.8);
   }
 
   // A held weapon fizzled out (never fired in time): a soft, deflating power-down.
   weaponFizzle() {
+    if (this._playClip('fizzle', 0.28)) return;
     this.blip(430, 0.22, { type: 'triangle', gain: 0.09, slideTo: 120 });
     this.blip(210, 0.18, { type: 'sine', gain: 0.06, slideTo: 70, delay: 0.02 });
     this.burst(900, 0.14, 0.05, 'lowpass', 0.8, 300);
@@ -498,6 +589,10 @@ export class AudioEngine {
     if (t0 - (this._lastWhoosh ?? -1) < 0.1) return; // don't stack same-frame fires
     this._lastWhoosh = t0;
     const amt = Math.max(0.3, Math.min(1, intensity));
+    // Baked flyby, panned with the same whip the synth does (start on the pass
+    // side, snap across as it goes by). Falls through to the synth swish.
+    const sd = Math.max(-1, Math.min(1, side));
+    if (this._playClip('near-miss', 0.35 * (0.5 + 0.5 * amt), { pan: sd * 0.85, panTo: -sd * 0.55, panDur: 0.25 })) return;
     const dur = 0.18 + 0.07 * amt;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -525,7 +620,8 @@ export class AudioEngine {
   }
 
   wallThud(severity) {
-    this.blip(95, 0.22, { type: 'sine', gain: 0.3 * (0.4 + severity * 0.6), slideTo: 38 });
+    this.blip(95, 0.22, { type: 'sine', gain: 0.3 * (0.4 + severity * 0.6), slideTo: 38 }); // low thud — always
+    if (this._playClip('wall-hit', 0.5 * (0.4 + severity * 0.6))) return;
     this.burst(2400, 0.16, 0.2 * (0.4 + severity * 0.6), 'highpass');
   }
 

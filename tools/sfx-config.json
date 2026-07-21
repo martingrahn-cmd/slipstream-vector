@@ -1,0 +1,78 @@
+{
+  "api": "sound-generation",
+  "prompt_influence": 0.45,
+  "sounds": {
+    "missile-launch": {
+      "prompt": "Sci-fi missile launch from a futuristic anti-gravity race ship: heavy pressurized thump ignition, then a hissing rocket motor streaking away with doppler. Punchy arcade game weapon sound.",
+      "duration_seconds": 2,
+      "chosen_take": 1,
+      "loop": false
+    },
+    "explosion": {
+      "prompt": "Arcade sci-fi explosion: punchy deep boom with a fireball whoosh, metallic debris scattering and crackling, short tail. Stylized video game weapon impact, not realistic warfare.",
+      "duration_seconds": 2.5,
+      "chosen_take": 2,
+      "loop": false
+    },
+    "player-hit": {
+      "prompt": "Huge stylized game explosion right on the player: deep sub-bass blast, then electrical crackle and sizzling sparks aftermath, short.",
+      "duration_seconds": 2.5,
+      "chosen_take": 2,
+      "loop": false
+    },
+    "mine-drop": {
+      "prompt": "A small metallic mine released with a soft mechanical clunk and a quick electronic arming beep, video game.",
+      "duration_seconds": 1,
+      "chosen_take": 5,
+      "loop": false
+    },
+    "shield-up": {
+      "prompt": "Sci-fi energy shield activating: a rising electric shimmer swelling into a protective bubble, short and bright, video game power-up.",
+      "duration_seconds": 1.5,
+      "chosen_take": 1,
+      "loop": false
+    },
+    "nitro": {
+      "prompt": "Nitrous boost ignition: a deep pressurized thump and a rising surge of thrust, punchy arcade game boost.",
+      "duration_seconds": 1.5,
+      "chosen_take": 2,
+      "loop": false
+    },
+    "boost-pad": {
+      "prompt": "Quick energy boost pad whoosh: an accelerating swoosh with a bright electric edge, very short, arcade racer.",
+      "duration_seconds": 1.2,
+      "chosen_take": 3,
+      "loop": false
+    },
+    "near-miss": {
+      "prompt": "Extremely fast near-miss flyby whoosh: a vehicle passing very close at high speed, tight doppler swish, short and punchy.",
+      "duration_seconds": 1.2,
+      "chosen_take": 1,
+      "loop": false
+    },
+    "wall-hit": {
+      "prompt": "A fast hovercraft slamming against a metal barrier: heavy dull impact with a short metallic scrape, video game.",
+      "duration_seconds": 1,
+      "chosen_take": 2,
+      "loop": false
+    },
+    "pickup": {
+      "prompt": "Bright arcade weapon pickup chirp: two quick ascending electronic notes, clean and short.",
+      "duration_seconds": 0.8,
+      "chosen_take": 2,
+      "loop": false
+    },
+    "fizzle": {
+      "prompt": "A soft deflating power-down fizzle: descending electronic whine with a little static puff, short, video game.",
+      "duration_seconds": 1,
+      "chosen_take": 1,
+      "loop": false
+    },
+    "shield-hum": {
+      "prompt": "Continuous sci-fi energy shield hum: warm electric force field drone, steady subtle pulsing, seamless loop, no melody.",
+      "duration_seconds": 4,
+      "chosen_take": 1,
+      "loop": true
+    }
+  }
+}
