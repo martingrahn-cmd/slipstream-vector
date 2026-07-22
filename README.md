@@ -102,7 +102,8 @@ elevation profile — in a framed viewport beside the settings, and a big **GO**
 button (pulsing when focused) launches the race. The 3D ship viewer and the
 preview canvases are shared and **reparented** into whichever section is active.
 
-**Options** has its own section: separate **MUSIC** and **SFX** volume bars,
+**Options** has its own section: separate **MUSIC**, **SFX** and **VOICE**
+(rival banter VO) volume bars,
 gamepad **DEADZONE** (low / medium / high) and **RUMBLE** toggle, **FULLSCREEN**,
 a **MOTION FX** switch (reduced-motion — disables the slide-ins, pulses and
 camera shake), **PILOT INTRO** (FIRST RACE / ALWAYS / OFF) and **RIVAL
@@ -229,6 +230,9 @@ position**: same odds in P1 as in P8.
 - **Missiles** — a 3-shot salvo, fired straight ahead at +25 m/s.
 - **Homing** — locks the nearest ship ahead within 90 m and tracks laterally;
   fires straight if nothing locks. A thick smoke-and-flame trail marks both.
+  When one locks onto **you**, a red **▲ MISSILE** warning pulses with rising
+  beeps, hardening into a constant tone ~1 s before impact — the ETA is honest
+  (outrun it and the warning stops), and the AI never reads it.
 - **Mine** — dropped behind; arms after 0.5 s and lives 25 s. After a short
   grace window it hits *anyone* who crosses it — including whoever dropped it.
 - **Boost** — a 1.6 s surge through the normal boost pipeline.
@@ -440,9 +444,10 @@ lab), a **baked ElevenLabs one-shot layer** over the synth (sfx-lab.html →
 generate-sfx.mjs), 31 trophies, records, world-uplift pass 1 (landmarks,
 directed horizons, monument zones, rock cut, light moods per world).
 
+Done since: the **missile lock-on warning** (▲ MISSILE + rising beeps → tone,
+honest ETA, player-facing only) and a **VOICE volume row** in Options.
+
 Next (rough priority):
-- **Missile lock-on warning** — rising beeps → constant tone + a warning
-  triangle ~1 s before impact.
 - **Post-race flow** — clearer results → next-step path (and menu guidance
   for new players).
 - **Content block** — a 4th world and one new track per world → 12 tracks,

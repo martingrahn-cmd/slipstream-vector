@@ -703,9 +703,11 @@ body.in-menu #speed-block,
 body.in-menu #boost-meter,
 body.in-menu #weapon-slot,
 body.in-menu #comms-feed,
+body.in-menu #lock-warn,
 body.in-menu #minimap { display: none !important; }
 /* Spectating the finish: hide the driving instruments, keep lap + minimap. */
-body.spectating #speed-block, body.spectating #boost-meter, body.spectating #weapon-slot { display: none !important; }
+body.spectating #speed-block, body.spectating #boost-meter, body.spectating #weapon-slot,
+body.spectating #lock-warn { display: none !important; }
 
 /* Championship podium ceremony — full-screen 3D stage + title overlay. */
 #podium-scene {
@@ -809,6 +811,23 @@ body.paused #boost-meter, body.paused #minimap { opacity: 0.25; }
   color: #00f0ff; text-shadow: 0 0 18px rgba(0, 240, 255, 0.85);
   opacity: 0; transition: opacity 120ms;
 }
+
+/* Missile lock warning — a homing is chasing YOU. .seek: it's closing (pulse);
+   .locked: impact imminent (bigger, fast blink). Red = danger, per #ghost-delta. */
+#lock-warn {
+  left: 0; right: 0; top: 24%;
+  text-align: center; pointer-events: none;
+  font-family: 'Orbitron', sans-serif; font-weight: 800;
+  font-size: 20px; letter-spacing: 0.3em;
+  color: #ff5a4a; text-shadow: 0 0 18px rgba(255, 90, 74, 0.85);
+  opacity: 0; transition: opacity 120ms;
+}
+#lock-warn .tri { font-size: 16px; vertical-align: 2px; }
+#lock-warn.seek { opacity: 1; animation: lockSeek 0.55s ease-in-out infinite; }
+#lock-warn.locked { opacity: 1; transform: scale(1.18); animation: lockImminent 0.16s steps(2, jump-none) infinite; }
+@keyframes lockSeek { 50% { opacity: 0.35; } }
+@keyframes lockImminent { 50% { opacity: 0.55; } }
+body.reduced-motion #lock-warn.seek, body.reduced-motion #lock-warn.locked { animation: none; }
 
 /* The HUD overlay is pointer-events:none so it never eats canvas input; opt the
    interactive menu/pause controls back in so the whole UI is clickable. */

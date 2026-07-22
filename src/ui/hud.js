@@ -21,9 +21,11 @@ export class Hud {
       overlay: document.getElementById('overlay'),
       stats: document.getElementById('stats'),
       weaponSlot: document.getElementById('weapon-slot'),
+      lockWarn: document.getElementById('lock-warn'),
     };
     this.ghost = 0;
     this.lastSpeed = 0;
+    this._lockStage = 0;
 
     juice.on('boost', () => this.pop(this.el.speed, 'boost-pop'));
     juice.on('miniboost', () => this.pop(this.el.speed, 'boost-pop'));
@@ -47,6 +49,15 @@ export class Hud {
     el.classList.remove(cls);
     void el.offsetWidth; // restart the animation
     el.classList.add(cls);
+  }
+
+  // Missile lock warning: 0 = safe (hidden), 1 = a homing is closing (pulse),
+  // 2 = impact imminent (solid, fast blink). Memoed — DOM touched on change only.
+  setLockWarning(stage) {
+    if (stage === this._lockStage) return;
+    this._lockStage = stage;
+    const el = this.el.lockWarn; if (!el) return;
+    el.className = 'hud' + (stage === 2 ? ' locked' : stage === 1 ? ' seek' : '');
   }
 
   flashCenter(text, ms) {

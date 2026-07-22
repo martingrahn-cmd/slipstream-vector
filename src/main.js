@@ -524,6 +524,7 @@ function updateMenu() {
 
   setHTML('opt-music', volBar(audio.musicVolume));
   setHTML('opt-sfx', volBar(audio.sfxVolume));
+  setHTML('opt-voice', volBar(audio.voiceVolume));
   let dzi = DEADZONES.indexOf(input.deadzone); if (dzi < 0) dzi = 1;
   setTxt('opt-dz', DZ_LABEL[dzi]);
   setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
@@ -1594,6 +1595,11 @@ function tick(now) {
   audio.updateEngine(realDt, sn, state === 'race' ? input.throttle : 0,
     juice.boostFactor, state !== 'attract');
   audio.updateShield(realDt, state === 'race' && ship.shielded); // brummande sköld-drönare medan bubblan är uppe
+  // Missile lock warning: an honest ETA from the weapons state (null = safe).
+  // Player-facing juice only — the AI never reads it (fairness holds).
+  const lockEta = weapons && state === 'race' ? weapons.threatEta(ship) : null;
+  audio.updateLockWarning(realDt, lockEta, lockEta !== null && lockEta < T.LOCKWARN_TONE_ETA);
+  hud.setLockWarning(lockEta === null ? 0 : lockEta < T.LOCKWARN_TONE_ETA ? 2 : 1);
   audio.updateOpponentEngines(realDt,
     state === 'race' ? race.racers.map((r) => r.phys) : null,
     ship.s, spline.length, state === 'race');
@@ -1654,6 +1660,8 @@ function editRow(row, dir) {
     audio.setMusicVolume(audio.musicVolume + dir);
   } else if (row === 'sfx') {
     audio.setSfxVolume(audio.sfxVolume + dir);
+  } else if (row === 'voice') {
+    audio.setVoiceVolume(audio.voiceVolume + dir);
   } else if (row === 'deadzone') {
     let i = DEADZONES.indexOf(input.deadzone); if (i < 0) i = 1;
     input.setDeadzone(DEADZONES[Math.max(0, Math.min(DEADZONES.length - 1, i + dir))]);

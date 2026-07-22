@@ -10,6 +10,7 @@ export class AudioEngine {
     const old = localStorage.getItem('sv-volume');
     this.musicVolume = clampVol(parseInt(localStorage.getItem('sv-music') ?? old ?? '8', 10));
     this.sfxVolume = clampVol(parseInt(localStorage.getItem('sv-sfx') ?? old ?? '8', 10));
+    this.voiceVolume = clampVol(parseInt(localStorage.getItem('sv-voice') ?? '8', 10));
     this.stateScale = 0.3; // menu idle vs racing
     this.scrapeLevel = 0;
     this.lastBump = 0;
@@ -63,10 +64,10 @@ export class AudioEngine {
     this.musicBus.connect(this.musicDuck);
     this.musicDuck.connect(this.master);
     // Voice bus: rival VO rides the SFX bus (so it follows the SFX volume) with
-    // its own trim on top — trimmed a touch below unity so the banter sits
-    // under the action instead of on top of it.
+    // its own VOICE volume on top (0-10, its own Options row). The 0.98 scale
+    // puts the default 8 at ~0.78 — banter sits under the action, not on top.
     this.voiceBus = ctx.createGain();
-    this.voiceBus.gain.value = 0.78;
+    this.voiceBus.gain.value = (this.voiceVolume / 10) * 0.98;
     this.voiceBus.connect(this.sfx);
 
     // Shared noise source material.
@@ -246,6 +247,46 @@ export class AudioEngine {
     }
     this.shieldGain.gain.value = this.shieldLevel * (this._shieldLoop ? 0.6 : 1);
     if (this._shieldLoop) this._shieldLoop.g.gain.value = this.shieldLevel * 2.4 * this._shieldLoop.norm;
+  }
+
+  // ---- missile lock warning ------------------------------------------------
+  // A homing missile is chasing YOU: a beep train whose rate rises as it
+  // closes, hardening into a sustained two-tone alarm when impact is imminent
+  // (main passes the T.LOCKWARN_TONE_ETA verdict — this file stays import-free).
+  // Fed every frame from the render path (eta in seconds, null = safe). Built
+  // like the beds: persistent nodes created lazily, gain-gated — and the beeps
+  // ride this.blip, so everything follows the SFX volume.
+  updateLockWarning(dt, eta, toneNow = false) {
+    if (!this.ctx) return;
+    const active = typeof eta === 'number' && eta >= 0;
+    const imminent = active && toneNow;
+    // Sustained tone: lazily build a persistent square pair behind a bandpass.
+    if (imminent && !this._lockTone) {
+      const o1 = this.ctx.createOscillator(); o1.type = 'square'; o1.frequency.value = 1320;
+      const o2 = this.ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 1980;
+      const o2g = this.ctx.createGain(); o2g.gain.value = 0.35;
+      const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1600; f.Q.value = 1.1;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      o1.connect(f); o2.connect(o2g); o2g.connect(f); f.connect(g); g.connect(this.sfx);
+      o1.start(); o2.start();
+      this._lockTone = g;
+    }
+    if (this._lockTone && imminent !== !!this._lockToneOn) {
+      this._lockToneOn = imminent;
+      const t = this.ctx.currentTime, g = this._lockTone.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(Math.max(0.0001, g.value), t);
+      if (imminent) g.linearRampToValueAtTime(0.06, t + 0.05);
+      else g.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    }
+    // Approach: the beep train (paused while the sustained tone has the floor).
+    if (!active || imminent) { this._lockBeepT = 0; return; }
+    this._lockBeepT = (this._lockBeepT || 0) - dt;
+    if (this._lockBeepT <= 0) {
+      this._lockBeepT = Math.min(0.5, Math.max(0.13, eta * 0.16)); // closes in -> beeps faster
+      this.blip(1240, 0.055, { type: 'square', gain: 0.055 });
+      this.blip(1860, 0.04, { type: 'square', gain: 0.022, delay: 0.006 });
+    }
   }
 
   // Called every frame. All values lerped here — no AudioParam event spam.
@@ -845,6 +886,12 @@ export class AudioEngine {
     this.sfxVolume = clampVol(v);
     localStorage.setItem('sv-sfx', String(this.sfxVolume));
     if (this.sfx) this.sfx.gain.value = Math.min(1, (this.sfxVolume / 10) * 1.1);
+  }
+
+  setVoiceVolume(v) {
+    this.voiceVolume = clampVol(v);
+    localStorage.setItem('sv-voice', String(this.voiceVolume));
+    if (this.voiceBus) this.voiceBus.gain.value = (this.voiceVolume / 10) * 0.98;
   }
 
   setVolume(v) { this.setMusicVolume(v); this.setSfxVolume(v); } // legacy alias

@@ -143,6 +143,9 @@ export const TUNING = {
   // if you don't fire it in time, so an offensive pickup with no target ahead
   // (typically the leader) is simply wasted. Position-blind, no rubber-banding.
   WEAPON_HOLD_TIME: 6.0,     // s an unfired held weapon lasts before it fizzles
+  // Missile lock-on warning (defensive juice for the PLAYER only — the AI
+  // never reads it, so no warning-driven dodges exist on either side).
+  LOCKWARN_TONE_ETA: 1.0,    // s to impact where the beeps harden into a tone
 
   // ---- Boost envelope ----
   BOOST_ATTACK: 12.0,     // boostFactor per second

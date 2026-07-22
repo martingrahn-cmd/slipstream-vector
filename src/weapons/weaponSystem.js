@@ -232,6 +232,30 @@ export class WeaponSystem {
     return this._shipList;
   }
 
+  // The defensive half of homing: smallest time-to-impact (s) of any homing
+  // projectile locked on `phys`, or null when nothing is going to land. Pure
+  // read for the render path (lock warning HUD/audio) — no state, no
+  // allocation, position-blind geometry like everything else here. A missile
+  // that's been outrun, already past, or expiring before it arrives is not a
+  // threat, so the warning is honest: beeps mean impact is genuinely coming.
+  threatEta(phys) {
+    let eta = null;
+    const L = this.spline.length;
+    for (const p of this.projectiles) {
+      if (p.type !== 'homing' || p.target !== phys) continue;
+      const gap = sdist(p.s, phys.s, L);            // + = the missile is behind, closing
+      if (gap < -T.MISSILE_HIT_DS) continue;        // fully past the ±hit window — it can't turn back
+      const closing = p.v - phys.v;                 // launch speed is frozen; yours is live
+      if (gap > T.MISSILE_HIT_DS && closing <= 0.1) continue; // being outrun — it never arrives
+      // Overlapping the hit window counts as NOW (it may still connect while
+      // steering in laterally) — the warning must never go dark before a hit.
+      const t = gap > 0 ? gap / Math.max(0.1, closing) : 0;
+      if (t > p.life + 0.2) continue;               // it despawns before it reaches you
+      if (eta === null || t < eta) eta = t;
+    }
+    return eta;
+  }
+
   _roll() {
     let x = this.rng();
     for (const [type, w] of WEIGHTS) { x -= w; if (x <= 0) return type; }
