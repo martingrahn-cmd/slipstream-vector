@@ -45,6 +45,10 @@ const jobs = [];
 let skipped = 0;
 for (const [key, s] of Object.entries(cfg.sounds)) {
   if (ONLY && key !== ONLY) { skipped++; continue; }
+  // curated = Martin hand-picked this take in the lab and dropped the mp3 in
+  // assets/sfx/ himself — NEVER regenerate it from a batch run (not even with
+  // --force). Only an explicit --only <key> may re-roll a curated sound.
+  if (s.curated && !ONLY) { console.log(`● ${key}: curated take — left untouched`); skipped++; continue; }
   const file = path.join(OUT, `${key}.mp3`);
   const up = manifest[key];
   const fresh = up && up.prompt === s.prompt && up.duration_seconds === s.duration_seconds && fs.existsSync(file);
