@@ -36,9 +36,9 @@ export class TrackSpline {
     this._buildStunts(ex); // corkscrew bank overrides + jump gaps
     this._applyBank();
 
+    this.splits = this._buildSplits(ex); // before the pads — they resolve against splitBand
     this.pads = this._padList(ex.points.length, ex.boostPads);
-    this.weaponPads = this._padList(ex.points.length, ex.weaponPads, true); // clamp to keep the decal on-track
-    this.splits = this._buildSplits(ex);
+    this.weaponPads = this._padList(ex.points.length, ex.weaponPads);
   }
 
   // Resolve {from,to (cp), gap, fast} splits to arc length and bake a per-sample
@@ -305,19 +305,58 @@ export class TrackSpline {
     }
   }
 
-  // Convert {cp: float control-point index, d} pads to {s, d} (boost + weapon).
-  _padList(m, list, clampToFit) {
+  // Convert {cp: float control-point index, d} pads to {s, d} (boost + weapon),
+  // then RESOLVE them onto drivable road: authors place pads by intent, the
+  // spline guarantees where they land. Both decals are 6x4m (HW=2) with the
+  // same |d-pad.d|<2.4 trigger, so one rule covers both kinds:
+  //  • a pad whose decal touches a jump gap slides past the landing lip — a
+  //    decal over the void reads dead, and the field is airborne there;
+  //  • d clamps inside the road edge at the narrowest point under the decal,
+  //    and where the road splits, into the LANE the author aimed for (by the
+  //    sign of d) — never onto the central island.
+  _padList(m, list) {
+    const HW = 2, MARGIN = 0.4;
+    // Road geometry under a 6m decal centred at ss: narrowest half-width,
+    // widest split island (the wedge ramps — one sample misses the worst
+    // spot), gap contact, and whether the decal genuinely fits there.
+    const probe = (ss) => {
+      let w = Infinity, island = 0;
+      for (let o = -3; o <= 3; o += 1.5) {
+        const i = Math.min(this.n - 1, Math.max(0, Math.floor(this.wrap(ss + o) / this.step)));
+        w = Math.min(w, this.width[i]);
+        island = Math.max(island, this.splitBand[i]);
+      }
+      let gapped = false;
+      for (const g of this.gaps) if (ss + HW + 6 > g.start && ss - HW < g.end + 10) gapped = true;
+      const ok = !gapped && (island < 0.05 || w - island >= HW * 2 + 0.3);
+      return { w, island, ok };
+    };
     return (list || []).map((p, idx) => {
       const j = Math.floor(p.cp) % m;
       const f = p.cp - Math.floor(p.cp);
-      const s = (this._sAtCP[j] * (1 - f) + this._sAtCP[j + 1] * f) % this.length;
+      let s = (this._sAtCP[j] * (1 - f) + this._sAtCP[j + 1] * f) % this.length;
+      // Slide to the nearest spot the decal fits: clear of jump gaps (a decal
+      // over the void reads dead, and the field is airborne there) and with a
+      // lane at least as wide as the decal where the road splits.
+      let at = probe(s);
+      for (let step = 2; !at.ok && step <= 60; step += 2) {
+        const fwd = probe(s + step);
+        if (fwd.ok) { s = this.wrap(s + step); at = fwd; break; }
+        const back = probe(s - step);
+        if (back.ok) { s = this.wrap(s - step); at = back; break; }
+      }
+      // Resolve d onto the drivable surface: inside the road edge, and where
+      // the road splits, into the LANE the author aimed for (by the sign of
+      // d) — never onto the central island.
       let d = p.d ?? 0;
-      if (clampToFit) {
-        // Keep the whole 4m-wide decal inside the road at this s (width is HALF
-        // width; the decal reaches HW=2 either side of d, + a small margin).
-        const i = Math.min(this.n - 1, Math.max(0, Math.floor(s / this.step)));
-        const maxD = Math.max(0, this.width[i] - 2 - 0.4);
-        d = Math.max(-maxD, Math.min(maxD, d));
+      const outer = Math.max(0, at.w - HW - MARGIN);
+      if (at.island > 0.05) {
+        const inner = at.island + HW + MARGIN;
+        const side = d < 0 ? -1 : 1;
+        // Margins don't fit -> centre in the lane; else keep the author's |d|.
+        d = side * (inner >= outer ? (inner + outer) / 2 : Math.min(outer, Math.max(inner, Math.abs(d))));
+      } else {
+        d = Math.max(-outer, Math.min(outer, d));
       }
       return { id: idx, s, d };
     });
