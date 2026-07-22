@@ -20,7 +20,8 @@
       "prompt": "Huge stylized game explosion right on the player: deep sub-bass blast, then electrical crackle and sizzling sparks aftermath, short.",
       "duration_seconds": 2.5,
       "chosen_take": 2,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "mine-drop": {
       "prompt": "A small metallic mine released with a soft mechanical clunk and a quick electronic arming beep, video game.",
@@ -39,7 +40,8 @@
       "prompt": "Nitrous boost ignition: a deep pressurized thump and a rising surge of thrust, punchy arcade game boost.",
       "duration_seconds": 1.5,
       "chosen_take": 2,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "boost-pad": {
       "prompt": "Quick energy boost pad whoosh: an accelerating swoosh with a bright electric edge, very short, arcade racer.",
@@ -52,7 +54,8 @@
       "prompt": "Extremely fast near-miss flyby whoosh: a vehicle passing very close at high speed, tight doppler swish, short and punchy.",
       "duration_seconds": 1.2,
       "chosen_take": 1,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "wall-hit": {
       "prompt": "A fast hovercraft slamming against a metal barrier: heavy dull impact with a short metallic scrape, video game.",
@@ -64,7 +67,8 @@
       "prompt": "Bright arcade weapon pickup chirp: two quick ascending electronic notes, clean and short.",
       "duration_seconds": 0.8,
       "chosen_take": 2,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "fizzle": {
       "prompt": "A soft deflating power-down fizzle: descending electronic whine with a little static puff, short, video game.",
