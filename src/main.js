@@ -562,7 +562,13 @@ function updateMenu() {
   if (goBtn) goBtn.textContent = saved ? `RESUME · ROUND ${champRound + 1}/${TRACKS.length}` : 'START CUP';
   const newCupBtn = document.getElementById('champ-newcup');
   if (newCupBtn) newCupBtn.classList.toggle('hidden', !saved);
-  setTxt('ns-championship', saved ? `RESUME R${champRound + 1}/${TRACKS.length}` : `${TRACKS.length} ROUNDS`);
+  // Brand-new player (never finished a race, no cup underway): point them at
+  // the front door. The badge reverts to the round count after the first race.
+  const fresh = !saved && !achievements.isUnlocked('first_race');
+  setTxt('ns-championship', saved ? `RESUME R${champRound + 1}/${TRACKS.length}`
+    : fresh ? '▶ START HERE' : `${TRACKS.length} ROUNDS`);
+  const nsChamp = document.getElementById('ns-championship');
+  if (nsChamp) nsChamp.classList.toggle('hot', fresh);
   menu.setChampResume(!!saved);
   const entryHTML = entryCardHTML();
   for (const id of ['champ-entry', 'single-entry', 'time-entry']) setHTML(id, entryHTML);
@@ -601,10 +607,14 @@ function buildResultsView() {
   const finished = rows.filter((r) => r.time !== null);
   const total = rows.length;
   const fPlace = finished.findIndex((r) => r.player) + 1;
+  // Fastest lap of the race gets a star — the board tells you WHO earned it.
+  const fl = finished.reduce((m, r) => (r.bestLap && (!m || r.bestLap < m) ? r.bestLap : m), null);
   const display = finished.map((r, i) => ({
     name: r.name, accent: r.accent, player: r.player,
     right1: fmt(r.time),
-    ...(champ.active ? { right2: `+${CHAMP_PTS[i] ?? 0}` } : {}),
+    ...(champ.active
+      ? { right2: `+${CHAMP_PTS[i] ?? 0}` }
+      : { right2: r.bestLap ? `${r.bestLap === fl ? '★ ' : ''}BL ${fmt(r.bestLap)}` : '' }),
   }));
   const allIn = finished.length >= total;
   const advance = champ.active ? `${glyph('confirm')} — STANDINGS` : `${glyph('confirm')} — RACE AGAIN &nbsp;·&nbsp; ${glyph('back')} — MENU`;
@@ -651,7 +661,10 @@ function buildStandingsView() {
     })),
     footer: last
       ? (champ.unlockMsg ? `${champ.unlockMsg} — ${glyph('confirm')} MENU` : `${glyph('confirm')} — MENU`)
-      : `${glyph('confirm')} — ROUND ${champ.round + 2}/${TRACKS.length}`,
+      // Name the next circuit and make the exit safe to take: the cup is
+      // already saved at this round, so backing out is never a loss.
+      : `${glyph('confirm')} — ROUND ${champ.round + 2}/${TRACKS.length} · ${TRACKS[champ.round + 1].name.toUpperCase()}`
+        + ` &nbsp;·&nbsp; ${glyph('back')} — SAVE & MENU`,
   };
 }
 

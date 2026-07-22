@@ -874,6 +874,10 @@ body.reduced-motion #lock-warn.seek, body.reduced-motion #lock-warn.locked { ani
 .navitem .ix { grid-row: 1 / 3; align-self: center; font-family: 'Orbitron'; font-weight: 600; font-size: 12px; color: rgba(0, 240, 255, 0.55); }
 .navitem .nl { font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.05em; color: rgba(255, 255, 255, 0.34); -webkit-text-stroke: 0.6px rgba(255, 255, 255, 0.22); }
 .navitem .ns { font-family: 'Rajdhani'; font-weight: 700; font-size: 9.5px; letter-spacing: 0.16em; color: rgba(159, 216, 255, 0.5); text-transform: uppercase; }
+/* First-visit guidance: the championship badge points new players at the front
+   door until their first finish. Gold + a soft pulse, gone after one race. */
+.navitem .ns.hot { color: var(--hot); text-shadow: 0 0 8px rgba(255, 210, 63, 0.6); animation: pulse 1.4s ease-in-out infinite; }
+body.reduced-motion .navitem .ns.hot { animation: none; }
 .navitem.hi { background: linear-gradient(90deg, rgba(0, 240, 255, 0.18), transparent); }
 .navitem.hi .nl { color: #fff; -webkit-text-stroke: 0; text-shadow: 0 0 10px var(--cyan); }
 .navitem.hi::before { content: ''; position: absolute; left: 0; top: 8%; bottom: 8%; width: 4px; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }

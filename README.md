@@ -445,11 +445,14 @@ generate-sfx.mjs), 31 trophies, records, world-uplift pass 1 (landmarks,
 directed horizons, monument zones, rock cut, light moods per world).
 
 Done since: the **missile lock-on warning** (▲ MISSILE + rising beeps → tone,
-honest ETA, player-facing only) and a **VOICE volume row** in Options.
+honest ETA, player-facing only), a **VOICE volume row** in Options, pads that
+**resolve onto drivable road** (split lanes, edges, jump gaps), and the
+**post-race flow** — results carry each finisher's best lap with a ★ on the
+race's fastest, the championship standings name the next circuit and offer
+⌫ SAVE & MENU (the cup is saved every round), and a ▶ START HERE badge
+points brand-new players at the Championship until their first finish.
 
 Next (rough priority):
-- **Post-race flow** — clearer results → next-step path (and menu guidance
-  for new players).
 - **Content block** — a 4th world and one new track per world → 12 tracks,
   two 6-track cups. World uplift stages 2–4 land first so every new track is
   born prettier.

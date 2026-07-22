@@ -197,6 +197,7 @@ export class Race {
       name: r.name,
       accent: r.accentCss,
       time: r.finishTime,
+      bestLap: r.phys.bestLap || null,
       progress: this.progressOf(r.phys),
       player: false,
     }));
@@ -206,6 +207,7 @@ export class Race {
       name: `${sel.teamName} · ${sel.pilotName}`,
       accent: sel.accentCss,
       time: playerTime,
+      bestLap: player.bestLap || null,
       progress: this.progressOf(player),
       player: true,
     });
