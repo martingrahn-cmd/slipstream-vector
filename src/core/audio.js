@@ -8,8 +8,8 @@ export class AudioEngine {
     this.ctx = null;
     // Separate Music and SFX volumes (0-10). Migrate from the old single sv-volume.
     const old = localStorage.getItem('sv-volume');
-    this.musicVolume = clampVol(parseInt(localStorage.getItem('sv-music') ?? old ?? '7', 10));
-    this.sfxVolume = clampVol(parseInt(localStorage.getItem('sv-sfx') ?? old ?? '7', 10));
+    this.musicVolume = clampVol(parseInt(localStorage.getItem('sv-music') ?? old ?? '8', 10));
+    this.sfxVolume = clampVol(parseInt(localStorage.getItem('sv-sfx') ?? old ?? '8', 10));
     this.stateScale = 0.3; // menu idle vs racing
     this.scrapeLevel = 0;
     this.lastBump = 0;
@@ -50,10 +50,11 @@ export class AudioEngine {
     this.master.gain.value = 0.9; // fixed headroom; Music/SFX are mixed below
     this.master.connect(ctx.destination);
     this.sfx = ctx.createGain();
-    this.sfx.gain.value = this.sfxVolume / 10;
+    // SFX ride +10% hot (capped at 1.0 so the max-volume ceiling is unchanged).
+    this.sfx.gain.value = Math.min(1, (this.sfxVolume / 10) * 1.1);
     this.sfx.connect(this.master);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = (this.musicVolume / 10) * 0.6;
+    this.musicBus.gain.value = (this.musicVolume / 10) * 0.68;
     // A transparent duck node between the music sum and master (base 1.0), so a
     // pilot voice can dip the music without touching musicBus (the volume knob)
     // or fighting the crossfade logic.
@@ -62,9 +63,10 @@ export class AudioEngine {
     this.musicBus.connect(this.musicDuck);
     this.musicDuck.connect(this.master);
     // Voice bus: rival VO rides the SFX bus (so it follows the SFX volume) with
-    // its own trim on top.
+    // its own trim on top — trimmed a touch below unity so the banter sits
+    // under the action instead of on top of it.
     this.voiceBus = ctx.createGain();
-    this.voiceBus.gain.value = 1.0;
+    this.voiceBus.gain.value = 0.78;
     this.voiceBus.connect(this.sfx);
 
     // Shared noise source material.
@@ -836,13 +838,13 @@ export class AudioEngine {
   setMusicVolume(v) {
     this.musicVolume = clampVol(v);
     localStorage.setItem('sv-music', String(this.musicVolume));
-    if (this.musicBus) this.musicBus.gain.value = (this.musicVolume / 10) * 0.6;
+    if (this.musicBus) this.musicBus.gain.value = (this.musicVolume / 10) * 0.68;
   }
 
   setSfxVolume(v) {
     this.sfxVolume = clampVol(v);
     localStorage.setItem('sv-sfx', String(this.sfxVolume));
-    if (this.sfx) this.sfx.gain.value = this.sfxVolume / 10;
+    if (this.sfx) this.sfx.gain.value = Math.min(1, (this.sfxVolume / 10) * 1.1);
   }
 
   setVolume(v) { this.setMusicVolume(v); this.setSfxVolume(v); } // legacy alias

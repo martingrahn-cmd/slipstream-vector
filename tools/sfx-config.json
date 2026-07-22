@@ -34,7 +34,8 @@
       "prompt": "Sci-fi energy shield activating: a rising electric shimmer swelling into a protective bubble, short and bright, video game power-up.",
       "duration_seconds": 1.5,
       "chosen_take": 1,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "nitro": {
       "prompt": "Nitrous boost ignition: a deep pressurized thump and a rising surge of thrust, punchy arcade game boost.",
@@ -61,7 +62,8 @@
       "prompt": "A fast hovercraft slamming against a metal barrier: heavy dull impact with a short metallic scrape, video game.",
       "duration_seconds": 1,
       "chosen_take": 2,
-      "loop": false
+      "loop": false,
+      "curated": true
     },
     "pickup": {
       "prompt": "Bright arcade weapon pickup chirp: two quick ascending electronic notes, clean and short.",
@@ -81,7 +83,8 @@
       "prompt": "Continuous sci-fi energy shield hum: warm electric force field drone, steady subtle pulsing, seamless loop, no melody.",
       "duration_seconds": 4,
       "chosen_take": 1,
-      "loop": true
+      "loop": true,
+      "curated": true
     }
   }
 }
