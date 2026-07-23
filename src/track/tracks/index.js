@@ -8,7 +8,7 @@ import { SKYLINE_RUSH } from './skylineRush.js';
 // FROSTFALL RIDGE (world 4) is built but NOT yet in the roster — Aurora Pass
 // goes live with the full content block (12 tracks -> two 6-round cups), so
 // the championship length never changes under a live player's saved cup.
-// To preview locally: import { AURORA_PASS } from './auroraPass.js' and add it.
+// To preview locally: import AURORA_PASS / AVALANCHE_RUN and append them.
 export const TRACKS = [
   SUNSET_CIRCUIT,
   MESA_RUN,
