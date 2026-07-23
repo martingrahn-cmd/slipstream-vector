@@ -131,6 +131,12 @@ export function buildScenery(spline, scene, theme) {
     ? buildBirds(rng, spline, groundY, { color: theme.birdCol, anchor: landmarks && landmarks.anchor })
     : null;
   if (birds) group.add(birds.mesh);
+  const devils = theme.dustDevils ? buildDustDevils(rng, spline, groundY, cx, cz, theme.dustDevils) : null;
+  if (devils) group.add(devils.group);
+  const sails = theme.sails ? buildSails(rng, spline, groundY, cx, cz, theme.sails) : null;
+  if (sails) group.add(sails.mesh);
+  const blimp = theme.blimp ? buildBlimp(rng, groundY, cx, cz) : null;
+  if (blimp) group.add(blimp.group);
 
   let flash = 0;
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
@@ -164,6 +170,9 @@ export function buildScenery(spline, scene, theme) {
       if (skyCars) skyCars.update(t);
       if (bridges) bridges.update(t);
       if (birds) birds.update(t);
+      if (devils) devils.update(t);
+      if (sails) sails.update(t);
+      if (blimp) blimp.update(t);
     },
   };
 }
@@ -2408,6 +2417,124 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}, spline = null) {
   g.add(glowMesh);
   g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
   return g;
+}
+
+// ----------------------------------------------------------- ambient life
+// Stage-4 world uplift: one moving far-field system per world, so the ground
+// plane is never static. All parametric on absolute time (render path,
+// deterministic), tiny screen coverage, 1-3 draws per world.
+
+// Desert: slow-wandering dust devils — tall sand columns spinning far off the
+// racing line, drifting a lazy figure around their anchor.
+function buildDustDevils(rng, spline, groundY, cx, cz, count) {
+  const group = new THREE.Group();
+  const devils = [];
+  for (let i = 0; i < count; i++) {
+    let x = cx, z = cz;
+    for (let a = 0; a < 12; a++) {
+      const ang = rng() * Math.PI * 2, r = 260 + rng() * 380;
+      x = cx + Math.cos(ang) * r; z = cz + Math.sin(ang) * r;
+      if (clearOfTrack(spline, x, z, 60)) break;
+    }
+    const geom = new THREE.CylinderGeometry(3.0, 0.7, 30, 6, 3, true);
+    const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
+      color: 0xd8b06a, transparent: true, opacity: 0.34,
+      depthWrite: false, fog: true, side: THREE.DoubleSide,
+    }));
+    mesh.position.set(x, groundY + 15, z);
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    devils.push({ mesh, x, z, ph: rng() * Math.PI * 2, spin: 2.2 + rng() * 1.4 });
+  }
+  return {
+    group,
+    update(t) {
+      for (const d of devils) {
+        d.mesh.rotation.y = t * d.spin;
+        d.mesh.rotation.z = 0.06 * Math.sin(t * 0.31 + d.ph);            // a lazy lean
+        d.mesh.position.x = d.x + 46 * Math.sin(t * 0.043 + d.ph);       // slow wander
+        d.mesh.position.z = d.z + 46 * Math.sin(t * 0.061 + d.ph * 1.7);
+      }
+    },
+  };
+}
+
+// Coast: small sailboats gliding wide circles on the far lagoon.
+function buildSails(rng, spline, groundY, cx, cz, count) {
+  const hull = new THREE.BoxGeometry(0.9, 0.5, 3.4);
+  hull.translate(0, 0.25, 0);
+  const sail = new THREE.CylinderGeometry(0.02, 1.35, 4.4, 3);
+  sail.translate(0, 2.6, 0.2);
+  const geom = mergeGeoms([
+    bakeFlatColors(hull, 0x2b3a55, { rim: false }),
+    bakeFlatColors(sail, 0xf6f0e2, { rim: false }),
+  ]);
+  const mesh = new THREE.InstancedMesh(geom,
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  const boats = [];
+  for (let i = 0; i < count; i++) {
+    let ox = cx, oz = cz;
+    for (let a = 0; a < 12; a++) {
+      const ang = rng() * Math.PI * 2, r = 420 + rng() * 420;
+      ox = cx + Math.cos(ang) * r; oz = cz + Math.sin(ang) * r;
+      if (clearOfTrack(spline, ox, oz, 90)) break;
+    }
+    boats.push({ ox, oz, r: 40 + rng() * 60, w: (0.008 + rng() * 0.01) * (rng() < 0.5 ? -1 : 1), ph: rng() * Math.PI * 2 });
+  }
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const sc = new THREE.Vector3(1, 1, 1);
+  const e = new THREE.Euler();
+  return {
+    mesh,
+    update(t) {
+      for (let i = 0; i < boats.length; i++) {
+        const b = boats[i];
+        const a = b.ph + t * b.w;
+        p.set(b.ox + Math.cos(a) * b.r, groundY + 0.15, b.oz + Math.sin(a) * b.r);
+        e.set(0, -a - Math.sign(b.w) * Math.PI / 2, 0.05 * Math.sin(t * 0.9 + b.ph)); // heel sway
+        q.setFromEuler(e);
+        m.compose(p, q, sc);
+        mesh.setMatrixAt(i, m);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+  };
+}
+
+// City: one ad blimp circling the skyline, lit banner on its flank.
+function buildBlimp(rng, groundY, cx, cz) {
+  const body = new THREE.IcosahedronGeometry(9, 1);
+  body.scale(2.4, 1, 1);
+  const gondola = new THREE.BoxGeometry(6, 2, 3);
+  gondola.translate(0, -9.6, 0);
+  const opaque = mergeGeoms([
+    bakeFlatColors(body, 0x3a3654, { rim: false }),
+    bakeFlatColors(gondola, 0x262238, { rim: false }),
+  ]);
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(opaque, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
+  const banner = new THREE.Mesh(
+    new THREE.BoxGeometry(16, 4.5, 19.4),
+    new THREE.MeshBasicMaterial({
+      color: 0xff2ec8, transparent: true, opacity: 0.55,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+  group.add(banner);
+  group.traverse((o) => { o.frustumCulled = false; });
+  const ph = rng() * Math.PI * 2;
+  return {
+    group,
+    update(t) {
+      const a = ph + t * 0.011;
+      group.position.set(cx + Math.cos(a) * 520, groundY + 165, cz + Math.sin(a) * 520);
+      group.rotation.y = -a - Math.PI / 2;
+      banner.material.opacity = 0.4 + 0.2 * (0.5 + 0.5 * Math.sin(t * 1.7)); // slow ad flicker
+    },
+  };
 }
 
 // ----------------------------------------------------------------- drones

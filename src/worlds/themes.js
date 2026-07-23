@@ -68,6 +68,7 @@ export const THEMES = {
     scrubCount: 210,      // low desert bushes near the track
     roadside: 'tufts',    // stage-2 near-band kit: dry grass + pebbles
     roadsideCount: 560,
+    dustDevils: 3,        // stage-4 ambient life: wandering sand columns
     flora: 'cacti',
     floraCol: 0x3f7a5c,   // sage-green cacti — pops against the bright sand
     floraCount: 120,
@@ -138,6 +139,7 @@ export const THEMES = {
     scrubCount: 95,       // low coastal scrub on the sandbars
     roadside: 'marina',   // stage-2 near-band kit: weathered mooring posts
     roadsideCount: 240,
+    sails: 4,             // stage-4 ambient life: sailboats on the far lagoon
     billboardEvery: 320,
     searchlights: false,
     city: false,
@@ -198,6 +200,7 @@ export const THEMES = {
     rockCount: 0,
     roadside: 'street',   // stage-2 near-band kit: barrier blocks + lit vents
     roadsideCount: 420,
+    blimp: true,          // stage-4 ambient life: an ad blimp rounding the skyline
     billboardEvery: 130,  // ads everywhere
     searchlights: true,
     canyon: true,         // tower rows lining the track

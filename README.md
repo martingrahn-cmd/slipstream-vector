@@ -454,8 +454,10 @@ points brand-new players at the Championship until their first finish.
 
 Next (rough priority):
 - **Content block** — a 4th world and one new track per world → 12 tracks,
-  two 6-track cups. World uplift stages 2–4 land first so every new track is
-  born prettier.
+  two 6-track cups. (World uplift stages 2–4 are DONE — near-band roadside
+  kits, ground detail that reads at track distance, and per-world ambient
+  life: dust devils / lagoon sailboats / an ad blimp — all theme knobs, so
+  the 4th world inherits everything.)
 - **Online leaderboards**, graphics quality tiers for weaker laptops, an
   Eliminator mode built on the weapon kit, packaging/trailer for a possible
   Steam release.
