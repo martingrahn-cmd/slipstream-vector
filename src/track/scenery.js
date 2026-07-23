@@ -386,6 +386,11 @@ function buildGround(groundY, cx, cz, theme) {
           float d2 = sin((vXZ.x * 0.55 + vXZ.y) * 0.016 + 1.7);
           float band = smoothstep(-0.6, 1.0, d1 * 0.6 + d2 * 0.4);
           vec3 col = mix(colA, colB, band * 0.55);
+          // Stage-3: mid-scale wind ripples (~14m wavelength) — the big bands
+          // are horizon language; THIS is what the sand reads as at track
+          // distance, so the near ground never flattens to one fill.
+          float rip = sin(dot(vXZ, vec2(0.42, 0.16)) + sin(dot(vXZ, vec2(-0.11, 0.31)) * 1.7) * 2.2);
+          col = mix(col, colB, smoothstep(0.2, 0.95, rip) * 0.10);
           // Coarse grain so the surface never reads as a flat fill.
           float g = hash(floor(vXZ * 0.9));
           col += (g - 0.5) * 0.035;
@@ -462,14 +467,24 @@ function buildGround(groundY, cx, cz, theme) {
         uniform vec3 colA, colB;
         varying vec2 vXZ;
         #include <fog_pars_fragment>
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
         void main() {
           vec3 col = colA;
+          // Stage-3: each 64m block gets its own lot tint, so the ground
+          // between the towers reads as a CITY plan, not a dark fill.
+          col *= 0.93 + hash(floor(vXZ / 64.0)) * 0.14;
           // Street grid shining through the asphalt, gently pulsing.
           float dx = abs(fract(vXZ.x / 64.0 + 0.5) - 0.5) * 64.0;
           float dz = abs(fract(vXZ.y / 64.0 + 0.5) - 0.5) * 64.0;
           float line = max(smoothstep(1.1, 0.0, dx), smoothstep(1.1, 0.0, dz));
           float pulse = 0.65 + 0.35 * sin(time * 0.8 + (vXZ.x + vXZ.y) * 0.01);
           col += colB * line * 0.22 * pulse;
+          // Every 4th line is an AVENUE — wider, brighter, the arterial glow.
+          vec2 a4 = fract(vXZ / 256.0 + 0.5) - 0.5;
+          float ave = max(smoothstep(0.011, 0.0, abs(a4.x)), smoothstep(0.011, 0.0, abs(a4.y)));
+          col += colB * ave * 0.34 * pulse;
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -1065,6 +1080,15 @@ function buildMesas(rng, spline, groundY, theme) {
       beach.rotateY(rng() * Math.PI);
       beach.translate(px, groundY + 0.25, pz);
       geoms.push(bakeFlatColors(beach, theme.sand, { rim: false }));
+      // Stage-3: a surf line where the beach meets the lagoon — a thin pale
+      // ring floating just above the water so the land/water edge never reads
+      // as a knife cut. Squashed + rotated per island so no two match.
+      const foam = new THREE.RingGeometry(scale * 1.2, scale * 1.36, 8, 1);
+      foam.rotateX(-Math.PI / 2);
+      foam.scale(1, 1, 0.86 + rng() * 0.22);
+      foam.rotateY(rng() * Math.PI);
+      foam.translate(px, groundY + 0.05, pz);
+      geoms.push(bakeFlatColors(foam, 0xdcf7ee, { rim: false }));
     }
     if (towers) {
       // Dense lit window GRID over the facades, transformed exactly like the
