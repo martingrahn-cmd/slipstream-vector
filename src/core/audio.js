@@ -711,9 +711,9 @@ export class AudioEngine {
   }
 
   // ---- music hooks ---------------------------------------------------------
-  // Five slots: assets/music/{menu,sunset,coast,sprawl}.mp3, all optional.
-  // race.mp3 acts as a fallback for any missing world track. Missing file =
-  // silence for that slot, never an error.
+  // Six slots: assets/music/{menu,sunset,coast,sprawl,frost}.mp3, all
+  // optional. race.mp3 acts as a fallback for any missing world track.
+  // Missing file = silence for that slot, never an error.
   _tryMusic() {
     this.musicEls = {};       // HTMLAudio fallbacks (used until a buffer decodes)
     this.musicBuffers = {};   // decoded AudioBuffers for gapless looping
@@ -730,7 +730,7 @@ export class AudioEngine {
       this._fadeIn[i] = Math.sin(x);
       this._fadeOut[i] = Math.cos(x);
     }
-    for (const key of ['menu', 'sunset', 'coast', 'sprawl', 'race']) {
+    for (const key of ['menu', 'sunset', 'coast', 'sprawl', 'frost', 'race']) {
       const el = document.createElement('audio');
       el.src = `./assets/music/${key}.mp3`;
       el.loop = true;
