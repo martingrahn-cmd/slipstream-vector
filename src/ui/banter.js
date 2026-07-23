@@ -16,36 +16,52 @@ import { pilotSlug } from '../worlds/teams.js';
 // source of truth, so generated audio always matches what the feed shows.
 export const LINES = {
   'JUNO VEX': {
-    glad: ["Rookie? Watch again.", "First blood to the kid.", "Blink and you missed it.", "Sheet music, remember?", "Golden. Every time.", "Was that your best line?", "The prodigy has teeth."],
-    arg: ["That the best you've got?", "Cheap. I'll answer it.", "You woke the rookie up.", "Mistake. Yours.", "I don't blink — you will.", "Noted. And returned."],
+    glad: ["Rookie? Watch again.", "First blood to the kid.", "Blink and you missed it.", "Sheet music, remember?", "Golden. Every time.", "Was that your best line?", "The prodigy has teeth.",
+      "Study that replay.", "Too easy. Next.", "You practiced for THAT?", "Highlight reel material.", "The kid strikes again."],
+    arg: ["That the best you've got?", "Cheap. I'll answer it.", "You woke the rookie up.", "Mistake. Yours.", "I don't blink — you will.", "Noted. And returned.",
+      "Lucky. Say it.", "That's coming back with interest.", "Cute. My turn.", "You just made my list.", "Copying me now? Flattering."],
   },
   'KAIDE SORO': {
-    glad: ["Efficient.", "Down. Predictable.", "Calm hands win.", "No wasted motion.", "That's the difference.", "Rebuilt for exactly this."],
-    arg: ["Unnecessary.", "I felt nothing.", "You'll want that back.", "Recorded.", "Patience. Then payback.", "A poor decision."],
+    glad: ["Efficient.", "Down. Predictable.", "Calm hands win.", "No wasted motion.", "That's the difference.", "Rebuilt for exactly this.",
+      "As planned.", "Clean.", "The line was mine.", "Nothing personal.", "Precision pays."],
+    arg: ["Unnecessary.", "I felt nothing.", "You'll want that back.", "Recorded.", "Patience. Then payback.", "A poor decision.",
+      "Sloppy.", "That cost you more than me.", "I remember everything.", "Anger is waste. Stored anyway.", "Try that again. Please."],
   },
   'MERIDIAN BLUE': {
-    glad: ["Calculated.", "The math was against you.", "Predictable trajectory.", "Probability favored me.", "Simple geometry.", "Optimal, as modeled."],
-    arg: ["That wasn't in the model.", "Statistical anomaly.", "Recalculating. You still lose.", "An error — I correct errors.", "Variance. Temporary."],
+    glad: ["Calculated.", "The math was against you.", "Predictable trajectory.", "Probability favored me.", "Simple geometry.", "Optimal, as modeled.",
+      "Within one sigma.", "The model holds.", "Your line diverged. Mine converged.", "Solved.", "Textbook trajectory."],
+    arg: ["That wasn't in the model.", "Statistical anomaly.", "Recalculating. You still lose.", "An error — I correct errors.", "Variance. Temporary.",
+      "Outlier. Ignored.", "Noise, not signal.", "Adjusting priors. You lose next.", "Improbable. Not impossible. Annoying.", "The math never forgives."],
   },
   'SOL ANARA': {
-    glad: ["Gracefully done.", "A pleasure, as always.", "Grace wins races.", "After you — no, after me.", "Three titles for a reason.", "Watch the line, darling."],
-    arg: ["...how rude.", "Apologies. This ends now.", "You'll regret the discourtesy.", "Composure, Sol.", "That was beneath you."],
+    glad: ["Gracefully done.", "A pleasure, as always.", "Grace wins races.", "After you — no, after me.", "Three titles for a reason.", "Watch the line, darling.",
+      "Experience, darling.", "The old way still wins.", "A masterclass, free of charge.", "Do keep up.", "Champions never hurry."],
+    arg: ["...how rude.", "Apologies. This ends now.", "You'll regret the discourtesy.", "Composure, Sol.", "That was beneath you.",
+      "Manners cost nothing.", "Oh, we're doing THAT, are we?", "A champion remembers.", "How very desperate.", "You'll apologise at the podium."],
   },
   'VOSS KRAIT': {
-    glad: ["Prey.", "Taste the asphalt.", "Down you go.", "I was already past you.", "The hunt's over.", "Marked. Hunted. Finished.", "You slowed. Fatal."],
-    arg: ["...you'll bleed for that.", "Now it's personal.", "The hunter turns.", "Run. It won't help.", "I don't forget prey."],
+    glad: ["Prey.", "Taste the asphalt.", "Down you go.", "I was already past you.", "The hunt's over.", "Marked. Hunted. Finished.", "You slowed. Fatal.",
+      "The pack thins.", "Smell that? Fear.", "Another one down.", "I eat mistakes.", "Struggle. It's sweeter."],
+    arg: ["...you'll bleed for that.", "Now it's personal.", "The hunter turns.", "Run. It won't help.", "I don't forget prey.",
+      "You drew blood first. Brave.", "Wounded, not dead.", "Closer... closer...", "The hunt just got personal.", "Teeth out."],
   },
   'KIRA NOX': {
-    glad: ["Target neutralized.", "Probability: you lose.", "Overtake logged.", "You are inefficient.", "Zero lap-time wasted.", "Outcome: expected."],
-    arg: ["Anomaly detected.", "That won't compute twice.", "Err—err—rebooting.", "Recalculating your defeat.", "Threat logged."],
+    glad: ["Target neutralized.", "Probability: you lose.", "Overtake logged.", "You are inefficient.", "Zero lap-time wasted.", "Outcome: expected.",
+      "Efficiency: optimal.", "Victory subroutine engaged.", "Your defeat: scheduled.", "Processing... satisfaction?", "Resistance was statistical noise."],
+    arg: ["Anomaly detected.", "That won't compute twice.", "Err—err—rebooting.", "Recalculating your defeat.", "Threat logged.",
+      "Damage report: irrelevant.", "Hostility logged. Response queued.", "Countermeasures loading.", "This unit holds grudges.", "Error. ERROR. ...Recovered."],
   },
   'LYRA STORM': {
-    glad: ["HAH! Gotcha!", "Wheee — down you go!", "Love this thing!", "Catch me, slowpoke!", "That boost pad's MINE!", "Sent it! No regrets!"],
-    arg: ["Aw, come ON—", "Okay okay, now I'm mad!", "You'll pay for that! ...eventually!", "Rude! Fun, but rude!", "Game ON, jerk!"],
+    glad: ["HAH! Gotcha!", "Wheee — down you go!", "Love this thing!", "Catch me, slowpoke!", "That boost pad's MINE!", "Sent it! No regrets!",
+      "WOOO did you SEE that?!", "Zoom zoom, baby!", "Best! Day! Ever!", "Say bye-byeee!", "I could do this all daaaay!"],
+    arg: ["Aw, come ON—", "Okay okay, now I'm mad!", "You'll pay for that! ...eventually!", "Rude! Fun, but rude!", "Game ON, jerk!",
+      "HEY! I liked that paint!", "Oh it is ON!", "Meanie! Fast meanie!", "I'll cry AFTER I beat you!", "That tickled. NOW I'm angry!"],
   },
   'ECHO TANE': {
-    glad: ["Saw it coming.", "Read and struck.", "From above.", "Mapped this hours ago.", "Predicted. Executed.", "The launch was always mine."],
-    arg: ["Didn't see that. Won't happen twice.", "Adjusting the map.", "Noted. Recalculated.", "A variable — I hate variables.", "You'll be predictable soon."],
+    glad: ["Saw it coming.", "Read and struck.", "From above.", "Mapped this hours ago.", "Predicted. Executed.", "The launch was always mine.",
+      "As forecast.", "Your pattern betrayed you.", "I saw it three corners ago.", "Checkmate was inevitable.", "The map is never wrong."],
+    arg: ["Didn't see that. Won't happen twice.", "Adjusting the map.", "Noted. Recalculated.", "A variable — I hate variables.", "You'll be predictable soon.",
+      "Unmapped. Impressive. Once.", "Recomputing your tells.", "You broke pattern. Noted.", "A surprise. I collect those.", "Next time I'll see it first."],
   },
 };
 
