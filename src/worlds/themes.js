@@ -213,4 +213,71 @@ export const THEMES = {
     skyTraffic: true,     // aircars crossing the skyline
     bridges: true,        // elevated highways crossing over the track
   },
+
+  frost: {
+    id: 'frost',
+    name: 'FROSTFALL RIDGE',
+    music: 'frost',
+    grade: { contrast: 1.07, saturation: 0.96 },   // cold dusk — crisp, slightly drained
+    adGlow: 0.0,
+    sky: {
+      zenith: 0x060a26,   // deep polar night
+      upper: 0x0e1c46,
+      band: 0x1e3a68,     // ice-blue haze band
+      horizon: 0x6a4a92,  // violet dusk glow at the rim
+      hot: 0xffd9ec,      // last pale pink of the sun
+      sunCore: 0xeaf4ff,  // a MOON, not a sun — small, pale, no stripes
+      sunStripe: 0xbcd0ee,
+      cloud: 0x93a8cc,
+      sunAz: [0.62, -0.78],
+      sunSize: 0.055,
+      sunStripes: 0.0,
+      starLevel: 0.962,   // hard polar starfield
+      cloudAmp: 0.22,
+      cloudPuff: 1.3,
+      event: 'aurora',    // the northern lights — build all race, own the zenith
+    },
+    fog: 0x2a3a5e,        // cold blue haze
+    ground: 0xc7d4e8,     // moonlit snowpack
+    groundB: 0xa7b9d6,    // wind-drift bands (sastrugi read via the dune shader)
+    warm: 0xdfe9ff,       // moonlight 'warm' highlight — actually the coldest light
+    sand: 0xdde8f6,
+    mesaLit: 0xb2c4e0,    // snowbound peaks, lit side
+    mesaShadow: 0x44548e, // deep blue shadow — the synthwave tell, frozen
+    mesaRim: 0xeef4ff,    // ice-glare rims
+    warmCrown: 0xffffff,
+    mountainFar: 0x33487e,
+    rock: 0x8ca4c6,       // ice boulders
+    trackBase: 0x1a1640,  // the ROAD stays dark so the neon edges read
+    trackBand: 0x2a2258,
+    mesaStyle: 'rocks',
+    mesaMax: 175,
+    horizonMask: [
+      { ang: 0.62, span: 0.9, density: 1, hScale: 1.5 },  // the RIDGE itself — a glacier wall under the moon
+      { ang: -1.6, span: 0.7, density: 0.4 },             // open tundra window (aurora breathing room)
+      { ang: 2.6, span: 0.8, density: 0.7 },
+    ],
+    landmark: { type: 'spire', dist: 430, scale: 1.1 },   // a colossal ice spire on the moon azimuth
+    monumentZones: true,  // peak clusters with truly empty snowfields between
+    rockCut: true,        // an ice-pass through the ridge — compression, then the aurora floods back
+    archMax: 18,
+    mountainStyle: 'ridges',
+    farCount: 42,
+    groundStyle: 'dunes', // the dune shader IS the snow shader: drift bands + sastrugi ripples
+    scrubCount: 0,
+    flora: 'pines',
+    floraCol: 0x274842,   // frost-dark spruce green
+    floraCount: 170,
+    rockCount: 240,
+    roadside: 'poles',    // stage-2 near-band kit: orange snow-marker stakes + drift humps
+    roadsideCount: 320,
+    dustDevils: 2,        // stage-4 ambient life: SNOW devils
+    devilCol: 0xe4edf8,
+    billboardEvery: 260,
+    searchlights: false,
+    city: false,
+    drones: 6,
+    birds: false,
+    ambient: { color: 0xffffff, mode: 'snow' },   // falling snow
+  },
 };

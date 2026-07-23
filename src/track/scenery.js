@@ -131,7 +131,7 @@ export function buildScenery(spline, scene, theme) {
     ? buildBirds(rng, spline, groundY, { color: theme.birdCol, anchor: landmarks && landmarks.anchor })
     : null;
   if (birds) group.add(birds.mesh);
-  const devils = theme.dustDevils ? buildDustDevils(rng, spline, groundY, cx, cz, theme.dustDevils) : null;
+  const devils = theme.dustDevils ? buildDustDevils(rng, spline, groundY, cx, cz, theme.dustDevils, theme.devilCol) : null;
   if (devils) group.add(devils.group);
   const sails = theme.sails ? buildSails(rng, spline, groundY, cx, cz, theme.sails) : null;
   if (sails) group.add(sails.mesh);
@@ -199,6 +199,7 @@ function buildSky(S) {
       progress: { value: 0 },   // 0..1 race progress — mood drifts over the laps
       flash: { value: 0 },      // lightning flash (city storms)
       planet: { value: S.event === 'planet' ? 1.0 : 0.0 }, // sister planet + meteors (desert)
+      aurora: { value: S.event === 'aurora' ? 1.0 : 0.0 }, // flowing northern lights (frost)
       sunFlare: { value: 0 },   // 0..1 sun-gate bloom — swells as you drive into the sun
       meteor: { value: -1 },    // -1 idle, else 0..1 life of the scripted last-lap fireball
       meteorAz: { value: 0 },   // world azimuth the fireball is centred on (player's heading at trigger)
@@ -212,7 +213,7 @@ function buildSky(S) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, sunFlare, meteor, meteorAz;
+      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, aurora, sunFlare, meteor, meteorAz;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
@@ -310,6 +311,23 @@ function buildSky(S) {
           vec3 mCol = mix(vec3(1.0, 0.82, 0.5), vec3(1.0, 0.97, 0.92), head);
           col += mCol * (body * 1.0 + head * 1.9) * life;
           col += hot * life * head * 0.2;                     // faint warm wash at the head
+        }
+        // Sky event (frost): the AURORA — two flowing curtains whose bases
+        // ripple along the azimuth, combed by fine vertical rays. Green core,
+        // violet fringe; deepens as the race night wears on (progress).
+        if (aurora > 0.5 && y > 0.04) {
+          float aAz = atan(d.x, d.z);
+          float wave1 = sin(aAz * 2.2 + time * 0.11) + 0.6 * sin(aAz * 4.7 - time * 0.07);
+          float wave2 = sin(aAz * 3.1 - time * 0.09 + 2.1) + 0.5 * sin(aAz * 6.3 + time * 0.05);
+          float y1 = 0.26 + 0.07 * wave1;
+          float y2 = 0.44 + 0.09 * wave2;
+          float band1 = smoothstep(y1 - 0.03, y1 + 0.10, y) * (1.0 - smoothstep(y1 + 0.10, y1 + 0.5, y));
+          float band2 = smoothstep(y2 - 0.03, y2 + 0.12, y) * (1.0 - smoothstep(y2 + 0.12, y2 + 0.55, y));
+          float rays = 0.55 + 0.45 * sin(aAz * 38.0 + time * 0.35 + 3.0 * sin(aAz * 3.0 + time * 0.06));
+          float amp = 0.4 + 0.5 * progress;                     // the show builds all race
+          vec3 aGreen = vec3(0.15, 0.95, 0.55);
+          vec3 aViolet = vec3(0.5, 0.35, 0.98);
+          col += (aGreen * band1 + mix(aGreen, aViolet, 0.72) * band2) * rays * amp * 0.5;
         }
         // Stars above the horizon band.
         if (y > 0.18) {
@@ -1494,6 +1512,19 @@ function buildRoadside(rng, spline, groundY, theme) {
     const stone = new THREE.IcosahedronGeometry(0.16, 0);        // base cleat
     stone.translate(0.24, 0.06, 0.1);
     parts.push(bakeFlatColors(stone, theme.sand ?? 0xe8d8a8, { rim: false }));
+  } else if (style === 'poles') {
+    // Snow-marker poles — the classic orange roadside stakes — with a low
+    // wind-carved drift hump at the base.
+    const pole = new THREE.CylinderGeometry(0.05, 0.06, 1.5, 5);
+    pole.translate(0, 0.72, 0);
+    parts.push(bakeFlatColors(pole, 0xe8763a, { rim: false }));
+    const bandTop = new THREE.CylinderGeometry(0.062, 0.062, 0.2, 5);
+    bandTop.translate(0, 1.32, 0);
+    parts.push(bakeFlatColors(bandTop, 0xf5f5f0, { rim: false }));
+    const drift = new THREE.IcosahedronGeometry(0.38, 0);
+    drift.scale(1.6, 0.45, 1);
+    drift.translate(0.1, 0.12, 0.05);
+    parts.push(bakeFlatColors(drift, 0xdde8f6, { rim: false }));
   } else { // 'street'
     const block = new THREE.BoxGeometry(1.7, 0.5, 0.42);         // jersey barrier
     block.translate(0, 0.25, 0);
@@ -1580,6 +1611,23 @@ function buildFlora(rng, spline, groundY, theme) {
       frond.translate(0.29, 2.3, 0);
       parts.push(bakeFlatColors(frond, 0x2fa05a, { rim: false }));
     }
+  } else if (style === 'pines') {
+    // Frosted spruce: dark tiered cones with snow-dusted brims + a white cap.
+    const trunk = new THREE.CylinderGeometry(0.09, 0.14, 0.7, 5);
+    trunk.translate(0, 0.35, 0);
+    parts.push(bakeFlatColors(trunk, 0x3a2c28, { rim: false }));
+    const tiers = [[1.15, 1.5, 0.75], [0.9, 1.3, 1.55], [0.62, 1.1, 2.3]];
+    for (const [r, h, y] of tiers) {
+      const cone = new THREE.ConeGeometry(r, h, 6);
+      cone.translate(0, y + h * 0.3, 0);
+      parts.push(bakeFlatColors(cone, theme.floraCol ?? 0x2a4a44, { rim: false }));
+      const brim = new THREE.ConeGeometry(r * 0.98, 0.16, 6); // snow on the tier's shoulder
+      brim.translate(0, y + h * 0.06, 0);
+      parts.push(bakeFlatColors(brim, 0xe8f0fa, { rim: false }));
+    }
+    const cap = new THREE.ConeGeometry(0.2, 0.4, 6);
+    cap.translate(0, 3.35, 0);
+    parts.push(bakeFlatColors(cap, 0xf2f7ff, { rim: false }));
   } else {
     const seg = (r0, r1, h, x, y, rotZ = 0) => {
       const g = new THREE.CylinderGeometry(r0, r1, h, 5);
@@ -2426,7 +2474,7 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}, spline = null) {
 
 // Desert: slow-wandering dust devils — tall sand columns spinning far off the
 // racing line, drifting a lazy figure around their anchor.
-function buildDustDevils(rng, spline, groundY, cx, cz, count) {
+function buildDustDevils(rng, spline, groundY, cx, cz, count, color = 0xd8b06a) {
   const group = new THREE.Group();
   const devils = [];
   for (let i = 0; i < count; i++) {
@@ -2438,7 +2486,7 @@ function buildDustDevils(rng, spline, groundY, cx, cz, count) {
     }
     const geom = new THREE.CylinderGeometry(3.0, 0.7, 30, 6, 3, true);
     const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
-      color: 0xd8b06a, transparent: true, opacity: 0.34,
+      color, transparent: true, opacity: 0.34,
       depthWrite: false, fog: true, side: THREE.DoubleSide,
     }));
     mesh.position.set(x, groundY + 15, z);
@@ -2601,13 +2649,15 @@ function buildDrones(rng, spline, theme) {
 // any static prop.
 function buildMotes(rng, spline, theme) {
   const rain = theme.ambient.mode === 'rain';
-  const N = rain ? 170 : 140;
+  const snow = theme.ambient.mode === 'snow';
+  const N = rain ? 170 : snow ? 200 : 140;
   const geom = rain
     ? new THREE.BoxGeometry(0.045, 1.6, 0.045)
-    : new THREE.BoxGeometry(0.17, 0.17, 0.17);
+    : snow ? new THREE.BoxGeometry(0.14, 0.14, 0.14)
+      : new THREE.BoxGeometry(0.17, 0.17, 0.17);
   const mesh = new THREE.InstancedMesh(geom, new THREE.MeshBasicMaterial({
     color: theme.ambient.color, transparent: true,
-    opacity: rain ? 0.3 : 0.45,
+    opacity: rain ? 0.3 : snow ? 0.6 : 0.45,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
   }), N);
   mesh.frustumCulled = false;
@@ -2632,6 +2682,11 @@ function buildMotes(rng, spline, theme) {
         let x = b.x, y = b.y, z = b.z;
         if (rain) {
           y = b.y + 9 - ((t * 26 * b.sp + b.ph) % 18);
+        } else if (snow) {
+          // Slow tumbling fall with a lateral waft — unhurried, thick flakes.
+          y = b.y + 8 - ((t * 3.6 * b.sp + b.ph) % 15);
+          x += Math.sin(t * 0.7 * b.sp + b.ph) * 1.5;
+          z += Math.cos(t * 0.5 * b.sp + b.ph * 1.3) * 1.2;
         } else {
           x += Math.sin(t * 0.35 * b.sp + b.ph) * 3.2;
           y += Math.sin(t * 0.6 * b.sp + b.ph * 2) * 1.4;

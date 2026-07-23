@@ -5,6 +5,7 @@ import { LAGOON_PASS } from './lagoonPass.js';
 import { CORAL_KEYS } from './coralKeys.js';
 import { ORBITAL_RING } from './orbitalRing.js';
 import { SKYLINE_RUSH } from './skylineRush.js';
+import { AURORA_PASS } from './auroraPass.js';
 
 export const TRACKS = [
   SUNSET_CIRCUIT,
@@ -13,4 +14,5 @@ export const TRACKS = [
   CORAL_KEYS,
   ORBITAL_RING,
   SKYLINE_RUSH,
+  AURORA_PASS, // TEMP preview registration — remove before deploy (cup = TRACKS.length rounds)
 ];
