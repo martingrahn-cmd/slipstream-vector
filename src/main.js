@@ -3,7 +3,7 @@
 // Wiring only — all behavior lives in the modules.
 import * as THREE from 'three';
 import { TUNING as T } from './config.js';
-import { TRACKS } from './track/tracks/index.js';
+import { TRACKS, CUPS } from './track/tracks/index.js';
 import { THEMES } from './worlds/themes.js';
 import { TrackSpline, makeFrame } from './track/spline.js';
 import { buildTrackMesh } from './track/trackMesh.js';
@@ -147,6 +147,7 @@ let TOTAL_LAPS = 3;
 const MODES = ['CHAMPIONSHIP', 'SINGLE RACE', 'TIME TRIAL'];
 const selection = {
   mode: clampInt(localStorage.getItem('sv-mode') ?? '1', MODES.length),
+  cup: clampInt(localStorage.getItem('sv-cup') ?? '0', CUPS.length),
   classIdx: Math.min(clampInt(localStorage.getItem('sv-class'), CLASSES.length), unlockedClasses()),
   // Rival difficulty (default PRO ≈ the old per-track average). Always free to pick.
   difficulty: clampInt(localStorage.getItem('sv-difficulty') ?? '1', DIFFICULTIES.length),
@@ -156,8 +157,15 @@ const selection = {
 
 // Championship: points across the whole roster, awarded per finish position.
 const CHAMP_PTS = [10, 8, 6, 5, 4, 3, 2, 1];
+// The active cup's calendar: champ.round indexes INTO the cup's track list,
+// never the roster directly — both cups are 6 rounds over the 12-track roster.
+const cupOf = (i) => CUPS[i] || CUPS[0];
+const champCup = () => cupOf(champ.cup ?? 0);
+const champLen = () => champCup().tracks.length;
+const champTrack = (r) => champCup().tracks[Math.max(0, Math.min(champLen() - 1, r))];
 const champ = {
   active: false,
+  cup: 0,            // which CUPS calendar this championship runs
   round: 0,
   done: 0,           // rounds whose points are in — the round to RESUME at
   classIndex: 0,     // the speed class this cup is being run at
@@ -175,7 +183,7 @@ function saveChamp() {
   if (!champ.active) { try { localStorage.removeItem(CHAMP_KEY); } catch (e) { /* ignore */ } return; }
   try {
     localStorage.setItem(CHAMP_KEY, JSON.stringify({
-      v: 1, done: champ.done, classIndex: champ.classIndex,
+      v: 2, cup: champ.cup ?? 0, done: champ.done, classIndex: champ.classIndex,
       entry: champ.entry, unlockMsg: champ.unlockMsg,
       points: [...champ.points.entries()].map(([id, e]) => ({ id, ...e })),
     }));
@@ -191,7 +199,10 @@ function clearChamp() {
 function readSavedChamp() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(CHAMP_KEY) || 'null'); } catch (e) { return null; }
-  if (!s || !Array.isArray(s.points) || !(s.done > 0) || s.done >= TRACKS.length) return null;
+  // v1 saves (pre-cups) carried roster-wide rounds — they map onto cup 0 only
+  // if still in range; otherwise the cup is finished/invalid and drops.
+  const cl = cupOf(s && s.cup ? s.cup : 0).tracks.length;
+  if (!s || !Array.isArray(s.points) || !(s.done > 0) || s.done >= cl) return null;
   return s;
 }
 // Load the saved cup into the working `champ` so RESUME can continue it.
@@ -199,6 +210,7 @@ function loadChamp() {
   const s = readSavedChamp();
   if (!s) return false;
   champ.active = true;
+  champ.cup = clampInt(String(s.cup ?? 0), CUPS.length);
   champ.done = s.done;
   champ.round = s.done;               // about to race this round
   champ.classIndex = clampInt(String(s.classIndex), CLASSES.length);
@@ -554,19 +566,24 @@ function updateMenu() {
   // reveals NEW CUP; the ladder lights completed rounds + the one you're on.
   const saved = readSavedChamp();
   const champRound = saved ? saved.done : 0; // 0-indexed round to resume / start at
-  setHTML('cup-ladder', TRACKS.map((t, i) => {
-    const cls = i < champRound ? ' done' : i === champRound ? ' lit' : '';
-    return `<div class="cup-rd${cls}"><span class="rn">${i + 1}</span>${t.name}</div>`;
+  // A saved cup owns the ladder + labels (and pins the CUP row to itself);
+  // otherwise the ladder previews whichever cup is selected.
+  const menuCup = saved ? cupOf(saved.cup ?? 0) : cupOf(selection.cup);
+  const menuCupLen = menuCup.tracks.length;
+  setTxt('menu-cup', menuCup.name + (saved ? ' · IN PROGRESS' : ''));
+  setHTML('cup-ladder', menuCup.tracks.map((ti, i) => {
+    const cls = saved && i < champRound ? ' done' : (saved ? i === champRound : i === 0) ? ' lit' : '';
+    return `<div class="cup-rd${cls}"><span class="rn">${i + 1}</span>${TRACKS[ti].name}</div>`;
   }).join(''));
   const goBtn = document.getElementById('champ-go');
-  if (goBtn) goBtn.textContent = saved ? `RESUME · ROUND ${champRound + 1}/${TRACKS.length}` : 'START CUP';
+  if (goBtn) goBtn.textContent = saved ? `RESUME · ROUND ${champRound + 1}/${menuCupLen}` : 'START CUP';
   const newCupBtn = document.getElementById('champ-newcup');
   if (newCupBtn) newCupBtn.classList.toggle('hidden', !saved);
   // Brand-new player (never finished a race, no cup underway): point them at
   // the front door. The badge reverts to the round count after the first race.
   const fresh = !saved && !achievements.isUnlocked('first_race');
-  setTxt('ns-championship', saved ? `RESUME R${champRound + 1}/${TRACKS.length}`
-    : fresh ? '▶ START HERE' : `${TRACKS.length} ROUNDS`);
+  setTxt('ns-championship', saved ? `RESUME R${champRound + 1}/${menuCupLen}`
+    : fresh ? '▶ START HERE' : `${CUPS.length} CUPS`);
   const nsChamp = document.getElementById('ns-championship');
   if (nsChamp) nsChamp.classList.toggle('hot', fresh);
   menu.setChampResume(!!saved);
@@ -620,7 +637,7 @@ function buildResultsView() {
   const advance = champ.active ? `${glyph('confirm')} — STANDINGS` : `${glyph('confirm')} — RACE AGAIN &nbsp;·&nbsp; ${glyph('back')} — MENU`;
   return {
     tag: champ.active
-      ? `CHAMPIONSHIP · ROUND ${champ.round + 1}/${TRACKS.length} · ${trackDef.name.toUpperCase()}`
+      ? `${champCup().name} · ROUND ${champ.round + 1}/${champLen()} · ${trackDef.name.toUpperCase()}`
       : trackDef.name.toUpperCase(),
     title: fPlace === 1 ? 'YOU WIN' : `P${fPlace}`,
     rows: display,
@@ -638,17 +655,17 @@ function awardChampPoints() {
     champ.points.set(r.id, e);
   });
   champ.done = champ.round + 1;        // this round's points are now in the bag
-  if (champ.done < TRACKS.length) saveChamp(); // resume point: next session continues here
+  if (champ.done < champLen()) saveChamp(); // resume point: next session continues here
 }                                      // final round: leave it to the complete branch to clear
 
 function buildStandingsView() {
   const entries = [...champ.points.values()].sort((a, b) => b.pts - a.pts);
   const playerRank = entries.findIndex((e) => e.player) + 1;
-  const last = champ.round >= TRACKS.length - 1;
+  const last = champ.round >= champLen() - 1;
   return {
     tag: last
-      ? `FINAL STANDINGS · ${TRACKS.length} ROUNDS`
-      : `STANDINGS AFTER ROUND ${champ.round + 1}/${TRACKS.length}`,
+      ? `${champCup().name} · FINAL STANDINGS`
+      : `${champCup().name} · AFTER ROUND ${champ.round + 1}/${champLen()}`,
     title: last
       ? (playerRank === 1 ? 'CHAMPION' : `P${playerRank} OVERALL`)
       : 'CHAMPIONSHIP',
@@ -663,7 +680,7 @@ function buildStandingsView() {
       ? (champ.unlockMsg ? `${champ.unlockMsg} — ${glyph('confirm')} MENU` : `${glyph('confirm')} — MENU`)
       // Name the next circuit and make the exit safe to take: the cup is
       // already saved at this round, so backing out is never a loss.
-      : `${glyph('confirm')} — ROUND ${champ.round + 2}/${TRACKS.length} · ${TRACKS[champ.round + 1].name.toUpperCase()}`
+      : `${glyph('confirm')} — ROUND ${champ.round + 2}/${champLen()} · ${TRACKS[champTrack(champ.round + 1)].name.toUpperCase()}`
         + ` &nbsp;·&nbsp; ${glyph('back')} — SAVE & MENU`,
   };
 }
@@ -740,7 +757,7 @@ function enterPodium() {
   podiumSceneEl.classList.remove('hidden');
   podiumTitleEl.className = playerRank === 1 ? 'champ' : '';
   podiumTitleEl.querySelector('.pt-tag').textContent =
-    `CHAMPIONSHIP · ${CLASSES[champ.classIndex].name} CLASS`;
+    `${champCup().name} · ${CLASSES[champ.classIndex].name} CLASS`;
   podiumTitleEl.querySelector('.pt-title').textContent =
     playerRank === 1 ? 'CHAMPION' : `P${playerRank} OVERALL`;
   podiumTitleEl.querySelector('.pt-sub').innerHTML = `${glyph('confirm')} — STANDINGS`;
@@ -1289,7 +1306,7 @@ function startCountdown() {
   hud.countdown(null);
   const clsName = CLASSES[selection.classIdx].name;
   hud.setSub(champ.active
-    ? `${clsName} CUP · ROUND ${champ.round + 1}/${TRACKS.length} · ${trackDef.name.toUpperCase()}`
+    ? `${champCup().name} · ${clsName} · ROUND ${champ.round + 1}/${champLen()} · ${trackDef.name.toUpperCase()}`
     : selection.mode === 2
       ? `TIME TRIAL · ${clsName} · ${trackDef.name.toUpperCase()}`
       : `${clsName} · ${trackDef.name.toUpperCase()}`);
@@ -1700,6 +1717,9 @@ function editRow(row, dir) {
   } else if (row === 'banter') {
     banterOn = !banterOn; banter.setEnabled(banterOn);
     localStorage.setItem('sv-banter', banterOn ? 'on' : 'off');
+  } else if (row === 'cup') {
+    selection.cup = n(CUPS.length, selection.cup, dir);
+    localStorage.setItem('sv-cup', String(selection.cup));
   } else if (row === 'tier') {
     trophyTier = TROPHY_FILTERS[n(TROPHY_FILTERS.length, TROPHY_FILTERS.indexOf(trophyTier), dir)];
   }
@@ -1709,7 +1729,7 @@ function editRow(row, dir) {
 // Start the race for the current selection (mode set on section entry).
 function startRace() {
   if (selection.mode === 0) {
-    champ.active = true; champ.round = 0; champ.done = 0;
+    champ.active = true; champ.cup = selection.cup; champ.round = 0; champ.done = 0;
     // Championship is gated by the unlock ladder — clamp here so a class picked
     // freely in Single/TT (shared selection.classIdx) can't leak into a cup.
     selection.classIdx = Math.min(selection.classIdx, unlockedClasses());
@@ -1718,7 +1738,8 @@ function startRace() {
     champ.unlockMsg = null; champ.points.clear();
     saveChamp();                       // overwrite any stale cup so a reload can't load the old one
     achievements.unlock('champ_play');
-    if (trackIndex !== 0) { trackIndex = 0; buildWorld(0); }
+    const t0 = champTrack(0);
+    if (trackIndex !== t0) { trackIndex = t0; buildWorld(t0); }
   } else {
     champ.active = false;
   }
@@ -1732,7 +1753,7 @@ function resumeChamp() {
   selection.classIdx = champ.classIndex;
   if (champ.entry) { selection.team = clampInt(String(champ.entry.team), TEAMS.length); selection.pilot = champ.entry.pilot & 1; }
   champ.round = champ.done;
-  trackIndex = champ.round;
+  trackIndex = champTrack(champ.round);
   buildWorld(trackIndex);
   hud.setCenter(null);
   startCountdown();
@@ -2016,7 +2037,7 @@ function onEnter() {
     if (champ.active && finishedView === 'race') {
       awardChampPoints();
       finishedView = 'standings';
-      const last = champ.round >= TRACKS.length - 1;
+      const last = champ.round >= champLen() - 1;
       const won = last && [...champ.points.values()]
         .sort((a, b) => b.pts - a.pts).findIndex((e) => e.player) === 0;
       if (won) {
@@ -2024,16 +2045,16 @@ function onEnter() {
         achievements.unlock('cup');
         if (champ.classIndex === 2) achievements.unlock('overdrive_cup');
         const me = [...champ.points.values()].find((e) => e.player);
-        if (me && me.wins >= TRACKS.length) achievements.unlock('sweep');
+        if (me && me.wins >= champLen()) achievements.unlock('sweep');
       }
       if (last) {
         enterPodium();           // 3D ceremony first; the board follows on confirm
       } else {
         hud.showResults(buildStandingsView());
       }
-    } else if (champ.active && champ.round < TRACKS.length - 1) {
+    } else if (champ.active && champ.round < champLen() - 1) {
       champ.round += 1;
-      trackIndex = champ.round;
+      trackIndex = champTrack(champ.round);
       buildWorld(trackIndex);
       hud.setCenter(null);
       startCountdown();

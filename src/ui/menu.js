@@ -6,7 +6,7 @@
 const NAV = ['championship', 'single', 'time', 'garage', 'options', 'controls', 'records', 'trophies'];
 // Ordered focusable rows per section (data-row values). 'go' = the action button.
 const STAGE = {
-  championship: ['class', 'difficulty', 'tweak', 'go'],
+  championship: ['cup', 'class', 'difficulty', 'tweak', 'go'],
   single: ['track', 'class', 'difficulty', 'tweak', 'go'],
   time: ['track', 'class', 'tweak', 'go'],
   garage: ['team', 'pilot'],
@@ -41,7 +41,7 @@ export class Menu {
   get sec() { return NAV[this.navFocus]; }
   // Championship grows a NEW CUP row once a cup is resumable (main toggles it).
   rowsFor(sec) {
-    if (sec === 'championship' && this._champResume) return ['class', 'difficulty', 'tweak', 'go', 'newcup'];
+    if (sec === 'championship' && this._champResume) return ['cup', 'class', 'difficulty', 'tweak', 'go', 'newcup'];
     return STAGE[sec] || [];
   }
   stageRows() { return this.rowsFor(this.sec); }

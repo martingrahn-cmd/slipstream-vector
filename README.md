@@ -1,16 +1,17 @@
 # SLIPSTREAM VECTOR
 
-A WipEout × Horizon Chase arcade racer. Anti-grav ship, three low-poly worlds,
-six tracks, five weapons, and eight rivals who trash-talk you over the comms —
-built for graphics and game feel first.
+A WipEout × Horizon Chase arcade racer. Anti-grav ship, four low-poly worlds,
+twelve tracks across two championship cups, five weapons, and eight rivals who
+trash-talk you over the comms — built for graphics and game feel first.
 
 **Worlds & tracks** (pick with ← → on the start screen; lap records persist):
 
 | World | Tracks | Character |
 |---|---|---|
-| Sunset Mesa | Sunset Circuit · Mesa Run | bright late afternoon over a monument valley: banded buttes in clusters with empty dune flats between, a canyon rock-cut pass, raptors circling the colossal **Sun Gate** arch that frames the striped sun |
-| Palm Coast | Lagoon Pass · Coral Keys | golden-hour archipelago: animated lagoon water, half-sunk islands with beaches, palms, a red-and-white **lighthouse** sweeping its beam over a resort strip; Coral Keys has a full F-Zero LOOP |
-| Neon Sprawl | Orbital Ring · Skyline Rush | blue-hour metropolis: street canyons of lit towers lining the track, **the Spire** anchoring the skyline, glowing asphalt grid, sweeping searchlights; Skyline Rush has a LOOP + summit dive |
+| Sunset Mesa | Sunset Circuit · Mesa Run · Dune Drift | bright late afternoon over a monument valley: banded buttes in clusters with empty dune flats between, a canyon rock-cut pass, raptors circling the colossal **Sun Gate** arch that frames the striped sun; Dune Drift is the slipstream speedway |
+| Palm Coast | Lagoon Pass · Coral Keys · Breaker Bay | golden-hour archipelago: animated lagoon water, half-sunk islands with surf-ringed beaches, palms, a red-and-white **lighthouse** sweeping its beam over a resort strip; Coral Keys has a full F-Zero LOOP, Breaker Bay is the tight marina street fight |
+| Neon Sprawl | Orbital Ring · Skyline Rush · Grid Lock | blue-hour metropolis: street canyons of lit towers lining the track, **the Spire** anchoring the skyline, glowing asphalt grid, sweeping searchlights; Skyline Rush has a LOOP + summit dive, Grid Lock corkscrews INSIDE a tunnel |
+| Frostfall Ridge | Aurora Pass · Avalanche Run · Moonlit Mile | polar dusk under the **aurora borealis** (it surges on the final lap): moonlit snowpack, blue-shadowed peaks, frosted pines, snow-marker poles, ice sculptures of race ships, skiers carving the far fields, ice-fishing huts on the frozen lake — and falling snow |
 
 Each theme controls composition, not just palette: ground style
 (flat/water/grid shaders), prop archetypes (rock spires / islands / tower
@@ -136,8 +137,10 @@ to the menu.
 
 ## Game modes
 
-The nav rail's race sections: **CHAMPIONSHIP** (all six tracks in roster order, points
-10-8-6-5-4-3-2-1 per race, standings between rounds, and at the end a full
+The nav rail's race sections: **CHAMPIONSHIP** (pick your cup on the CUP row —
+**VECTOR CUP** runs the six classic circuits, **AURORA CUP** runs the six newer
+ones and finishes in Frostfall Ridge under the northern lights; 6 rounds each,
+points 10-8-6-5-4-3-2-1 per race, standings between rounds, and at the end a full
 **3D podium ceremony** (`ui/podiumScene.js`) — the top-three ships rise onto
 gold/silver/bronze tiers under spotlights, confetti rains, the camera dollies
 in from a wide shot to a hero shot, your ship is ringed, and the title reads
@@ -452,12 +455,15 @@ race's fastest, the championship standings name the next circuit and offer
 ⌫ SAVE & MENU (the cup is saved every round), and a ▶ START HERE badge
 points brand-new players at the Championship until their first finish.
 
+Also done: the **CONTENT BLOCK** — FROSTFALL RIDGE (the 4th world: aurora sky
+with a final-lap surge, snow, ice sculptures, skiers, huts, Martin's frost
+soundtrack) with three tracks, one new track in every classic world (Dune
+Drift / Breaker Bay / Grid Lock), and the championship split into **two
+6-round cups** (VECTOR / AURORA) with a CUP selector, per-cup saves and
+resume. World uplift stages 2–4 landed first (roadside kits, ground detail,
+ambient life — all theme knobs), so the new world inherited everything.
+
 Next (rough priority):
-- **Content block** — a 4th world and one new track per world → 12 tracks,
-  two 6-track cups. (World uplift stages 2–4 are DONE — near-band roadside
-  kits, ground detail that reads at track distance, and per-world ambient
-  life: dust devils / lagoon sailboats / an ad blimp — all theme knobs, so
-  the 4th world inherits everything.)
 - **Online leaderboards**, graphics quality tiers for weaker laptops, an
   Eliminator mode built on the weapon kit, packaging/trailer for a possible
   Steam release.
