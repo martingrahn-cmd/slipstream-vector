@@ -5,8 +5,10 @@ import { LAGOON_PASS } from './lagoonPass.js';
 import { CORAL_KEYS } from './coralKeys.js';
 import { ORBITAL_RING } from './orbitalRing.js';
 import { SKYLINE_RUSH } from './skylineRush.js';
-import { AURORA_PASS } from './auroraPass.js';
-
+// FROSTFALL RIDGE (world 4) is built but NOT yet in the roster — Aurora Pass
+// goes live with the full content block (12 tracks -> two 6-round cups), so
+// the championship length never changes under a live player's saved cup.
+// To preview locally: import { AURORA_PASS } from './auroraPass.js' and add it.
 export const TRACKS = [
   SUNSET_CIRCUIT,
   MESA_RUN,
@@ -14,5 +16,4 @@ export const TRACKS = [
   CORAL_KEYS,
   ORBITAL_RING,
   SKYLINE_RUSH,
-  AURORA_PASS, // TEMP preview registration — remove before deploy (cup = TRACKS.length rounds)
 ];

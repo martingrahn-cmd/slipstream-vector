@@ -273,6 +273,9 @@ export const THEMES = {
     roadsideCount: 320,
     dustDevils: 2,        // stage-4 ambient life: SNOW devils
     devilCol: 0xe4edf8,
+    sculptures: 5,        // ice statues of race ships on pedestals — the world honours the sport
+    skiers: 8,            // tiny figures carving slalom on the far snowfields
+    huts: 6,              // ice-fishing huts on the lake, warm windows glowing
     billboardEvery: 260,
     searchlights: false,
     city: false,

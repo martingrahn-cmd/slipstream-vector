@@ -806,6 +806,8 @@ function updateNearMiss(realDt) {
 let _sunFlare = 0;
 let _meteorT = -1;               // -1 idle, else 0..1 life of the last-lap fireball
 let _meteorAz = 0;               // world heading the fireball drops into view along
+let _auroraFlare = 0;            // 0..1 — the final-lap aurora SURGE (frost world)
+let _auroraTarget = 0;
 const _sunFwd = new THREE.Vector3();
 function fireMeteor() {
   if (!(theme && theme.sky && theme.sky.event === 'planet')) return;
@@ -813,8 +815,14 @@ function fireMeteor() {
   _meteorAz = Math.atan2(_sunFwd.x, _sunFwd.z); // matches the shader's atan(d.x, d.z)
   _meteorT = 0;
 }
+// Final lap under the aurora: the whole sky show surges and stays lit for the
+// run home. Self-gates by theme, like fireMeteor.
+function igniteAurora() {
+  if (theme && theme.sky && theme.sky.event === 'aurora') _auroraTarget = 1;
+}
 function updateSunGate(realDt) {
   if (_meteorT >= 0) { _meteorT += realDt / T.METEOR_DURATION; if (_meteorT > 1) _meteorT = -1; }
+  _auroraFlare += (_auroraTarget - _auroraFlare) * Math.min(1, 0.45 * realDt); // ~4s bloom
   let target = 0;
   if (state === 'race' && theme && theme.sky && theme.sky.event === 'planet') {
     const sa = theme.sky.sunAz || [-0.35, -0.94];
@@ -1248,6 +1256,7 @@ function startCountdown() {
   ship.reset(12); // a few meters past the gantry so it doesn't sit over the camera
   ship.lap = 1;
   _sunFlare = 0; _meteorT = -1; // clear the sun-gate set-piece for the new race
+  _auroraFlare = 0; _auroraTarget = 0; // and the aurora surge
   rig.reset(ship);
   // Cinematic arc: front approach -> orbit around -> settle behind the ship.
   // Reduced-motion skips the sweep and starts at the chase pose.
@@ -1333,7 +1342,8 @@ juice.on('lap', ({ lap, time }) => {
     // Time Trial never ends — keep lapping the ghost until the player quits.
   } else if (lap === TOTAL_LAPS) {
     hud.flashCenter('FINAL LAP', 1300);
-    fireMeteor(); // crown the last lap with a meteor arcing across the desert sky
+    fireMeteor();    // crown the last lap: a meteor across the desert sky...
+    igniteAurora();  // ...or the aurora surging over the frost world
   } else if (lap > TOTAL_LAPS) {
     state = 'finished';
     playerFinishTime = race.clock;
@@ -1589,7 +1599,7 @@ function tick(now) {
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
   updateSunGate(realDt); // sun-gate bloom + scripted last-lap meteor (desert)
-  scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz);
+  scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz, _auroraFlare);
 
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {

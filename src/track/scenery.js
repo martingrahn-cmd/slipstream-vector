@@ -137,19 +137,24 @@ export function buildScenery(spline, scene, theme) {
   if (sails) group.add(sails.mesh);
   const blimp = theme.blimp ? buildBlimp(rng, groundY, cx, cz) : null;
   if (blimp) group.add(blimp.group);
+  if (theme.sculptures) group.add(buildIceSculptures(rng, spline, groundY, theme));
+  const skiers = theme.skiers ? buildSkiers(rng, spline, groundY, theme) : null;
+  if (skiers) group.add(skiers.mesh);
+  if (theme.huts) group.add(buildHuts(rng, spline, groundY, theme));
 
   let flash = 0;
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
   return {
     group,
     sky: sky.mesh,
-    update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0) {
+    update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
       sky.mat.uniforms.progress.value = raceProgress;
       sky.mat.uniforms.sunFlare.value = sunFlare;
       sky.mat.uniforms.meteor.value = meteor;
       sky.mat.uniforms.meteorAz.value = meteorAz;
+      sky.mat.uniforms.auroraFlare.value = auroraFlare;
       if (stormy) {
         flash *= 0.86;                                 // decay the last strike
         if (Math.random() < 0.004) flash = 1;          // ~occasional lightning
@@ -173,6 +178,7 @@ export function buildScenery(spline, scene, theme) {
       if (devils) devils.update(t);
       if (sails) sails.update(t);
       if (blimp) blimp.update(t);
+      if (skiers) skiers.update(t);
     },
   };
 }
@@ -200,6 +206,7 @@ function buildSky(S) {
       flash: { value: 0 },      // lightning flash (city storms)
       planet: { value: S.event === 'planet' ? 1.0 : 0.0 }, // sister planet + meteors (desert)
       aurora: { value: S.event === 'aurora' ? 1.0 : 0.0 }, // flowing northern lights (frost)
+      auroraFlare: { value: 0 }, // 0..1 final-lap SURGE — the sky show floods
       sunFlare: { value: 0 },   // 0..1 sun-gate bloom — swells as you drive into the sun
       meteor: { value: -1 },    // -1 idle, else 0..1 life of the scripted last-lap fireball
       meteorAz: { value: 0 },   // world azimuth the fireball is centred on (player's heading at trigger)
@@ -213,7 +220,7 @@ function buildSky(S) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, aurora, sunFlare, meteor, meteorAz;
+      uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, aurora, auroraFlare, sunFlare, meteor, meteorAz;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
@@ -323,11 +330,18 @@ function buildSky(S) {
           float y2 = 0.44 + 0.09 * wave2;
           float band1 = smoothstep(y1 - 0.03, y1 + 0.10, y) * (1.0 - smoothstep(y1 + 0.10, y1 + 0.5, y));
           float band2 = smoothstep(y2 - 0.03, y2 + 0.12, y) * (1.0 - smoothstep(y2 + 0.12, y2 + 0.55, y));
-          float rays = 0.55 + 0.45 * sin(aAz * 38.0 + time * 0.35 + 3.0 * sin(aAz * 3.0 + time * 0.06));
-          float amp = 0.4 + 0.5 * progress;                     // the show builds all race
+          float rays = 0.55 + 0.45 * sin(aAz * 38.0 + time * (0.35 + 0.5 * auroraFlare) + 3.0 * sin(aAz * 3.0 + time * 0.06));
+          // Builds all race; SURGES on the final lap (auroraFlare) — brighter,
+          // faster, plus a third low curtain flooding toward the horizon.
+          float amp = (0.4 + 0.5 * progress) * (1.0 + 1.4 * auroraFlare);
           vec3 aGreen = vec3(0.15, 0.95, 0.55);
           vec3 aViolet = vec3(0.5, 0.35, 0.98);
           col += (aGreen * band1 + mix(aGreen, aViolet, 0.72) * band2) * rays * amp * 0.5;
+          if (auroraFlare > 0.01) {
+            float y3 = 0.13 + 0.05 * sin(aAz * 2.7 + time * 0.14);
+            float band3 = smoothstep(y3 - 0.02, y3 + 0.08, y) * (1.0 - smoothstep(y3 + 0.08, y3 + 0.4, y));
+            col += mix(aViolet, aGreen, 0.4) * band3 * rays * auroraFlare * 0.4;
+          }
         }
         // Stars above the horizon band.
         if (y > 0.18) {
@@ -2583,6 +2597,196 @@ function buildBlimp(rng, groundY, cx, cz) {
       banner.material.opacity = 0.4 + 0.2 * (0.5 + 0.5 * Math.sin(t * 1.7)); // slow ad flicker
     },
   };
+}
+
+// ---------------------------------------------------------- frost events
+// Ice sculptures of race ships on pedestals — the frost world honours the
+// sport. Spaced around the lap like billboards, close enough to read.
+function buildIceSculptures(rng, spline, groundY, theme) {
+  const parts = [];
+  const ped = new THREE.BoxGeometry(2.4, 1.1, 2.4);
+  ped.translate(0, 0.55, 0);
+  parts.push(bakeFlatColors(ped, 0x7e96ba, { rim: false }));
+  const slab = new THREE.BoxGeometry(2.8, 0.18, 2.8);
+  slab.translate(0, 1.19, 0);
+  parts.push(bakeFlatColors(slab, 0xa8c0dc, { rim: false }));
+  // The ship: a crystalline silhouette — diamond fuselage, swept wings, fin.
+  const body = new THREE.CylinderGeometry(0.16, 0.62, 3.6, 4);
+  body.rotateX(Math.PI / 2);                    // nose forward
+  body.translate(0, 1.95, 0.2);
+  parts.push(bakeFlatColors(body, 0xcfe6f8, { rim: false }));
+  for (const side of [-1, 1]) {
+    const wing = new THREE.BoxGeometry(1.7, 0.09, 0.8);
+    wing.rotateY(side * 0.55);
+    wing.translate(side * 0.95, 1.8, -0.5);
+    parts.push(bakeFlatColors(wing, 0xbcd8f0, { rim: false }));
+  }
+  const fin = new THREE.BoxGeometry(0.08, 0.7, 0.9);
+  fin.translate(0, 2.35, -1.1);
+  parts.push(bakeFlatColors(fin, 0xbcd8f0, { rim: false }));
+  const geom = mergeGeoms(parts);
+  const count = theme.sculptures;
+  const mesh = new THREE.InstancedMesh(geom,
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  const f = makeFrame();
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  const Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < count; i++) {
+    let placed = false;
+    for (let a = 0; a < 6 && !placed; a++) {
+      const s = ((i + rng() * 0.5) / count) * spline.length;
+      spline.frameAt(s, f);
+      const side = rng() < 0.5 ? -1 : 1;
+      const dist = f.width + 9 + rng() * 10;
+      const rl = Math.hypot(f.R.x, f.R.z) || 1;
+      const x = f.pos.x + (f.R.x / rl) * side * dist;
+      const z = f.pos.z + (f.R.z / rl) * side * dist;
+      if (!clearOfTrack(spline, x, z, 3)) continue;
+      p.set(x, groundY + 0.02, z);
+      q.setFromAxisAngle(Y, rng() * Math.PI * 2);
+      sc.setScalar(1.1 + rng() * 0.5);
+      m.compose(p, q, sc);
+      mesh.setMatrixAt(i, m);
+      placed = true;
+    }
+    if (!placed) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
+}
+
+// Skiers carving slalom lines across the far snowfields — tiny figures on a
+// long run, weaving as they go, looping back to the top when they run out.
+function buildSkiers(rng, spline, groundY, theme) {
+  const bodyG = new THREE.CylinderGeometry(0.13, 0.17, 0.6, 5);
+  bodyG.translate(0, 0.55, 0);
+  const headG = new THREE.IcosahedronGeometry(0.13, 0);
+  headG.translate(0, 0.97, 0);
+  const parts = [
+    bakeFlatColors(bodyG, 0xd84a4a, { rim: false }),   // red parka — pops on snow
+    bakeFlatColors(headG, 0x30364a, { rim: false }),
+  ];
+  for (const side of [-1, 1]) {
+    const ski = new THREE.BoxGeometry(0.09, 0.05, 1.15);
+    ski.translate(side * 0.12, 0.03, 0.1);
+    parts.push(bakeFlatColors(ski, 0x2a3050, { rim: false }));
+  }
+  const geom = mergeGeoms(parts);
+  const N = theme.skiers;
+  const mesh = new THREE.InstancedMesh(geom,
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), N);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  const runs = [];
+  for (let i = 0; i < N; i++) {
+    let ox = 0, oz = 0, ok = false;
+    for (let a = 0; a < 14 && !ok; a++) {
+      const s = rng() * spline.length;
+      const f2 = makeFrame();
+      spline.frameAt(s, f2);
+      const side = rng() < 0.5 ? -1 : 1;
+      const dist = f2.width + 30 + rng() * 60;
+      const rl = Math.hypot(f2.R.x, f2.R.z) || 1;
+      ox = f2.pos.x + (f2.R.x / rl) * side * dist;
+      oz = f2.pos.z + (f2.R.z / rl) * side * dist;
+      ok = clearOfTrack(spline, ox, oz, 22);
+    }
+    const dir = rng() * Math.PI * 2;
+    runs.push({
+      ox, oz, ok,
+      dx: Math.sin(dir), dz: Math.cos(dir),      // run direction
+      len: 130 + rng() * 80,
+      sp: 9 + rng() * 5,                          // m/s downhill
+      ph: rng() * 1000,
+      carve: 5 + rng() * 4,                       // weave amplitude
+    });
+  }
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const sc = new THREE.Vector3(1, 1, 1);
+  const e = new THREE.Euler();
+  return {
+    mesh,
+    update(t) {
+      for (let i = 0; i < runs.length; i++) {
+        const r = runs[i];
+        if (!r.ok) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); continue; }
+        sc.setScalar(1);
+        const d = (t * r.sp + r.ph) % r.len;      // distance down the run
+        const weave = Math.sin(d * 0.22) * r.carve;
+        const px = r.ox + r.dx * d - r.dz * weave;
+        const pz = r.oz + r.dz * d + r.dx * weave;
+        p.set(px, groundY + 0.02, pz);
+        const heading = Math.atan2(r.dx - r.dz * Math.cos(d * 0.22) * 0.22 * r.carve,
+          r.dz + r.dx * Math.cos(d * 0.22) * 0.22 * r.carve);
+        e.set(0, heading, Math.cos(d * 0.22) * 0.3); // lean into the carve
+        q.setFromEuler(e);
+        m.compose(p, q, sc);
+        mesh.setMatrixAt(i, m);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+  };
+}
+
+// Ice-fishing huts on the frozen lake near the start — dark timber, snowy
+// roofs, one warm amber window apiece: cosy dots of life in the cold.
+function buildHuts(rng, spline, groundY, theme) {
+  const parts = [];
+  const box = new THREE.BoxGeometry(2.2, 1.8, 2.6);
+  box.translate(0, 0.9, 0);
+  parts.push(bakeFlatColors(box, 0x4a3c38, { rim: false }));
+  const roof = new THREE.ConeGeometry(2.0, 1.1, 4);
+  roof.rotateY(Math.PI / 4);
+  roof.translate(0, 2.35, 0);
+  parts.push(bakeFlatColors(roof, 0xe6eef8, { rim: false }));
+  const win = new THREE.BoxGeometry(0.55, 0.5, 0.06);
+  win.translate(0.4, 1.0, 1.31);
+  parts.push(bakeFlatColors(win, 0xffb45c, { rim: false }));   // the warm glow
+  const pipe = new THREE.CylinderGeometry(0.09, 0.09, 0.7, 5);
+  pipe.translate(-0.6, 2.6, -0.4);
+  parts.push(bakeFlatColors(pipe, 0x30302e, { rim: false }));
+  const geom = mergeGeoms(parts);
+  const count = theme.huts;
+  const mesh = new THREE.InstancedMesh(geom,
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  const f = makeFrame();
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  const Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < count; i++) {
+    let placed = false;
+    for (let a = 0; a < 8 && !placed; a++) {
+      // Cluster on the lake: the first stretch of the lap, spread outward.
+      const s = rng() * spline.length * 0.14;
+      spline.frameAt(s, f);
+      const side = rng() < 0.5 ? -1 : 1;
+      const dist = f.width + 16 + rng() * 30;
+      const rl = Math.hypot(f.R.x, f.R.z) || 1;
+      const x = f.pos.x + (f.R.x / rl) * side * dist;
+      const z = f.pos.z + (f.R.z / rl) * side * dist;
+      if (!clearOfTrack(spline, x, z, 5)) continue;
+      p.set(x, groundY + 0.02, z);
+      q.setFromAxisAngle(Y, rng() * Math.PI * 2);
+      sc.setScalar(0.9 + rng() * 0.35);
+      m.compose(p, q, sc);
+      mesh.setMatrixAt(i, m);
+      placed = true;
+    }
+    if (!placed) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
 }
 
 // ----------------------------------------------------------------- drones
