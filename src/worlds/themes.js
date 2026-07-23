@@ -66,6 +66,8 @@ export const THEMES = {
     farCount: 44,
     groundStyle: 'dunes',
     scrubCount: 210,      // low desert bushes near the track
+    roadside: 'tufts',    // stage-2 near-band kit: dry grass + pebbles
+    roadsideCount: 560,
     flora: 'cacti',
     floraCol: 0x3f7a5c,   // sage-green cacti — pops against the bright sand
     floraCount: 120,
@@ -134,6 +136,8 @@ export const THEMES = {
     floraCount: 180,
     rockCount: 160,
     scrubCount: 95,       // low coastal scrub on the sandbars
+    roadside: 'marina',   // stage-2 near-band kit: weathered mooring posts
+    roadsideCount: 240,
     billboardEvery: 320,
     searchlights: false,
     city: false,
@@ -192,6 +196,8 @@ export const THEMES = {
     flora: null,
     floraCount: 0,
     rockCount: 0,
+    roadside: 'street',   // stage-2 near-band kit: barrier blocks + lit vents
+    roadsideCount: 420,
     billboardEvery: 130,  // ads everywhere
     searchlights: true,
     canyon: true,         // tower rows lining the track

@@ -107,6 +107,7 @@ export function buildScenery(spline, scene, theme) {
   group.add(buildGantry(spline, groundY));
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
+  if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme));
   group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
@@ -1424,6 +1425,94 @@ function buildScrub(rng, spline, groundY, theme) {
     mesh.setMatrixAt(i, m);
   }
   mesh.instanceMatrix.needsUpdate = true;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+// --------------------------------------------------------------- roadside
+// Stage-2 world uplift: the NEAR band (3-27m off the wall) gets a fine-grain
+// per-world ground kit, so the strip you actually read at speed isn't bare.
+// One merged archetype per world -> one InstancedMesh -> one draw call, all
+// opaque (zero overdraw cost). Styles: 'tufts' (dry grass + pebbles),
+// 'marina' (weathered mooring posts on the lagoon), 'street' (barrier blocks
+// + vent boxes, aligned with the road). Knobs: theme.roadside/roadsideCount.
+function buildRoadside(rng, spline, groundY, theme) {
+  const style = theme.roadside;
+  const parts = [];
+  if (style === 'tufts') {
+    for (let i = 0; i < 3; i++) { // a dry-grass tuft: three lean blades
+      const g = new THREE.ConeGeometry(0.06, 0.55 + i * 0.14, 4);
+      g.rotateZ((i - 1) * 0.38 + 0.08);
+      g.translate((i - 1) * 0.14, 0.28, (i % 2) * 0.1 - 0.05);
+      parts.push(bakeFlatColors(g, 0xc09a52, { rim: false })); // deep straw — must read against the sand
+    }
+    for (const [ox, oz, r] of [[0.42, 0.18, 0.11], [-0.35, -0.2, 0.08]]) {
+      const g = new THREE.IcosahedronGeometry(r, 0);
+      g.translate(ox, r * 0.5, oz);
+      parts.push(bakeFlatColors(g, theme.rock ?? 0xb87a58, { rim: false }));
+    }
+  } else if (style === 'marina') {
+    const post = new THREE.CylinderGeometry(0.09, 0.11, 1.35, 5);
+    post.translate(0, 0.62, 0);
+    parts.push(bakeFlatColors(post, 0xf2ead8, { rim: false }));
+    const cap = new THREE.CylinderGeometry(0.11, 0.11, 0.16, 5); // red tide band
+    cap.translate(0, 1.28, 0);
+    parts.push(bakeFlatColors(cap, 0xe8604a, { rim: false }));
+    const stone = new THREE.IcosahedronGeometry(0.16, 0);        // base cleat
+    stone.translate(0.24, 0.06, 0.1);
+    parts.push(bakeFlatColors(stone, theme.sand ?? 0xe8d8a8, { rim: false }));
+  } else { // 'street'
+    const block = new THREE.BoxGeometry(1.7, 0.5, 0.42);         // jersey barrier
+    block.translate(0, 0.25, 0);
+    parts.push(bakeFlatColors(block, 0x3a3a56, { rim: false }));
+    const stripe = new THREE.BoxGeometry(1.7, 0.09, 0.44);       // hazard lip
+    stripe.translate(0, 0.52, 0);
+    parts.push(bakeFlatColors(stripe, 0xffb13d, { rim: false }));
+    const vent = new THREE.BoxGeometry(0.6, 0.62, 0.6);          // vent box
+    vent.translate(1.6, 0.31, 0.25);
+    parts.push(bakeFlatColors(vent, 0x2c2c44, { rim: false }));
+    const slit = new THREE.BoxGeometry(0.62, 0.07, 0.5);         // its lit grille
+    slit.translate(1.6, 0.5, 0.25);
+    parts.push(bakeFlatColors(slit, 0x37e0ff, { rim: false }));
+  }
+  const geom = mergeGeoms(parts);
+  const count = theme.roadsideCount ?? 300;
+  const mesh = new THREE.InstancedMesh(geom,
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+  const f = makeFrame();
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const p = new THREE.Vector3();
+  const sc = new THREE.Vector3();
+  const Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < count; i++) {
+    let placed = false;
+    for (let attempt = 0; attempt < 4 && !placed; attempt++) {
+      const s = rng() * spline.length;
+      spline.frameAt(s, f);
+      const side = rng() < 0.5 ? -1 : 1;
+      const dist = f.width + 3 + rng() * 24;
+      const rx = f.R.x, rz = f.R.z;
+      const rl = Math.hypot(rx, rz) || 1;
+      const x = f.pos.x + (rx / rl) * side * dist;
+      const z = f.pos.z + (rz / rl) * side * dist;
+      if (!clearOfTrack(spline, x, z, 2.5)) continue;   // never on another pass of the road
+      p.set(x, groundY + 0.02, z);
+      // Street kit runs parallel with the road it guards; nature just grows.
+      const yaw = style === 'street'
+        ? Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.22
+        : rng() * Math.PI * 2;
+      q.setFromAxisAngle(Y, yaw);
+      const size = style === 'street' ? 0.9 + rng() * 0.4 : 0.8 + rng() * 1.2;
+      sc.setScalar(size);
+      m.compose(p, q, sc);
+      mesh.setMatrixAt(i, m);
+      placed = true;
+    }
+    if (!placed) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); }
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
   return mesh;
 }
