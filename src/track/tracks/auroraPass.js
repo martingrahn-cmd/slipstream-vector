@@ -34,8 +34,8 @@ export const AURORA_PASS = {
     { x: -290, y: 3, z: 60, width: 8 },    // 22 ice chicane left — PINCH
     { x: -220, y: 2, z: -10, width: 8 },   // 23 ice chicane right — PINCH
     { x: -150, y: 2, z: 60, width: 12 },   // 24 back toward the lake
-    { x: -120, y: 2, z: 180, width: 14 },  // 25 onto the ice
-    { x: -60, y: 2, z: 260, width: 16 },   // 26 wide run home
+    { x: -110, y: 2, z: 220, width: 14 },  // 25 onto the ice
+    { x: -45, y: 2, z: 370, width: 16 },   // 26 overshoot — sweep down onto the line
   ],
   boostPads: [
     { cp: 0.6, d: 4 },    // lake risk line: a chain by the right wall

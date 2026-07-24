@@ -34,9 +34,10 @@ export const DUNE_DRIFT = {
     { x: -350, y: 3, z: -60, width: 18 },  // 22 lower sweep back
     { x: -280, y: 2, z: -140, width: 18 }, // 23 SPLIT 2 — the desert fork
     { x: -180, y: 2, z: -160, width: 19 }, // 24 fork straight
-    { x: -90, y: 2, z: -120, width: 18 },  // 25 merge, curving home
-    { x: -30, y: 2, z: -20, width: 17 },   // 26
-    { x: -10, y: 2, z: 150, width: 18 },   // 27 the run to the line
+    { x: -90, y: 2, z: -100, width: 18 },  // 25 merge, curving home
+    { x: -80, y: 2, z: 60, width: 17 },    // 26 running north WEST of the straight
+    { x: -60, y: 2, z: 220, width: 17 },   // 27 |
+    { x: -25, y: 2, z: 400, width: 18 },   // 28 overshoot — sweep down onto the line
   ],
   boostPads: [
     { cp: 1.2, d: -4 },   // front-straight chain by the left wall
@@ -50,14 +51,14 @@ export const DUNE_DRIFT = {
     { cp: 21.3, d: 0 },   // corkscrew rollout
     { cp: 23.2, d: -8 },  // SPLIT 2 fast lane
     { cp: 23.9, d: -8 },
-    { cp: 26.5, d: 0 },   // run home
+    { cp: 27.5, d: 0 },   // run home
   ],
   weaponPads: [
     { cp: 3.3, d: 3 },
     { cp: 7.5, d: -3 },
     { cp: 12.5, d: 3 },
     { cp: 18.8, d: -3 },
-    { cp: 26.3, d: 3 },
+    { cp: 27.2, d: 3 },
   ],
   splits: [
     { from: 8.8, to: 11.2, gap: 4.5, fast: 1 },   // back-straight rock outcrop

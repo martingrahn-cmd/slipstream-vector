@@ -32,10 +32,10 @@ export const BREAKER_BAY = {
     { x: 260, y: 3, z: -260, width: 10 },  // 20 harbour end
     { x: 180, y: 2, z: -310, width: 7 },   // 21 harbour hairpin — TIGHT
     { x: 100, y: 2, z: -260, width: 9 },   // 22 exit
-    { x: 60, y: 2, z: -150, width: 11 },   // 23 back along the shore
-    { x: 40, y: 2, z: -30, width: 12 },    // 24
-    { x: 30, y: 2, z: 90, width: 13 },     // 25 shore straight
-    { x: 15, y: 2, z: 190, width: 14 },    // 26 final approach
+    { x: 85, y: 2, z: -160, width: 11 },   // 23 back along the shore, EAST of the pier
+    { x: 75, y: 2, z: -20, width: 12 },    // 24 |
+    { x: 65, y: 2, z: 140, width: 12 },    // 25 shore straight
+    { x: 45, y: 2, z: 330, width: 14 },    // 26 overshoot — sweep down onto the line
   ],
   boostPads: [
     { cp: 0.6, d: -4 },   // boardwalk chain
