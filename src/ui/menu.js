@@ -174,13 +174,22 @@ export function bar(n) {
 }
 export function hex(c) { return c.toString(16).padStart(6, '0'); }
 
+// The dossier canvases draw into a fixed high-res backing store and are scaled
+// down by CSS — sharp on any display, and immune to window resizes.
+// Feature colours match the .track-facts tags AND the in-game pad language:
+// boost cyan, weapon gold, loop magenta, jump amber, split green.
+const MAP_W = 560, MAP_H = 470;
+const PROF_W = 1180, PROF_H = 250;
+const C_BOOST = '#00f0ff', C_WEAPON = '#ffb13d', C_JUMP = '#ffd23f', C_SPLIT = '#51ffae';
+
+// ROUTE MAP: the lap outline with the pads and hazards marked, a start gate and
+// a direction chevron — the circuit at a glance instead of a bare loop of line.
 export function drawThumb(canvas, spline) {
-  const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 206, H = 150;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+  const W = MAP_W, H = MAP_H;
+  canvas.width = W; canvas.height = H;
+  canvas.style.removeProperty('width'); canvas.style.removeProperty('height');
   const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (let i = 0; i < spline.n; i++) {
@@ -188,33 +197,82 @@ export function drawThumb(canvas, spline) {
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
   }
-  const pad = 12;
+  const pad = 24;
   const sc = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxZ - minZ));
   const ox = (W - (maxX - minX) * sc) / 2, oz = (H - (maxZ - minZ) * sc) / 2;
-  ctx.beginPath();
+  const PX = (s) => {
+    const i = Math.min(spline.n - 1, Math.max(0, Math.floor(s / spline.step)));
+    return [ox + (spline.pos[i * 3] - minX) * sc, oz + (spline.pos[i * 3 + 2] - minZ) * sc];
+  };
+  // faint grid wash so the map reads as an instrument, not a floating squiggle
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.055)'; ctx.lineWidth = 1;
+  for (let g = 0; g < W; g += 40) { ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, H); ctx.stroke(); }
+  for (let g = 0; g < H; g += 40) { ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(W, g); ctx.stroke(); }
+
   const step = Math.max(1, Math.round(6 / spline.step));
-  for (let i = 0; i <= spline.n; i += step) {
-    const j = (i % spline.n) * 3;
-    const x = ox + (spline.pos[j] - minX) * sc;
-    const y = oz + (spline.pos[j + 2] - minZ) * sc;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  const trace = () => {
+    ctx.beginPath();
+    for (let i = 0; i <= spline.n; i += step) {
+      const j = (i % spline.n) * 3;
+      const x = ox + (spline.pos[j] - minX) * sc, y = oz + (spline.pos[j + 2] - minZ) * sc;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  };
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  trace(); ctx.strokeStyle = 'rgba(24, 10, 58, 0.95)'; ctx.lineWidth = 13; ctx.stroke();
+  trace(); ctx.strokeStyle = 'rgba(0, 240, 255, 0.18)'; ctx.lineWidth = 9; ctx.stroke();
+  trace(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.4;
+  ctx.shadowColor = 'rgba(0, 240, 255, 0.9)'; ctx.shadowBlur = 12; ctx.stroke(); ctx.shadowBlur = 0;
+
+  // SPLIT stretches: overdraw the forked section in the split colour.
+  for (const sp of spline.splits || []) {
+    ctx.beginPath();
+    for (let d = 0; d <= sp.span; d += 6) { const [x, y] = PX((sp.s0 + d) % spline.length); if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.strokeStyle = C_SPLIT; ctx.lineWidth = 3.6;
+    ctx.shadowColor = C_SPLIT; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
   }
-  ctx.closePath();
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(30, 14, 70, 0.9)'; ctx.lineWidth = 5; ctx.stroke();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8;
-  ctx.shadowColor = 'rgba(0, 240, 255, 0.9)'; ctx.shadowBlur = 6; ctx.stroke(); ctx.shadowBlur = 0;
-  const tx = ox + (spline.pos[0] - minX) * sc, ty = oz + (spline.pos[2] - minZ) * sc;
-  ctx.fillStyle = '#ffd23f'; ctx.fillRect(tx - 2.5, ty - 2.5, 5, 5);
+  // JUMP gaps: break the line and mark the void.
+  for (const g of spline.gaps || []) {
+    ctx.beginPath();
+    for (let d = 0; d <= g.end - g.start; d += 3) { const [x, y] = PX(g.start + d); if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    ctx.strokeStyle = 'rgba(24, 10, 58, 1)'; ctx.lineWidth = 7; ctx.stroke();
+    const [jx, jy] = PX((g.start + g.end) / 2);
+    ctx.fillStyle = C_JUMP; ctx.beginPath(); ctx.arc(jx, jy, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  // Pads: boost cyan, weapon gold — the same language as the road decals.
+  const dot = (list, col, r) => {
+    ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 8;
+    for (const p of list || []) { const [x, y] = PX(p.s); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.shadowBlur = 0;
+  };
+  dot(spline.pads, C_BOOST, 3.6);
+  dot(spline.weaponPads, C_WEAPON, 4.2);
+
+  // START GATE: a bar across the road plus a chevron showing which way it runs.
+  const i0 = 0, tx = spline.tan[0], tz = spline.tan[2];
+  const tl = Math.hypot(tx, tz) || 1;
+  const [sx, sy] = PX(0);
+  const nx = -(tz / tl), ny = (tx / tl);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 4.5;
+  ctx.beginPath(); ctx.moveTo(sx - nx * 11, sy - ny * 11); ctx.lineTo(sx + nx * 11, sy + ny * 11); ctx.stroke();
+  ctx.fillStyle = C_JUMP;
+  const hx = tx / tl, hy = tz / tl;
+  ctx.beginPath();
+  ctx.moveTo(sx + hx * 22, sy + hy * 22);
+  ctx.lineTo(sx + hx * 8 - nx * 7, sy + hy * 8 - ny * 7);
+  ctx.lineTo(sx + hx * 8 + nx * 7, sy + hy * 8 + ny * 7);
+  ctx.closePath(); ctx.fill();
+  void i0;
 }
 
+// ELEVATION TRACE: the lap's climb profile with the hazards banded onto it.
 export function drawProfile(canvas, spline) {
-  const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 432, H = 92;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+  const W = PROF_W, H = PROF_H;
+  canvas.width = W; canvas.height = H;
+  canvas.style.removeProperty('width'); canvas.style.removeProperty('height');
   const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
   let minY = Infinity, maxY = -Infinity;
   for (let i = 0; i < spline.n; i++) {
@@ -222,18 +280,46 @@ export function drawProfile(canvas, spline) {
     if (y < minY) minY = y; if (y > maxY) maxY = y;
   }
   const span = Math.max(maxY - minY, 10);
-  const px = (i) => 4 + (i / spline.n) * (W - 8);
-  const py = (y) => H - 7 - ((y - minY) / span) * (H - 14);
-  ctx.beginPath(); ctx.moveTo(px(0), H - 4);
+  const px = (i) => 10 + (i / spline.n) * (W - 20);
+  const pxs = (s) => px((s / spline.length) * spline.n);
+  const py = (y) => H - 18 - ((y - minY) / span) * (H - 40);
+  // baseline rules — a sense of scale behind the trace
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)'; ctx.lineWidth = 1;
+  for (let k = 0; k <= 3; k++) { const y = py(minY + (span * k) / 3); ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(W - 10, y); ctx.stroke(); }
+  // JUMP gaps as amber bands behind the trace
+  for (const g of spline.gaps || []) {
+    ctx.fillStyle = 'rgba(255, 210, 63, 0.16)';
+    ctx.fillRect(pxs(g.start), 8, Math.max(3, pxs(g.end) - pxs(g.start)), H - 26);
+  }
+  // SPLIT stretches as green bands
+  for (const sp of spline.splits || []) {
+    ctx.fillStyle = 'rgba(81, 255, 174, 0.12)';
+    const x0 = pxs(sp.s0), w = Math.max(3, (sp.span / spline.length) * (W - 20));
+    ctx.fillRect(x0, 8, w, H - 26);
+  }
   const step = Math.max(1, Math.round(8 / spline.step));
+  ctx.beginPath(); ctx.moveTo(px(0), H - 10);
   for (let i = 0; i <= spline.n; i += step) ctx.lineTo(px(Math.min(i, spline.n)), py(spline.pos[(i % spline.n) * 3 + 1]));
-  ctx.lineTo(px(spline.n), H - 4); ctx.closePath();
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.16)'; ctx.fill();
+  ctx.lineTo(px(spline.n), H - 10); ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0, 240, 255, 0.30)');
+  grad.addColorStop(1, 'rgba(0, 240, 255, 0.03)');
+  ctx.fillStyle = grad; ctx.fill();
   ctx.beginPath();
   for (let i = 0; i <= spline.n; i += step) {
     const x = px(Math.min(i, spline.n)), y = py(spline.pos[(i % spline.n) * 3 + 1]);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
-  ctx.strokeStyle = '#7df9ff'; ctx.lineWidth = 1.6;
-  ctx.shadowColor = 'rgba(0, 240, 255, 0.8)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#7df9ff'; ctx.lineWidth = 3;
+  ctx.shadowColor = 'rgba(0, 240, 255, 0.8)'; ctx.shadowBlur = 9; ctx.stroke(); ctx.shadowBlur = 0;
+  // Pad ticks along the foot, in the road's own colours.
+  const tick = (list, col, h) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 2.4;
+    for (const p of list || []) { const x = pxs(p.s); ctx.beginPath(); ctx.moveTo(x, H - 10); ctx.lineTo(x, H - 10 - h); ctx.stroke(); }
+  };
+  tick(spline.pads, C_BOOST, 9);
+  tick(spline.weaponPads, C_WEAPON, 13);
+  // START/FINISH tick, matching the map's gate.
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(px(0), 8); ctx.lineTo(px(0), H - 10); ctx.stroke();
 }

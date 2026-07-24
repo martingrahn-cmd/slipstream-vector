@@ -19,6 +19,12 @@ function radialTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+// Display-bay geometry constants — the hull rests against these.
+const PED_TOP = -0.35;  // top surface of the pedestal cylinder
+const HOVER = 0.14;     // anti-grav gap between hull and dais
+const BOB = 0.05;       // idle bob amplitude
+const ROLL = 0.045;     // idle roll amplitude (rad) — tips a wingtip down
+
 export class Podium {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -139,6 +145,20 @@ export class Podium {
     }
     this.ship = buildShipMesh(variant);
     this.scene.add(this.ship);
+    // HOVER the hull over the dais instead of parking every archetype at one
+    // fixed height: hulls are authored in ship space with keels and engine
+    // bells BELOW y=0 (the twinboom's reach 0.52 down), so a shared height sank
+    // the heavy teams into the pedestal. Measure this hull and float it a fixed
+    // gap above the dais top — accounting for the deepest point of the idle
+    // cycle, since the bob dips it and the roll tips a wingtip down. Every ship
+    // now floats identically, which is what an anti-grav racer should do.
+    this.ship.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(this.ship);
+    const halfSpan = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
+    const dip = BOB + Math.sin(ROLL) * halfSpan;
+    this.baseY = PED_TOP + HOVER + dip - box.min.y;
+    // Frame the hull we actually have: aim at its middle, not a fixed point.
+    this.camera.lookAt(0, this.baseY + (box.max.y - box.min.y) * 0.35, 0);
     // Tint the bay to the livery accent, and kick off a scan sweep.
     const accent = variant && variant.accent != null ? variant.accent : 0x00f0ff;
     for (const m of this.accentMats) m.color.setHex(accent);
@@ -149,8 +169,8 @@ export class Podium {
     if (!this.ship) return;
     this.spin += dt * 0.55;
     this.ship.rotation.y = this.spin;
-    this.ship.rotation.z = Math.sin(this.spin * 0.6) * 0.045;
-    this.ship.position.y = -0.1 + Math.sin(this.spin * 1.2) * 0.05;
+    this.ship.rotation.z = Math.sin(this.spin * 0.6) * ROLL;
+    this.ship.position.y = (this.baseY ?? 0) + Math.sin(this.spin * 1.2) * BOB;
 
     // Scan sweep up the hull, then idle.
     if (this.scanT < 1.4) {

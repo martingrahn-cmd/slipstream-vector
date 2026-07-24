@@ -95,13 +95,24 @@ content rows in the middle column; Backspace returns you to the rail. A top
 status rail shows the current section + live telemetry, and a huge ghost numeral
 sits behind the content. Every section slides in with its own boot label.
 
-The **Garage** is the showpiece: a wide neon display bay where your hull turns
-on a lit pedestal between sensor pillars and corner ticks, team identity to the
-left, livery / pilot to the right. The race sections (Championship / Single /
-Time) put the circuit previews — environment snapshot, top-down outline,
-elevation profile — in a framed viewport beside the settings, and a big **GO**
-button (pulsing when focused) launches the race. The 3D ship viewer and the
-preview canvases are shared and **reparented** into whichever section is active.
+The **Garage** is the showpiece: a wide neon display bay where your hull hovers
+over a lit pedestal between sensor pillars and corner ticks, team identity to
+the left, livery / pilot to the right. (Each hull is measured on load and
+floated a fixed gap above the dais, so the heavy teams' engine bells clear it
+the same way the light ones do.)
+
+The race sections (Championship / Single / Time) put a full **CIRCUIT DOSSIER**
+beside the settings: a wide cinematic hero shot of the circuit under a
+broadcast-style scanline overlay, a **route map** marking the boost and weapon
+pads in the road's own colours plus the split lanes, jump gaps, start gate and
+direction of travel, an **elevation trace** with the hazards banded onto it and
+pad ticks along its foot, and a **stat block** — world, length, laps, pad
+count, your best lap and best race, race distance, and the stunt tags
+(LOOP / JUMP / CORKSCREW / SPLIT). A big **GO** button (pulsing when focused)
+launches the race. The 3D ship viewer and the dossier canvases are shared and
+**reparented** into whichever section is active; the canvases carry a fixed
+high-res backing store and are scaled by CSS, so the panel stays sharp and
+never needs a re-render on resize.
 
 **Options** has its own section: separate **MUSIC**, **SFX** and **VOICE**
 (rival banter VO) volume bars,

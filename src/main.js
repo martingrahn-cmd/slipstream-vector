@@ -84,12 +84,16 @@ const podium = new Podium(document.getElementById('podium'));
 const podiumScene = new PodiumScene(document.getElementById('podium-scene'));
 const postfx = new PostFX(renderer, scene, camera);
 
-// Environment snapshot for the track card: rendered from a showcase point in
-// the real world, supersampled 2x into the menu canvas.
-const ENV_W = 432, ENV_H = 224;
-const envRT = new THREE.WebGLRenderTarget(ENV_W * 2, ENV_H * 2);
-const envCam = new THREE.PerspectiveCamera(56, ENV_W / ENV_H, 0.5, 2200);
-const envPixels = new Uint8Array(ENV_W * 2 * ENV_H * 2 * 4);
+// HERO SHOT for the circuit dossier: rendered from a showcase point in the
+// real world at a fixed high resolution, then scaled to fit by CSS — so the
+// panel is resolution-independent and a window resize never needs a recapture.
+// Framed like a broadcast beauty pass: a long lens down near the deck, aimed
+// along the road so the world stacks up behind it (the old wide 13m-up angle
+// read like a map, not a place).
+const ENV_W = 960, ENV_H = 500;
+const envRT = new THREE.WebGLRenderTarget(ENV_W, ENV_H, { samples: 4 });
+const envCam = new THREE.PerspectiveCamera(34, ENV_W / ENV_H, 0.5, 2200);
+const envPixels = new Uint8Array(ENV_W * ENV_H * 4);
 const _envF = makeFrame();
 
 function captureEnvThumb() {
@@ -105,33 +109,27 @@ function captureEnvThumb() {
   }
   const f = spline.frameAt(bestS, _envF);
   envCam.position.copy(f.pos)
-    .addScaledVector(f.T, -34)
-    .addScaledVector(f.U, 13)
-    .addScaledVector(f.R, 17);
-  envCam.lookAt(f.pos.x + f.T.x * 30, f.pos.y + 2, f.pos.z + f.T.z * 30);
+    .addScaledVector(f.T, -46)   // further back — the long lens compresses it
+    .addScaledVector(f.U, 4.2)   // low, just above the deck
+    .addScaledVector(f.R, 9);    // slightly off the centreline for depth
+  envCam.lookAt(f.pos.x + f.T.x * 70, f.pos.y + 3.5, f.pos.z + f.T.z * 70);
   renderer.setRenderTarget(envRT);
   renderer.render(scene, envCam);
   renderer.setRenderTarget(null);
-  renderer.readRenderTargetPixels(envRT, 0, 0, ENV_W * 2, ENV_H * 2, envPixels);
+  renderer.readRenderTargetPixels(envRT, 0, 0, ENV_W, ENV_H, envPixels);
 
   const canvas = document.getElementById('env-thumb');
   canvas.width = ENV_W; canvas.height = ENV_H;
-  canvas.style.width = `${ENV_W}px`; canvas.style.height = `${ENV_H}px`;
+  canvas.style.removeProperty('width');   // CSS owns the display size now
+  canvas.style.removeProperty('height');
   const ctx = canvas.getContext('2d');
-  // Flip Y via a temp canvas at full res, then downscale (cheap 2x AA).
-  const tmp = captureEnvThumb._tmp || (captureEnvThumb._tmp = document.createElement('canvas'));
-  tmp.width = ENV_W * 2; tmp.height = ENV_H * 2;
-  const tctx = tmp.getContext('2d');
-  const img = tctx.createImageData(ENV_W * 2, ENV_H * 2);
-  const rowBytes = ENV_W * 2 * 4;
-  for (let y = 0; y < ENV_H * 2; y++) {
-    img.data.set(
-      envPixels.subarray((ENV_H * 2 - 1 - y) * rowBytes, (ENV_H * 2 - y) * rowBytes),
-      y * rowBytes,
-    );
+  // GL reads bottom-up; flip into the canvas row by row.
+  const img = ctx.createImageData(ENV_W, ENV_H);
+  const rowBytes = ENV_W * 4;
+  for (let y = 0; y < ENV_H; y++) {
+    img.data.set(envPixels.subarray((ENV_H - 1 - y) * rowBytes, (ENV_H - y) * rowBytes), y * rowBytes);
   }
-  tctx.putImageData(img, 0, 0);
-  ctx.drawImage(tmp, 0, 0, ENV_W, ENV_H);
+  ctx.putImageData(img, 0, 0);
 }
 
 // --------------------------------------------------- world (per track)
@@ -601,29 +599,54 @@ function updateMenu() {
   drawThumb(document.getElementById('menu-thumb'), spline);
   drawProfile(document.getElementById('menu-profile'), spline);
 
-  // Track-facts strip: circuit length + the stunts/splits it carries, so the
-  // preview column says something instead of sitting empty.
-  const facts = trackFactsHTML(trackDef, spline);
-  setHTML('single-facts', facts);
-  setHTML('tt-facts', facts);
-  // Championship facts follow the cup + round the ladder is showing: a saved
-  // cup's next round, else round 1 of the selected cup.
+  // CIRCUIT DOSSIER: world, vitals, your times and the stunt tags — the
+  // preview column reads as a briefing instead of sitting mostly empty.
+  const dossier = dossierHTML(trackDef, spline);
+  setHTML('single-dossier', dossier);
+  setHTML('tt-dossier', dossier);
+  // Championship dossier follows the cup + round the ladder is showing: a
+  // saved cup's next round, else round 1 of the selected cup.
   const savedCup = readSavedChamp();
-  const cupTracks = (CUPS[savedCup ? (savedCup.cup ?? 0) : selection.cup] || CUPS[0]).tracks;
-  const champTrackDef = TRACKS[cupTracks[savedCup ? savedCup.done : 0]] || trackDef;
-  setHTML('champ-facts', trackFactsHTML(champTrackDef, null));
+  const cupIdx = savedCup ? (savedCup.cup ?? 0) : selection.cup;
+  const cupTracks = (CUPS[cupIdx] || CUPS[0]).tracks;
+  const champRoundIdx = savedCup ? savedCup.done : 0;
+  const champTrackDef = TRACKS[cupTracks[champRoundIdx]] || trackDef;
+  setHTML('champ-dossier', dossierHTML(champTrackDef, champTrackDef === trackDef ? spline : null, {
+    label: `ROUND ${champRoundIdx + 1}/${cupTracks.length}`, map: false,
+  }));
 }
 
-// Feature tags + length for a track — reads the authored features[] + splits[].
-function trackFactsHTML(td, spline) {
+// Feature tags for a track — reads the authored features[] + splits[].
+function trackTagsHTML(td) {
   const tags = [];
   const feats = td.features || [];
   if (feats.some((f) => f.type === 'loop')) tags.push('<span class="tf-tag loop">LOOP</span>');
   if (feats.some((f) => f.type === 'jump')) tags.push('<span class="tf-tag jump">JUMP</span>');
   if (feats.some((f) => f.type === 'corkscrew')) tags.push('<span class="tf-tag cork">CORKSCREW</span>');
   if ((td.splits || []).length) tags.push(`<span class="tf-tag split">${td.splits.length > 1 ? td.splits.length + '× ' : ''}SPLIT</span>`);
-  const len = spline ? `${(spline.length / 1000).toFixed(1)} KM` : '';
-  return (len ? `<span class="tf-len">${len}</span>` : '') + tags.join('');
+  return tags.join('');
+}
+
+// The dossier body: which world you're racing in, the circuit's vitals, the
+// times YOU hold on it, and what it throws at you. `sp` is the live spline when
+// the card is showing the loaded track (length is only known from the spline).
+function dossierHTML(td, sp, opts = {}) {
+  const world = (THEMES[td.world] && THEMES[td.world].name) || '';
+  const idx = TRACKS.indexOf(td);
+  const label = opts.label || (idx >= 0 ? `CIRCUIT ${String(idx + 1).padStart(2, '0')}/${TRACKS.length}` : '');
+  const lap = bestLap(td.id), race = bestTotal(td.id);
+  const laps = td.laps ?? TOTAL_LAPS;
+  const cell = (v, l) => `<div class="dos-cell"><b>${v}</b><span>${l}</span></div>`;
+  const time = (l, v) => `<div class="dos-time${Number.isFinite(v) ? '' : ' none'}"><i>${l}</i><b>${Number.isFinite(v) ? fmt(v) : '—:——.———'}</b></div>`;
+  const dist = sp ? `<div class="dos-time"><i>RACE DISTANCE</i><b>${((sp.length * laps) / 1000).toFixed(1)} KM</b></div>` : '';
+  return `<div class="dos-head"><span class="dos-world">${world}</span><span class="dos-idx">${label}</span></div>`
+    + `<div class="dos-grid">${cell(sp ? (sp.length / 1000).toFixed(1) : '—', 'KM')}${cell(laps, 'LAPS')}${cell(sp ? sp.pads.length : '—', 'PADS')}</div>`
+    + `<div class="dos-times">${time('BEST LAP', lap)}${time('BEST RACE', race)}${dist}</div>`
+    + `<div class="track-facts">${trackTagsHTML(td)}</div>`
+    // Legend: teaches the map's colour language, which is the road's language.
+    // Only where the map is actually shown (championship has the ladder instead).
+    + (opts.map === false ? '' : '<div class="dos-legend"><span class="lg boost">BOOST</span>'
+      + '<span class="lg weapon">WEAPON</span><span class="lg gate">START</span></div>');
 }
 
 // ------------------------------------------------------ result/standing views

@@ -950,16 +950,60 @@ body.reduced-motion .go-btn.focus { animation: none; }
 .vp-frame::before, .vp-frame::after { content: ''; position: absolute; width: 14px; height: 14px; border: 2px solid var(--cyan); opacity: 0.7; }
 .vp-frame::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
 .vp-frame::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
-/* Hero env snapshot spans the top; the top-down outline + elevation trace tuck
-   beneath it (env is 432 wide, outline 206 + profile 432 wrap under it). */
-.vp-slot { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: center; }
-.vp-slot canvas { display: block; }
-.vp-slot canvas#env-thumb { border: 1px solid rgba(0, 240, 255, 0.25); box-shadow: 0 0 24px -8px rgba(0, 240, 255, 0.5); }
+/* CIRCUIT DOSSIER — the preview column is a briefing document, not a thumbnail:
+   a wide cinematic hero shot across the top, the route map and the stat block
+   side by side beneath it, and the elevation trace spanning the foot. Canvases
+   carry a fixed high-res backing store and are scaled by CSS, so the panel is
+   resolution-independent and never needs a re-capture on resize. */
+/* (the garage's stage-slot keeps its own free-form layout — the 3D bay canvas
+   sizes itself through the renderer, so the dossier grid must not touch it) */
+.vp-slot:not(.stage-slot) { display: grid; grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
+  grid-template-areas: "hero hero" "map dossier" "prof prof"; gap: 10px; align-items: start; }
+.vp-slot:not(.stage-slot) canvas { display: block; width: 100%; height: auto; }
+.vp-slot:not(.stage-slot) canvas#env-thumb { grid-area: hero; border: 1px solid rgba(0, 240, 255, 0.25); box-shadow: 0 0 30px -10px rgba(0, 240, 255, 0.55); }
+.vp-slot:not(.stage-slot) canvas#menu-thumb { grid-area: map; }
+.vp-slot:not(.stage-slot) canvas#menu-profile { grid-area: prof; }
+.vp-dossier { grid-area: dossier; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Broadcast overlay on the hero shot: scanlines, a corner vignette and a
+   recording chip, so the survey reads as a live feed off the circuit rather
+   than a flat screenshot. Purely decorative — never eats a click. */
+.vp-scan { grid-area: hero; position: relative; align-self: stretch; pointer-events: none; overflow: hidden;
+  background: repeating-linear-gradient(0deg, rgba(4, 2, 14, 0.20) 0 1px, transparent 1px 3px),
+    radial-gradient(120% 130% at 50% 45%, transparent 55%, rgba(4, 2, 14, 0.55) 100%); }
+.vp-tag { position: absolute; left: 10px; top: 9px; display: flex; align-items: center; gap: 6px;
+  font-family: 'Rajdhani'; font-weight: 700; font-size: 9.5px; letter-spacing: 0.2em; color: rgba(220, 240, 255, 0.85);
+  background: rgba(6, 3, 18, 0.55); border-left: 2px solid var(--cyan); padding: 3px 9px 3px 7px; }
+.vp-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #ff4d6a; box-shadow: 0 0 8px #ff4d6a; animation: pulse 1.6s ease-in-out infinite; }
+body.reduced-motion .vp-tag::before { animation: none; }
+/* Championship shows the hero + dossier only (the ladder is the route map). */
+.section[data-sec="championship"] .vp-slot { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "dossier"; }
 .vp-note { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.1em; font-size: 12px; color: var(--cyan); margin-top: 10px; text-align: center; }
 
-/* Track facts: a feature-tag strip under the preview — fills the space and
-   tells you what the circuit throws at you before you commit. */
-.track-facts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+/* Dossier internals: a world/index header, a stat grid, your times, tags. */
+.dos-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(0, 240, 255, 0.22); padding-bottom: 5px; }
+.dos-world { font-family: 'Orbitron'; font-weight: 800; font-size: 13px; letter-spacing: 0.14em; color: #fff; text-shadow: 0 0 12px rgba(0, 240, 255, 0.5); }
+.dos-idx { font-family: 'Rajdhani'; font-weight: 700; font-size: 10px; letter-spacing: 0.16em; color: rgba(159, 216, 255, 0.55); white-space: nowrap; }
+.dos-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dos-cell { background: linear-gradient(160deg, rgba(0, 240, 255, 0.09), rgba(0, 240, 255, 0.02)); border: 1px solid rgba(0, 240, 255, 0.16); padding: 6px 8px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%); }
+.dos-cell b { display: block; font-family: 'Orbitron'; font-weight: 800; font-size: 17px; line-height: 1.05; color: #fff; }
+.dos-cell span { display: block; font-family: 'Rajdhani'; font-weight: 700; font-size: 9px; letter-spacing: 0.16em; color: rgba(159, 216, 255, 0.6); margin-top: 2px; }
+.dos-times { display: flex; flex-direction: column; gap: 4px; }
+.dos-time { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-family: 'Rajdhani'; font-weight: 700; font-size: 11.5px; letter-spacing: 0.1em; }
+.dos-time i { font-style: normal; color: rgba(159, 216, 255, 0.6); }
+.dos-time b { font-family: 'Orbitron'; font-size: 13px; color: var(--hot); text-shadow: 0 0 10px rgba(255, 210, 63, 0.4); }
+.dos-time.none b { color: rgba(159, 216, 255, 0.35); text-shadow: none; }
+/* Map legend — the dots on the route map are the decals on the road. */
+.dos-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: auto; padding-top: 4px; }
+.dos-legend .lg { display: flex; align-items: center; gap: 5px; font-family: 'Rajdhani'; font-weight: 700; font-size: 9.5px; letter-spacing: 0.14em; color: rgba(159, 216, 255, 0.6); }
+.dos-legend .lg::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--lg, #fff); box-shadow: 0 0 7px var(--lg, #fff); }
+.dos-legend .lg.boost { --lg: #00f0ff; }
+.dos-legend .lg.weapon { --lg: #ffb13d; }
+.dos-legend .lg.gate { --lg: #fff; }
+.dos-legend .lg.gate::before { border-radius: 0; width: 3px; height: 9px; }
+
+/* Track facts: the feature-tag strip — what the circuit throws at you. */
+.track-facts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .track-facts .tf-len { font-family: 'Orbitron'; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; color: #fff; margin-right: 4px; }
 .track-facts .tf-tag { font-family: 'Rajdhani'; font-weight: 700; font-size: 10.5px; letter-spacing: 0.12em; padding: 3px 9px; border: 1px solid var(--pa, rgba(0,240,255,0.5)); color: var(--pa, var(--cyan)); background: rgba(0, 240, 255, 0.06); }
 .track-facts .tf-tag.loop { --pa: #ff2ec8; }
