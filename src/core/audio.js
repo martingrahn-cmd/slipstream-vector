@@ -27,7 +27,11 @@ export class AudioEngine {
     this._sfxBuf = new Map();     // key -> { buf, norm } (decoded at unlock)
     this._loadSfxManifest();
 
+    // The browser gesture rule: unlock on the FIRST real interaction of either
+    // kind. The whole menu is clickable, so mouse-only players must unlock too
+    // — keydown alone left them in silence until they happened to press a key.
     window.addEventListener('keydown', () => this.unlock());
+    window.addEventListener('pointerdown', () => this.unlock());
 
     juice.on('boost', () => this.boostWhoosh(1));
     juice.on('miniboost', () => this.boostWhoosh(0.55));
@@ -81,6 +85,9 @@ export class AudioEngine {
     this._buildOpponentVoices();
     this._tryMusic();
     this._prefetchSfx();
+    // Whatever was requested pre-unlock starts the moment the gesture lands
+    // (the canplaythrough hook also retries, this covers already-cached files).
+    if (this._wantKey) this.playMusic(this._wantKey);
   }
 
   // A small pool of engine voices reassigned to the nearest opponents each
@@ -719,7 +726,10 @@ export class AudioEngine {
     this.musicBuffers = {};   // decoded AudioBuffers for gapless looping
     this._decoding = {};
     this._loop = null;        // active gapless loop {key, gain, timer, sources}
-    this._wantKey = null;
+    // PRESERVE any track requested before the unlock gesture (playMusic records
+    // it even without a ctx) — wiping it here was how the menu music sometimes
+    // never started: the pre-unlock request was lost and nothing replayed it.
+    this._wantKey = this._wantKey ?? null;
     this.currentMusic = null; // HTMLAudio element currently playing, if any
     // Equal-power crossfade curves (reused for every loop boundary).
     const N = 33;
@@ -730,7 +740,10 @@ export class AudioEngine {
       this._fadeIn[i] = Math.sin(x);
       this._fadeOut[i] = Math.cos(x);
     }
-    for (const key of ['menu', 'sunset', 'coast', 'sprawl', 'frost', 'race']) {
+    // NOTE: no 'race' probe — the optional race.mp3 fallback slot 404'd on
+    // every load for every player once all five real slots were filled. To
+    // bring the fallback back, add 'race' to this list again.
+    for (const key of ['menu', 'sunset', 'coast', 'sprawl', 'frost']) {
       const el = document.createElement('audio');
       el.src = `./assets/music/${key}.mp3`;
       el.loop = true;

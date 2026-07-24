@@ -388,14 +388,15 @@ function setTxt(id, t) { const e = document.getElementById(id); if (e) e.textCon
 function setHTML(id, h) { const e = document.getElementById(id); if (e) e.innerHTML = h; }
 
 // Pilot portrait: initials sit behind, the photo covers them. Drop-in art lives
-// at assets/pilots/<slug>.png OR .jpg — we try png, fall back to jpg, and if both
-// 404 the <img> removes itself so the neon initials show through.
+// at assets/pilots/<slug>.jpg (Juno is the lone .png) — we ask for the RIGHT
+// extension up front so consoles stay clean of probing 404s; if even that
+// 404s the <img> removes itself so the neon initials show through.
 function pilotInitials(name) { return name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2); }
+function pilotExt(slug) { return slug === 'juno-vex' ? 'png' : 'jpg'; }
 function pilotFaceInner(name) {
   const slug = pilotSlug(name);
   return `<span class="face-init">${pilotInitials(name)}</span>`
-    + `<img src="assets/pilots/${slug}.png" alt=""`
-    + ` onerror="if(this.dataset.jpg){this.remove()}else{this.dataset.jpg=1;this.src='assets/pilots/${slug}.jpg'}">`;
+    + `<img src="assets/pilots/${slug}.${pilotExt(slug)}" alt="" onerror="this.remove()">`;
 }
 // "Your entry" loadout card shown on the race-setup screens so the chosen team /
 // pilot / livery is unmistakable before you commit. GARAGE ▸ jumps to the garage.

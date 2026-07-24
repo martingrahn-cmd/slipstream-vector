@@ -169,11 +169,13 @@ export class BanterFeed {
 
   _render({ rival, bucket, line, tag, idx }) {
     const s = rival.slug;
-    // generated expression face -> profile fallback (png then jpg at each step)
-    const img = `<img alt="" src="assets/pilots/${s}-${bucket}.png"`
-      + ` onerror="if(this.dataset.s==='2'){this.remove()}`
-      + `else if(this.dataset.s==='1'){this.dataset.s='2';this.src='assets/pilots/${s}.jpg'}`
-      + `else{this.dataset.s='1';this.src='assets/pilots/${s}-${bucket}.jpg'}">`;
+    // Generated expression face -> profile fallback. Every pilot's art is .jpg
+    // except Juno (.png) — ask for the right extension up front so the console
+    // stays clean of probing 404s.
+    const ext = s === 'juno-vex' ? 'png' : 'jpg';
+    const img = `<img alt="" src="assets/pilots/${s}-${bucket}.${ext}"`
+      + ` onerror="if(this.dataset.s){this.remove()}`
+      + `else{this.dataset.s='1';this.src='assets/pilots/${s}.${ext}'}">`;
     const node = document.createElement('div');
     node.className = 'banter-chip';
     node.style.setProperty('--pa', rival.accent);
