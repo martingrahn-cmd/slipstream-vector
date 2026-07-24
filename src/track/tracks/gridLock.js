@@ -35,8 +35,9 @@ export const GRID_LOCK = {
     { x: 120, y: 2, z: -270, width: 11 },  // 23 back street
     { x: 70, y: 2, z: -200, width: 12 },   // 24 corner 5
     { x: 90, y: 2, z: -60, width: 12 },    // 25 northbound avenue
-    { x: 85, y: 2, z: 140, width: 13 },    // 26 |
-    { x: 30, y: 2, z: 360, width: 14 },    // 27 overshoot — sweep down onto the line
+    { x: 95, y: 2, z: 150, width: 13 },    // 26 | climbing past the line
+    { x: 70, y: 2, z: 330, width: 13 },    // 27 wide arc north of it
+    { x: 25, y: 2, z: 385, width: 14 },    // 28 monotonic fall onto Main Street
   ],
   boostPads: [
     { cp: 1.0, d: -4 },   // Main Street chain

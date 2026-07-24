@@ -34,10 +34,10 @@ export const DUNE_DRIFT = {
     { x: -350, y: 3, z: -60, width: 18 },  // 22 lower sweep back
     { x: -280, y: 2, z: -140, width: 18 }, // 23 SPLIT 2 — the desert fork
     { x: -180, y: 2, z: -160, width: 19 }, // 24 fork straight
-    { x: -90, y: 2, z: -100, width: 18 },  // 25 merge, curving home
-    { x: -80, y: 2, z: 60, width: 17 },    // 26 running north WEST of the straight
-    { x: -60, y: 2, z: 220, width: 17 },   // 27 |
-    { x: -25, y: 2, z: 400, width: 18 },   // 28 overshoot — sweep down onto the line
+    { x: -95, y: 2, z: -100, width: 18 },  // 25 merge, curving home
+    { x: -100, y: 2, z: 100, width: 17 },  // 26 the west run, clear of the straight
+    { x: -90, y: 2, z: 300, width: 17 },   // 27 | climbing past the line
+    { x: -45, y: 2, z: 430, width: 18 },   // 28 wide arc, monotonic fall onto the grid
   ],
   boostPads: [
     { cp: 1.2, d: -4 },   // front-straight chain by the left wall

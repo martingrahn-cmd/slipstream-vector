@@ -895,11 +895,14 @@ body.reduced-motion .rail-caret, body.reduced-motion .navitem { transition: none
 /* ---- bay + sections ---- */
 #bay { grid-row: 2; grid-column: 2 / -1; position: relative; }
 .ghostnum { position: absolute; right: 1%; top: -6%; font-family: 'Orbitron'; font-weight: 800; font-size: 190px; line-height: 1; color: rgba(0, 240, 255, 0.06); pointer-events: none; z-index: 0; }
-.section { display: none; position: relative; z-index: 1; height: 100%; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); column-gap: clamp(16px, 2vw, 36px); }
+.section { display: none; position: relative; z-index: 1; height: 100%; grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.15fr); column-gap: clamp(20px, 3vw, 56px); align-items: center; }
 .section.active { display: grid; }
 .section.garage.active { grid-template-columns: 210px minmax(0, 1fr) 300px; align-items: stretch; }
 .section.garage .stage { min-width: 0; }
-.col { min-width: 0; display: flex; flex-direction: column; gap: 12px; align-content: start; padding-top: 4px; }
+.col { min-width: 0; display: flex; flex-direction: column; gap: 12px; align-content: center; }
+/* Race sections: the setup column centres in its half, the preview column
+   grows to fill so the hero snapshot + facts own the dead space. */
+.section:not(.garage) .col.mid { justify-content: center; }
 .col.right, .col.gright { gap: 10px; }
 .col.right.wide { grid-column: auto; }
 
@@ -947,9 +950,22 @@ body.reduced-motion .go-btn.focus { animation: none; }
 .vp-frame::before, .vp-frame::after { content: ''; position: absolute; width: 14px; height: 14px; border: 2px solid var(--cyan); opacity: 0.7; }
 .vp-frame::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
 .vp-frame::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
-.vp-slot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+/* Hero env snapshot spans the top; the top-down outline + elevation trace tuck
+   beneath it (env is 432 wide, outline 206 + profile 432 wrap under it). */
+.vp-slot { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; justify-content: center; }
 .vp-slot canvas { display: block; }
-.vp-note { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.1em; font-size: 12px; color: var(--cyan); margin-top: 8px; text-align: center; }
+.vp-slot canvas#env-thumb { border: 1px solid rgba(0, 240, 255, 0.25); box-shadow: 0 0 24px -8px rgba(0, 240, 255, 0.5); }
+.vp-note { font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.1em; font-size: 12px; color: var(--cyan); margin-top: 10px; text-align: center; }
+
+/* Track facts: a feature-tag strip under the preview — fills the space and
+   tells you what the circuit throws at you before you commit. */
+.track-facts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.track-facts .tf-len { font-family: 'Orbitron'; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; color: #fff; margin-right: 4px; }
+.track-facts .tf-tag { font-family: 'Rajdhani'; font-weight: 700; font-size: 10.5px; letter-spacing: 0.12em; padding: 3px 9px; border: 1px solid var(--pa, rgba(0,240,255,0.5)); color: var(--pa, var(--cyan)); background: rgba(0, 240, 255, 0.06); }
+.track-facts .tf-tag.loop { --pa: #ff2ec8; }
+.track-facts .tf-tag.jump { --pa: #ffd23f; }
+.track-facts .tf-tag.cork { --pa: #7df9ff; }
+.track-facts .tf-tag.split { --pa: #51ffae; }
 
 /* cup ladder */
 .cup-ladder { display: flex; flex-direction: column; gap: 3px; }

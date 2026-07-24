@@ -34,9 +34,10 @@ export const AVALANCHE_RUN = {
     { x: -260, y: 15, z: -110, width: 6 }, // 21 hairpin apex — TIGHT (the commit)
     { x: -180, y: 14, z: -80, width: 8 },  // 22 hairpin exit
     { x: -140, y: 14, z: 20, width: 11 },  // 23 ridge back
-    { x: -120, y: 14, z: 130, width: 13 }, // 24 run home begins
-    { x: -90, y: 14, z: 240, width: 15 },  // 25 wide, west of the shelf straight
-    { x: -30, y: 14, z: 360, width: 16 },  // 26 overshoot — sweep down onto the line
+    { x: -125, y: 14, z: 150, width: 13 }, // 24 run home, climbing past the line
+    { x: -95, y: 14, z: 300, width: 14 },  // 25 wide arc west of the shelf
+    { x: -45, y: 14, z: 385, width: 15 },  // 26 arc top
+    { x: -8, y: 14, z: 372, width: 16 },   // 27 monotonic fall onto the shelf
   ],
   boostPads: [
     { cp: 0.5, d: -4 },   // shelf risk line by the left wall

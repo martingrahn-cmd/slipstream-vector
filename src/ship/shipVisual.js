@@ -695,8 +695,9 @@ function buildPronghorn(V) {
     { z: 2.40, pts: hexa(0, 0.14, 0.24, 0.12, 0.04) },
   ], { capStart: true, capEnd: true }), V.hull]);
 
-  // 3. Pilot canopy — a raised glass bubble on the centre pod.
-  addCanopy(opaque, glows, 0, t.canY ?? 0.4, t.canZ ?? -0.02, t.canW ?? 0.2, t.canH ?? 0.29, t.canL ?? 0.62, V.accent);
+  // 3. Pilot canopy — a glass teardrop SUNK INTO the centre pod's spine (not
+  // perched on the ridge: base below the crest, longer, so it blends in).
+  addCanopy(opaque, glows, 0, t.canY ?? 0.31, t.canZ ?? 0.06, t.canW ?? 0.22, t.canH ?? 0.27, t.canL ?? 0.8, V.accent);
 
   // 4. Wing bridges.
   both(slab([0.32, 0.12, -0.05], [0.95, 0.12, 0.55], [0.95, 0.10, 1.45], [0.32, 0.12, 0.80], 0.06), V.hull);
@@ -717,12 +718,14 @@ function buildPronghorn(V) {
     opaque.push([scaleAround(quadFin(
       V3(0, 0.42, 0.95 + fz), V3(0, 0.92, 2.25 + fz), V3(0, 0.30, 2.40 + fz), V3(0, 0.32, 1.05 + fz), 0.04, 0.16, 0.06),
       1, V.finScale, 1, 0, 0.36, 0), V.accent]);
-    // splayed V airbrake fins — vfinH height / vfinSpread how wide the V opens / vfinZ fore-aft
+    // splayed V airbrake fins — vfinH height / vfinSpread how wide the V opens / vfinZ fore-aft.
+    // Root sits OUTBOARD and ABOVE the engine nacelles (bells at x±1.05, z 2.46)
+    // and ends well before them — the fin must never grow out of the motor.
     const vh = t.vfinH ?? 1, vsp = t.vfinSpread ?? 1, vz = t.vfinZ ?? 0;
     for (const sx of [-1, 1]) {
-      const vf = (x, y, z) => V3(x * vsp, 0.28 + (y - 0.28) * vh, z + vz);
+      const vf = (x, y, z) => V3(x * vsp, 0.40 + (y - 0.40) * vh, z + vz);
       opaque.push([quadFin(
-        vf(sx * 1.20, 0.30, 0.95), vf(sx * 1.66, 0.62, 1.75), vf(sx * 1.62, 0.58, 2.15), vf(sx * 1.18, 0.26, 2.05), 0.04, 0.10, 0.05), V.accent]);
+        vf(sx * 1.34, 0.44, 0.70), vf(sx * 1.78, 0.74, 1.45), vf(sx * 1.74, 0.70, 1.85), vf(sx * 1.32, 0.40, 1.78), 0.04, 0.10, 0.05), V.accent]);
     }
   }
 
@@ -1131,9 +1134,16 @@ function buildDelta(V) {
   const wing = quadFin(
     wp(0.5, 0.03, -0.65), wp(1.72, 0.2, 0.95), wp(1.5, 0.11, 2.25), wp(0.85, 0.05, 2.05), 0.04, 0.14, 0.06);
   opaque.push([wing, V.hull], [mirrorX(wing), V.hull]);
-  // low swept-back tail fin (finH height / finZ fore-aft / finLen chord) + canopy
+  // low swept-back tail fin (finH height / finZ fore-aft / finLen chord) + canopy.
+  // A rounded quadFin like every other fin in the fleet — the old flat tri3d
+  // plate read as a cardboard cutout on the smooth dart.
   const dfz = (z) => 1.65 + (z - 1.65) * flen + fz; // scale chord about the fin centre, then offset
-  opaque.push([tri3d([0, 0.12, dfz(0.95)], [0, 0.12 + 0.46 * fh, dfz(2.05)], [0, 0.12, dfz(2.35)], 0.05, 'x'), V.accent]);
+  {
+    const V3f = (x, y, z) => new THREE.Vector3(x, y, z);
+    opaque.push([quadFin(
+      V3f(0, 0.13, dfz(0.85)), V3f(0, 0.12 + 0.5 * fh, dfz(1.95)),
+      V3f(0, 0.12 + 0.32 * fh, dfz(2.38)), V3f(0, 0.13, dfz(2.25)), 0.04, 0.15, 0.05), V.accent]);
+  }
   addCanopy(opaque, glows, 0, t.canY ?? 0.12, t.canZ ?? -0.6, t.canW ?? 0.24, t.canH ?? 0.3, t.canL ?? 0.62, V.accent);
   glows.push(gcol(ribbon([[[-0.02, 0.16, -2.6], [0.02, 0.16, -2.6]], [[-0.02, 0.14, 2.0], [0.02, 0.14, 2.0]]]), V.accent));
   // --- surface detail ---

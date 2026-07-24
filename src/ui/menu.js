@@ -176,7 +176,7 @@ export function hex(c) { return c.toString(16).padStart(6, '0'); }
 
 export function drawThumb(canvas, spline) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 150, H = 120;
+  const W = 206, H = 150;
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
   const ctx = canvas.getContext('2d');
@@ -210,7 +210,7 @@ export function drawThumb(canvas, spline) {
 
 export function drawProfile(canvas, spline) {
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  const W = 230, H = 54;
+  const W = 432, H = 92;
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
   const ctx = canvas.getContext('2d');

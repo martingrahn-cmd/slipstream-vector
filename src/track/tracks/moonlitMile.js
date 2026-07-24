@@ -32,10 +32,10 @@ export const MOONLIT_MILE = {
     { x: -320, y: 3, z: -110, width: 14 }, // 21 |
     { x: -250, y: 3, z: -190, width: 12 }, // 22 low sweep home
     { x: -160, y: 3, z: -200, width: 13 }, // 23
-    { x: -90, y: 3, z: -60, width: 14 },   // 24 curving north up the west side
-    { x: -80, y: 3, z: 120, width: 15 },   // 25 | the moonlit run
-    { x: -60, y: 3, z: 300, width: 15 },   // 26 |
-    { x: -25, y: 3, z: 395, width: 16 },   // 27 overshoot — sweep down onto the line
+    { x: -150, y: 3, z: 0, width: 14 },    // 24 the west run — well clear of the straight
+    { x: -140, y: 3, z: 200, width: 15 },  // 25 | climbing PAST the line
+    { x: -105, y: 3, z: 360, width: 15 },  // 26 wide arc north of it
+    { x: -45, y: 3, z: 415, width: 16 },   // 27 …and a monotonic fall onto the grid
   ],
   boostPads: [
     { cp: 0.7, d: -4 },   // start chain by the left wall

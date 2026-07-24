@@ -86,7 +86,7 @@ const postfx = new PostFX(renderer, scene, camera);
 
 // Environment snapshot for the track card: rendered from a showcase point in
 // the real world, supersampled 2x into the menu canvas.
-const ENV_W = 332, ENV_H = 152;
+const ENV_W = 432, ENV_H = 224;
 const envRT = new THREE.WebGLRenderTarget(ENV_W * 2, ENV_H * 2);
 const envCam = new THREE.PerspectiveCamera(56, ENV_W / ENV_H, 0.5, 2200);
 const envPixels = new Uint8Array(ENV_W * 2 * ENV_H * 2 * 4);
@@ -600,6 +600,30 @@ function updateMenu() {
 
   drawThumb(document.getElementById('menu-thumb'), spline);
   drawProfile(document.getElementById('menu-profile'), spline);
+
+  // Track-facts strip: circuit length + the stunts/splits it carries, so the
+  // preview column says something instead of sitting empty.
+  const facts = trackFactsHTML(trackDef, spline);
+  setHTML('single-facts', facts);
+  setHTML('tt-facts', facts);
+  // Championship facts follow the cup + round the ladder is showing: a saved
+  // cup's next round, else round 1 of the selected cup.
+  const savedCup = readSavedChamp();
+  const cupTracks = (CUPS[savedCup ? (savedCup.cup ?? 0) : selection.cup] || CUPS[0]).tracks;
+  const champTrackDef = TRACKS[cupTracks[savedCup ? savedCup.done : 0]] || trackDef;
+  setHTML('champ-facts', trackFactsHTML(champTrackDef, null));
+}
+
+// Feature tags + length for a track — reads the authored features[] + splits[].
+function trackFactsHTML(td, spline) {
+  const tags = [];
+  const feats = td.features || [];
+  if (feats.some((f) => f.type === 'loop')) tags.push('<span class="tf-tag loop">LOOP</span>');
+  if (feats.some((f) => f.type === 'jump')) tags.push('<span class="tf-tag jump">JUMP</span>');
+  if (feats.some((f) => f.type === 'corkscrew')) tags.push('<span class="tf-tag cork">CORKSCREW</span>');
+  if ((td.splits || []).length) tags.push(`<span class="tf-tag split">${td.splits.length > 1 ? td.splits.length + '× ' : ''}SPLIT</span>`);
+  const len = spline ? `${(spline.length / 1000).toFixed(1)} KM` : '';
+  return (len ? `<span class="tf-len">${len}</span>` : '') + tags.join('');
 }
 
 // ------------------------------------------------------ result/standing views
