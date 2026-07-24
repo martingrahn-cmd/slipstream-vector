@@ -320,15 +320,19 @@ export class TrackSpline {
     // widest split island (the wedge ramps — one sample misses the worst
     // spot), gap contact, and whether the decal genuinely fits there.
     const probe = (ss) => {
-      let w = Infinity, island = 0;
+      let w = Infinity, island = 0, roll = 0;
       for (let o = -3; o <= 3; o += 1.5) {
         const i = Math.min(this.n - 1, Math.max(0, Math.floor(this.wrap(ss + o) / this.step)));
         w = Math.min(w, this.width[i]);
         island = Math.max(island, this.splitBand[i]);
+        roll = Math.max(roll, Math.abs(this.bank[i]));
       }
       let gapped = false;
       for (const g of this.gaps) if (ss + HW + 6 > g.start && ss - HW < g.end + 10) gapped = true;
-      const ok = !gapped && (island < 0.05 || w - island >= HW * 2 + 0.3);
+      // Corkscrew roll zones (>40°) are out too: a decal mid-roll IS the road
+      // surface, so from the approach you see it edge-on/backside — it reads
+      // as a dead pad even though it would trigger fine.
+      const ok = !gapped && roll <= 0.7 && (island < 0.05 || w - island >= HW * 2 + 0.3);
       return { w, island, ok };
     };
     return (list || []).map((p, idx) => {
