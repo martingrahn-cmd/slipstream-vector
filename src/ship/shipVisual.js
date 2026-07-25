@@ -1173,38 +1173,74 @@ function buildDelta(V) {
   return assembleShip(V, opaque, glows, nozzles, reactive);
 }
 
-// NOVASURGE — short, heavy, twin-boom with big rear engines (thrust).
+// NOVASURGE — a twin-boom CATAMARAN, not a buggy. The old build was a short fat
+// pod with two stubby side tubes and oversized bells hung off the back, which
+// read as a moon buggy on four wheels from every angle Martin looked at it. This
+// one is long and low: a needle-nosed fuselage, two slim outrigger booms that
+// start forward of the cockpit and run the whole length, bridged by swept wings,
+// and TWIN rounded tail fins standing on the booms instead of one big angular
+// plate down the middle. Same thrust-monster brief, read as speed.
 function buildTwinboom(V) {
   // Livery TRIM: the panel lines, vents, strakes and louvres take a third
   // colour so a hull is never one hue in eight shades. Unset -> the old dark.
   const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const opaque = [], glows = [];
-  const t = V.tune || {}; const bx = t.boomX ?? 0.78; // ship-editor knobs
+  const t = V.tune || {}; const bx = t.boomX ?? 0.86; // ship-editor knobs
   const fh = t.finH ?? 1, fz = t.finZ ?? 0, flen = t.finLen ?? 1; // fin: height / fore-aft / chord
-  const tfz = (z) => 1.15 + (z - 1.15) * flen + fz; // fin chord about its centre + offset
+  const tfz = (z) => 1.68 + (z - 1.68) * flen + fz; // fin chord about its centre + offset
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  // Central fuselage: a needle that swells over the cockpit and tapers away.
   opaque.push([loft([
-    { z: -1.9, pts: hex6(0.16, 0.18, 0.04, -0.1) }, { z: -0.8, pts: hex6(0.46, 0.42, 0.08, -0.2) },
-    { z: 0.6, pts: hex6(0.52, 0.46, 0.08, -0.22) }, { z: 1.6, pts: hex6(0.4, 0.34, 0.06, -0.16) },
+    { z: -2.90, pts: hex6(0.05, 0.04, 0.00, -0.03) }, { z: -1.90, pts: hex6(0.22, 0.20, 0.02, -0.12) },
+    { z: -0.60, pts: hex6(0.40, 0.36, 0.04, -0.20) }, { z: 0.60, pts: hex6(0.44, 0.38, 0.04, -0.22) },
+    { z: 1.70, pts: hex6(0.30, 0.26, 0.02, -0.14) }, { z: 2.05, pts: hex6(0.15, 0.13, 0.00, -0.07) },
   ], { capStart: true, capEnd: true }), V.hull]);
+  // Outrigger booms: pointed intake well forward of the cockpit, swelling all
+  // the way back into the engine. Slung LOW so they read as hulls, not shoulders.
   for (const sx of [-1, 1]) {
-    const boom = loft([{ z: -0.3, pts: hex6(0.16, 0.16, 0.0, -0.16) }, { z: 1.7, pts: hex6(0.28, 0.24, 0.0, -0.24) }], { capEnd: true });
-    boom.translate(sx * bx, 0.02, 0);
+    const boom = loft([
+      { z: -1.70, pts: hex6(0.07, 0.06, 0.00, -0.06) }, { z: -0.90, pts: hex6(0.20, 0.18, 0.00, -0.18) },
+      { z: 1.00, pts: hex6(0.28, 0.25, 0.00, -0.25) }, { z: 2.25, pts: hex6(0.35, 0.32, 0.00, -0.32) },
+    ], { capStart: true, capEnd: true });
+    boom.translate(sx * bx, -0.04, 0);
     opaque.push([boom, V.hull]);
   }
-  // tall fin (finH height / finZ fore-aft / finLen chord) + canopy on the pod
-  opaque.push([tri3d([0, 0.4, tfz(0.4)], [0, 0.4 + 0.75 * fh, tfz(1.5)], [0, 0.4, tfz(1.9)], 0.06, 'x'), V.accent]);
-  addCanopy(opaque, glows, 0, t.canY ?? 0.42, t.canZ ?? -0.25, t.canW ?? 0.27, t.canH ?? 0.32, t.canL ?? 0.6, V.accent);
-  glows.push(gcol(ribbon([[[-0.02, 0.48, -1.0], [0.02, 0.48, -1.0]], [[-0.02, 0.4, 1.4], [0.02, 0.4, 1.4]]]), V.accent));
+  // Bridges: a swept main wing and a slim forward strut per side. These are what
+  // turn "pod plus two wheels" into one aircraft.
+  for (const sx of [-1, 1]) {
+    opaque.push([quadFin(
+      V3(sx * 0.30, 0.02, -0.35), V3(sx * 0.88, -0.02, 0.10),
+      V3(sx * 0.88, -0.02, 1.15), V3(sx * 0.34, 0.02, 0.95), 0.03, 0.12, 0.05), V.hull]);
+    opaque.push([quadFin(
+      V3(sx * 0.19, 0.00, -1.90), V3(sx * 0.84, -0.03, -1.42),
+      V3(sx * 0.86, -0.03, -0.95), V3(sx * 0.25, 0.00, -1.25), 0.03, 0.08, 0.04), V.hull]);
+  }
+  // TWIN tail fins, one on each boom — rounded quadFins, swept back. The old
+  // single tri3d spike down the centreline was the last hard-edged plate in the
+  // fleet, and it was the thing that made this hull look like a go-kart.
+  for (const sx of [-1, 1]) {
+    opaque.push([quadFin(
+      V3(sx * bx, 0.18, tfz(0.92)), V3(sx * bx, 0.18 + 0.74 * fh, tfz(1.74)),
+      V3(sx * bx, 0.18 + 0.60 * fh, tfz(2.04)), V3(sx * bx, 0.18, tfz(1.72)), 0.04, 0.10, 0.04), V.accent]);
+    glows.push(gcol(ribbon([
+      [[sx * bx - 0.03, 0.22, tfz(0.97)], [sx * bx + 0.03, 0.22, tfz(1.01)]],
+      [[sx * bx - 0.03, 0.16 + 0.74 * fh, tfz(1.72)], [sx * bx + 0.03, 0.16 + 0.74 * fh, tfz(1.76)]],
+    ]), V.accent)); // fin leading-edge glow
+  }
+  addCanopy(opaque, glows, 0, t.canY ?? 0.30, t.canZ ?? -1.05, t.canW ?? 0.24, t.canH ?? 0.27, t.canL ?? 0.62, V.accent);
+  glows.push(gcol(ribbon([[[-0.02, 0.34, -0.35], [0.02, 0.34, -0.35]], [[-0.02, 0.22, 1.85], [0.02, 0.22, 1.85]]]), V.accent)); // spine
   // --- surface detail ---
-  for (const sx of [-1, 1]) { const bs = ribbon([[[sx * bx, 0.18, -0.2], [sx * bx, 0.08, -0.2]], [[sx * bx, 0.24, 1.5], [sx * bx, 0.12, 1.5]]]); opaque.push([bs, V.accent]); } // boom accent stripes
-  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const z = -0.3 + i * 0.4; opaque.push([slab([sx * 0.5, 0.22, z], [sx * 0.54, 0.12, z], [sx * 0.54, 0.12, z + 0.18], [sx * 0.5, 0.22, z + 0.18], 0.02), trim]); } // pod louvres
-  for (const z of [-0.8, 0.2, 1.0]) opaque.push([ribbon([[[-0.38, 0.47, z], [0.38, 0.47, z]], [[-0.38, 0.47, z + 0.06], [0.38, 0.47, z + 0.06]]]), 0x2a1a40]); // pod deck seams
-  glows.push(gcol(ribbon([[[0, 0.42, tfz(0.52)], [0, 0.42, tfz(0.58)]], [[0, 0.35 + 0.75 * fh, tfz(1.48)], [0, 0.35 + 0.75 * fh, tfz(1.54)]]]), V.accent)); // fin edge glow
-  glows.push(gcol(discGeo(-bx, 0.24, 1.62, 0.06, 8), C.EDGE_L), gcol(discGeo(bx, 0.24, 1.62, 0.06, 8), C.EDGE_R)); // nav lights
-  const ex = t.engX ?? bx, ey = t.engY ?? 0.02, ez = t.engZ ?? 2.0, er = t.engR ?? 0.42;
+  for (const sx of [-1, 1]) { const bs = ribbon([[[sx * (bx + 0.21), 0.06, -0.85], [sx * (bx + 0.21), -0.06, -0.85]], [[sx * (bx + 0.27), 0.08, 2.10], [sx * (bx + 0.27), -0.08, 2.10]]]); opaque.push([bs, V.accent]); } // boom flank stripes
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const z = 0.10 + i * 0.34; opaque.push([slab([sx * 0.40, 0.20, z], [sx * 0.45, 0.10, z], [sx * 0.45, 0.10, z + 0.16], [sx * 0.40, 0.20, z + 0.16], 0.02), trim]); } // pod louvres
+  for (const z of [-1.55, 0.35, 1.15]) { const w = z < -1 ? 0.16 : z < 1 ? 0.34 : 0.24; opaque.push([ribbon([[[-w, 0.30, z], [w, 0.30, z]], [[-w, 0.30, z + 0.06], [w, 0.30, z + 0.06]]]), trim]); } // pod deck seams
+  for (const sx of [-1, 1]) opaque.push([slab([sx * (bx - 0.14), 0.14, -0.60], [sx * (bx + 0.14), 0.14, -0.60], [sx * (bx + 0.14), 0.14, -0.20], [sx * (bx - 0.14), 0.14, -0.20], 0.03), trim]); // boom intake louvres
+  glows.push(gcol(discGeo(-(bx + 0.24), -0.02, 1.30, 0.06, 8), C.EDGE_L), gcol(discGeo(bx + 0.24, -0.02, 1.30, 0.06, 8), C.EDGE_R)); // nav lights
+  // The bell sits INSIDE the boom's rear diameter — a nozzle in a nacelle. When
+  // it flared wider than the boom it read as a wheel on an axle.
+  const ex = t.engX ?? bx, ey = t.engY ?? -0.04, ez = t.engZ ?? 2.34, er = t.engR ?? 0.29;
   const nozzles = [{ x: -ex, y: ey, z: ez, r: er }, { x: ex, y: ey, z: ez, r: er }];
   addEngines(opaque, glows, nozzles, V.accent);
-  const reactive = { brake: [[[-0.5, 0.46, 1.2], [0.5, 0.46, 1.2]], [[-0.5, 0.46, 1.45], [0.5, 0.46, 1.45]]], boost: { pos: [0, 0.1, 1.9], scale: 1.9 } };
+  const reactive = { brake: [[[-0.34, 0.28, 1.45], [0.34, 0.28, 1.45]], [[-0.34, 0.28, 1.70], [0.34, 0.28, 1.70]]], boost: { pos: [0, 0.0, 2.5], scale: 1.9 } };
   return assembleShip(V, opaque, glows, nozzles, reactive);
 }
 

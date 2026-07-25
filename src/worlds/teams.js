@@ -83,7 +83,9 @@ export const TEAMS = [
     name: 'NOVASURGE',
     fullName: 'NovaSurge Industries',
     pilots: ['LYRA STORM', 'ECHO TANE'],
-    variant: { scaleX: 1.0, scaleZ: 0.88, finScale: 1.3, bellScale: 1.28, arch: 'twinboom' },
+    // scaleZ was 0.88 — a squash that fought the twin-boom silhouette and left
+    // it as wide as it was long. The hull is authored long now; let it be long.
+    variant: { scaleX: 1.0, scaleZ: 0.98, finScale: 1.3, bellScale: 1.28, arch: 'twinboom' },
     skill: { corner: -0.02, line: -0.01, boost: 0.1 },
     stats: { vmax: 0.99, accel: 1.14, steer: 0.96 },
     bars: { speed: 2, thrust: 5, handling: 3 },
