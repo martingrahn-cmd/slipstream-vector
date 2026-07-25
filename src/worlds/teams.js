@@ -20,10 +20,13 @@ export const TEAMS = [
     bars: { speed: 3, thrust: 3, handling: 3 },
     blurb: 'The all-rounder. No habits to unlearn.',
     liveries: [
-      // JUNO VEX — pearl-gold hull, rose accent, magenta→GOLD iridescent rim (rookie gold)
-      { hull: 0xf3eddc, accent: 0xff4f9d, glow: 0xff7ab0, rim: 0xffd24d, accent2: 0xffd24d, irid: true, bellyTint: 0x2c1a30 },
-      // KAIDE SORO — near-black aubergine hull, electric-violet accent (calm dark twin)
-      { hull: 0x231a30, accent: 0xb14dff, glow: 0xb14dff, rim: 0xcf86ff, bellyTint: 0x0e0820 },
+      // JUNO VEX — pearl-gold hull, rose accent, magenta→GOLD iridescent rim
+      // (rookie gold). Trim: deep plum panelling grounds the pale hull.
+      { hull: 0xf3eddc, accent: 0xff4f9d, glow: 0xff7ab0, rim: 0xffd24d, accent2: 0xffd24d, irid: true, trim: 0x5c2647, bellyTint: 0x2c1a30 },
+      // KAIDE SORO — near-black aubergine hull, electric-violet accent, and a
+      // COLD ICE counterpoint: the rim banks violet→ice so the dark twin isn't
+      // one hue in eight shades, with ice-blue panel lines cutting the black.
+      { hull: 0x231a30, accent: 0xb14dff, glow: 0xb14dff, rim: 0x7ce8ff, accent2: 0x7ce8ff, irid: true, trim: 0x2e7f9e, bellyTint: 0x0e0820 },
     ],
   },
   {
@@ -40,10 +43,16 @@ export const TEAMS = [
     bars: { speed: 2, thrust: 3, handling: 5 },
     blurb: 'Carves corners like they owe it money.',
     liveries: [
-      // MERIDIAN BLUE — porcelain hull, true azure accent (bluer than the cyan road edge)
-      { hull: 0xe9eef3, accent: 0x2f8bff, glow: 0x4da3ff, rim: 0x8fd0ff, bellyTint: 0x14304a },
-      // SOL ANARA — deep-teal hull, jade-mint accent, warm amber champion rim
-      { hull: 0x123832, accent: 0x33e3b0, glow: 0x33e3b0, rim: 0xffc24d, accent2: 0x8ff7d6, irid: true, bellyTint: 0x06181a },
+      // MERIDIAN BLUE — porcelain hull, true azure accent (bluer than the cyan
+      // road edge) with a HOT ORANGE counterpoint: complementary trim and a
+      // blue→amber irid rim, so the mathematician reads as more than one blue.
+      { hull: 0xe9eef3, accent: 0x2f8bff, glow: 0x4da3ff, rim: 0x8fd0ff, accent2: 0xff9a3c, irid: true, trim: 0xff6a1e, bellyTint: 0x14304a },
+      // SOL ANARA — deep NAVY hull, CHAMPION GOLD engines and a gold→champagne
+      // rim, with jade kept as a thin pinstripe on the panel lines. The teal
+      // hull + jade accent + mint rim she used to wear made her the ship that
+      // was "just green in eight shades"; now the green is a signature, not a
+      // wash, and three titles read as navy-and-gold from across the grid.
+      { hull: 0x101a3a, accent: 0xffc24d, glow: 0xffc24d, rim: 0xffe9b0, accent2: 0xffe9b0, irid: true, trim: 0x33e3b0, bellyTint: 0x060a1c },
     ],
   },
   {
@@ -60,10 +69,13 @@ export const TEAMS = [
     bars: { speed: 5, thrust: 2, handling: 2 },
     blurb: 'Fastest thing on the straights. Pray for the corners.',
     liveries: [
-      // VOSS KRAIT — predator near-black hull, blood-red accent (darkest ship on the grid)
-      { hull: 0x180b0d, accent: 0xff2a1c, glow: 0xff3a1f, rim: 0xff5a30, bellyTint: 0x060203 },
-      // KIRA NOX — chrome shell, amber-orange accent, ice-white mirror irid rim (the AI)
-      { hull: 0xd8dfe6, accent: 0xff8a1e, glow: 0xffa030, rim: 0x9fe6ff, accent2: 0xeaf6ff, irid: true, bellyTint: 0x2a2e34 },
+      // VOSS KRAIT — predator near-black hull, blood-red accent (darkest ship
+      // on the grid) with BONE panelling and a red→bone irid rim: war paint on
+      // a hunter, not a single wash of red.
+      { hull: 0x180b0d, accent: 0xff2a1c, glow: 0xff3a1f, rim: 0xff5a30, accent2: 0xe8dcc4, irid: true, trim: 0xbfae90, bellyTint: 0x060203 },
+      // KIRA NOX — chrome shell, amber-orange accent, ice-white mirror irid rim
+      // (the AI). Trim: deep gunmetal-blue circuitry lines under the chrome.
+      { hull: 0xd8dfe6, accent: 0xff8a1e, glow: 0xffa030, rim: 0x9fe6ff, accent2: 0xeaf6ff, irid: true, trim: 0x24506e, bellyTint: 0x2a2e34 },
     ],
   },
   {
@@ -77,10 +89,15 @@ export const TEAMS = [
     bars: { speed: 2, thrust: 5, handling: 3 },
     blurb: 'Launches out of every corner. Lives for the pads.',
     liveries: [
-      // LYRA STORM — electric-violet hull, lemon-gold accent (reckless boost-gold)
-      { hull: 0x2a1656, accent: 0xffe23a, glow: 0xffcf2a, rim: 0xffee8c, bellyTint: 0x0d0622 },
-      // ECHO TANE — pearl-violet hull, acid-green accent, acid→jade iridescent (signal-green)
-      { hull: 0xe4e0ec, accent: 0x8ef23a, glow: 0x6fd624, rim: 0xd8ff8a, accent2: 0x3fae6b, irid: true, bellyTint: 0x161320 },
+      // LYRA STORM — electric-violet hull (brightened so it reads violet and
+      // not brown under the warm key), lemon-gold accent (reckless boost-gold),
+      // HOT PINK trim and a gold→pink irid rim: three loud colours, like her.
+      { hull: 0x4a2597, accent: 0xffe23a, glow: 0xffcf2a, rim: 0xffee8c, accent2: 0xff4fa8, irid: true, trim: 0xe0338c, bellyTint: 0x150a33 },
+      // ECHO TANE — pearl hull, acid-green accent, and DEEP INDIGO as the
+      // counterweight: indigo engines (the twinboom's bells are the biggest
+      // colour mass on the ship), indigo panel lines and an acid→indigo rim, so
+      // the signal-green reads as a signal instead of drowning in more green.
+      { hull: 0xe4e0ec, accent: 0x8ef23a, glow: 0x6b4cf0, rim: 0xd8ff8a, accent2: 0x5b3ce0, irid: true, trim: 0x3b2a8c, bellyTint: 0x161320 },
     ],
   },
 ];

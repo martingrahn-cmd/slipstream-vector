@@ -661,6 +661,9 @@ function quadFin(p0, p1, p2, p3, expand = 0.04, r = 0.13, thick = 0.06) {
 }
 
 function buildPronghorn(V) {
+  // Livery TRIM: the panel lines, vents, strakes and louvres take a third
+  // colour so a hull is never one hue in eight shades. Unset -> the old dark.
+  const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const group = new THREE.Group();
   const hexa = (cx, w, yT, yM, yB) => [
     [cx - w, yM], [cx - 0.55 * w, yT], [cx + 0.55 * w, yT],
@@ -730,7 +733,7 @@ function buildPronghorn(V) {
   }
 
   // 8. Belly keel.
-  opaque.push([slab([0, -0.03, 0.00], [0, -0.16, 0.60], [0, -0.16, 1.60], [0, 0.02, 1.90], 0.05), C.SHIP_CANOPY]);
+  opaque.push([slab([0, -0.03, 0.00], [0, -0.16, 0.60], [0, -0.16, 1.60], [0, 0.02, 1.90], 0.05), trim]);
 
   // 9. Intake wall plates (darken the slot interior).
   both(slab([0.56, 0.14, -2.20], [0.64, 0.20, -1.10], [0.64, -0.08, -1.10], [0.57, -0.02, -2.20], 0.02), C.SHIP_CANOPY);
@@ -767,14 +770,14 @@ function buildPronghorn(V) {
   // 14. Rear deck vents: three dark slats on the pod's aft slope.
   for (let i = 0; i < 3; i++) {
     const z = 1.62 + i * 0.2;
-    both(slab([0.13, 0.32, z], [0.33, 0.30, z], [0.33, 0.30, z + 0.11], [0.13, 0.32, z + 0.11], 0.03), C.SHIP_CANOPY);
+    both(slab([0.13, 0.32, z], [0.33, 0.30, z], [0.33, 0.30, z + 0.11], [0.13, 0.32, z + 0.11], 0.03), trim);
   }
 
   // 15. Airbrake actuator arms.
-  both(slab([1.02, 0.18, 1.55], [1.38, 0.42, 1.75], [1.36, 0.40, 1.88], [1.00, 0.16, 1.68], 0.04), C.SHIP_CANOPY);
+  both(slab([1.02, 0.18, 1.55], [1.38, 0.42, 1.75], [1.36, 0.40, 1.88], [1.00, 0.16, 1.68], 0.04), trim);
 
   // 17. Underside strakes below each sponson.
-  both(slab([0.95, -0.18, 0.20], [0.95, -0.28, 0.70], [0.95, -0.28, 1.45], [0.95, -0.16, 1.70], 0.03), C.SHIP_CANOPY);
+  both(slab([0.95, -0.18, 0.20], [0.95, -0.28, 0.70], [0.95, -0.28, 1.45], [0.95, -0.16, 1.70], 0.03), trim);
 
   // 18. Nose chevrons on each prong deck.
   {
@@ -799,7 +802,7 @@ function buildPronghorn(V) {
   // 20. Cooling louvres on the centre-pod flanks.
   for (let i = 0; i < 3; i++) {
     const z = 0.15 + i * 0.22;
-    both(slab([0.30, 0.18, z], [0.40, 0.10, z], [0.40, 0.10, z + 0.13], [0.30, 0.18, z + 0.13], 0.02), C.SHIP_CANOPY);
+    both(slab([0.30, 0.18, z], [0.40, 0.10, z], [0.40, 0.10, z + 0.13], [0.30, 0.18, z + 0.13], 0.02), trim);
   }
 
   // 21. Flank livery stripe down each sponson's outer face.
@@ -1012,6 +1015,9 @@ function addCanopy(opaque, glows, cx, cy, cz, W, H, L, accentHex) {
 // gull-curved wing blades (volume in the middle, blade at the tips), engine
 // nacelles sunk into the trailing deck, and a full AAA detail layer.
 function buildManta(V) {
+  // Livery TRIM: the panel lines, vents, strakes and louvres take a third
+  // colour so a hull is never one hue in eight shades. Unset -> the old dark.
+  const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const opaque = [], glows = [];
   const t = V.tune || {}; const bw = t.bodyW ?? 1; // ship-editor knobs (fall back to defaults)
 
@@ -1094,13 +1100,13 @@ function buildManta(V) {
   for (const sx of [-1, 1]) {
     for (let i = 0; i < 3; i++) {
       const z0 = 0.35 + i * 0.17;
-      opaque.push([slab([sx * 0.2, 0.26 - i * 0.025, z0], [sx * 0.44, 0.16 - i * 0.02, z0 + 0.05], [sx * 0.44, 0.16 - i * 0.02, z0 + 0.11], [sx * 0.2, 0.26 - i * 0.025, z0 + 0.06], 0.015), C.SHIP_CANOPY]);
+      opaque.push([slab([sx * 0.2, 0.26 - i * 0.025, z0], [sx * 0.44, 0.16 - i * 0.02, z0 + 0.05], [sx * 0.44, 0.16 - i * 0.02, z0 + 0.11], [sx * 0.2, 0.26 - i * 0.025, z0 + 0.06], 0.015), trim]);
     }
     glows.push(gcol(ribbon([[[sx * 0.2, 0.275, 0.32], [sx * 0.44, 0.18, 0.42]], [[sx * 0.22, 0.21, 0.9], [sx * 0.45, 0.13, 0.98]]]), V.accent));
   }
   // Belly keel strakes under the pod (ground-effect fences).
   const strake = slab([0.16, -0.14, -0.7], [0.16, -0.21, 0.1], [0.16, -0.2, 1.1], [0.16, -0.12, 1.6], 0.03);
-  opaque.push([strake, C.SHIP_CANOPY], [mirrorX(strake), C.SHIP_CANOPY]);
+  opaque.push([strake, trim], [mirrorX(strake), trim]);
   // Accent flank stripe down the wing root.
   const mStripe = ribbon([[[0.55, 0.12, -0.3], [0.55, 0.05, -0.3]], [[1.3, 0.1, 0.75], [1.3, 0.03, 0.75]]]);
   opaque.push([mStripe, V.accent], [mirrorX(mStripe), V.accent]);
@@ -1120,6 +1126,9 @@ function buildManta(V) {
 
 // RAZORBACK — wide, low, forward-swept delta arrow (speed).
 function buildDelta(V) {
+  // Livery TRIM: the panel lines, vents, strakes and louvres take a third
+  // colour so a hull is never one hue in eight shades. Unset -> the old dark.
+  const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const opaque = [], glows = [];
   const t = V.tune || {}; const ws = t.wingSpan ?? 1, wl = t.wingLen ?? 1; // ship-editor knobs
   const fh = t.finH ?? 1, fz = t.finZ ?? 0, flen = t.finLen ?? 1; // fin: height / fore-aft / chord
@@ -1152,10 +1161,10 @@ function buildDelta(V) {
   glows.push(gcol(geomFrom([0, 0.145, -2.2, 0.16, 0.135, -1.7, -0.16, 0.135, -1.7]), V.accent)); // nose chevron
   // twin dorsal air intakes on the fuselage shoulders, angled back to feed the rear engines
   for (const sx of [-1, 1]) {
-    opaque.push([slab([sx * 0.22, 0.13, 0.35], [sx * 0.52, 0.12, 0.5], [sx * 0.52, 0.0, 1.25], [sx * 0.22, 0.02, 1.05], 0.03), C.SHIP_CANOPY]);
+    opaque.push([slab([sx * 0.22, 0.13, 0.35], [sx * 0.52, 0.12, 0.5], [sx * 0.52, 0.0, 1.25], [sx * 0.22, 0.02, 1.05], 0.03), trim]);
     glows.push(gcol(ribbon([[[sx * 0.22, 0.14, 0.34], [sx * 0.52, 0.13, 0.49]], [[sx * 0.26, 0.04, 1.1], [sx * 0.54, 0.03, 1.22]]]), V.accent)); // intake lip
   }
-  for (const z of [-0.3, 0.7, 1.5]) { const w = z < 0 ? 0.55 : z < 1 ? 0.95 : 1.25; opaque.push([ribbon([[[-w, 0.135, z], [w, 0.135, z]], [[-w, 0.135, z + 0.06], [w, 0.135, z + 0.06]]]), 0x2a1626]); } // deck seams
+  for (const z of [-0.3, 0.7, 1.5]) { const w = z < 0 ? 0.55 : z < 1 ? 0.95 : 1.25; opaque.push([ribbon([[[-w, 0.135, z], [w, 0.135, z]], [[-w, 0.135, z + 0.06], [w, 0.135, z + 0.06]]]), trim]); } // deck seams
   glows.push(gcol(discGeo(-1.68 * ws, 0.19, 1.0, 0.05, 8), C.EDGE_L), gcol(discGeo(1.68 * ws, 0.19, 1.0, 0.05, 8), C.EDGE_R)); // nav lights at the wingtips
   const ex = t.engX ?? 0.52, ey = t.engY ?? 0.06, ez = t.engZ ?? 2.28, er = t.engR ?? 0.22;
   const nozzles = [{ x: -ex, y: ey, z: ez, r: er }, { x: ex, y: ey, z: ez, r: er }];
@@ -1166,6 +1175,9 @@ function buildDelta(V) {
 
 // NOVASURGE — short, heavy, twin-boom with big rear engines (thrust).
 function buildTwinboom(V) {
+  // Livery TRIM: the panel lines, vents, strakes and louvres take a third
+  // colour so a hull is never one hue in eight shades. Unset -> the old dark.
+  const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const opaque = [], glows = [];
   const t = V.tune || {}; const bx = t.boomX ?? 0.78; // ship-editor knobs
   const fh = t.finH ?? 1, fz = t.finZ ?? 0, flen = t.finLen ?? 1; // fin: height / fore-aft / chord
@@ -1185,7 +1197,7 @@ function buildTwinboom(V) {
   glows.push(gcol(ribbon([[[-0.02, 0.48, -1.0], [0.02, 0.48, -1.0]], [[-0.02, 0.4, 1.4], [0.02, 0.4, 1.4]]]), V.accent));
   // --- surface detail ---
   for (const sx of [-1, 1]) { const bs = ribbon([[[sx * bx, 0.18, -0.2], [sx * bx, 0.08, -0.2]], [[sx * bx, 0.24, 1.5], [sx * bx, 0.12, 1.5]]]); opaque.push([bs, V.accent]); } // boom accent stripes
-  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const z = -0.3 + i * 0.4; opaque.push([slab([sx * 0.5, 0.22, z], [sx * 0.54, 0.12, z], [sx * 0.54, 0.12, z + 0.18], [sx * 0.5, 0.22, z + 0.18], 0.02), C.SHIP_CANOPY]); } // pod louvres
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const z = -0.3 + i * 0.4; opaque.push([slab([sx * 0.5, 0.22, z], [sx * 0.54, 0.12, z], [sx * 0.54, 0.12, z + 0.18], [sx * 0.5, 0.22, z + 0.18], 0.02), trim]); } // pod louvres
   for (const z of [-0.8, 0.2, 1.0]) opaque.push([ribbon([[[-0.38, 0.47, z], [0.38, 0.47, z]], [[-0.38, 0.47, z + 0.06], [0.38, 0.47, z + 0.06]]]), 0x2a1a40]); // pod deck seams
   glows.push(gcol(ribbon([[[0, 0.42, tfz(0.52)], [0, 0.42, tfz(0.58)]], [[0, 0.35 + 0.75 * fh, tfz(1.48)], [0, 0.35 + 0.75 * fh, tfz(1.54)]]]), V.accent)); // fin edge glow
   glows.push(gcol(discGeo(-bx, 0.24, 1.62, 0.06, 8), C.EDGE_L), gcol(discGeo(bx, 0.24, 1.62, 0.06, 8), C.EDGE_R)); // nav lights

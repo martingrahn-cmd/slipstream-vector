@@ -24,6 +24,32 @@ const PED_TOP = -0.35;  // top surface of the pedestal cylinder
 const HOVER = 0.14;     // anti-grav gap between hull and dais
 const BOB = 0.05;       // idle bob amplitude
 const ROLL = 0.045;     // idle roll amplitude (rad) — tips a wingtip down
+// Fixed 3/4 view at ~22° elevation. The garage bay is a tall portrait frame, so
+// a floor-level camera leaves the top 40% of it empty and the hull's length
+// projects into the vertical as it turns — but go much above this and you are
+// looking down at the deck, which hides the flank panelling the liveries carry.
+const CAM_DIR = new THREE.Vector3(4.7, 3.0, 5.9).normalize();
+const FIT = 1.03;       // breathing room outside the silhouette
+const MIN_DIST = 7.0;   // never dolly closer than the old fixed framing
+
+// Worst-case turntable silhouette radius: the hull spins about Y, so the frame
+// has to contain the largest sqrt(x^2 + z^2) over its vertices. The static AABB
+// is no good here — its corner overstates a long, narrow hull by ~50%.
+const _v = new THREE.Vector3();
+function spinRadius(root) {
+  let r2 = 0;
+  root.traverse((o) => {
+    const g = o.geometry;
+    if (!g || !g.attributes || !g.attributes.position) return;
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      _v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld);
+      const d = _v.x * _v.x + _v.z * _v.z;
+      if (d > r2) r2 = d;
+    }
+  });
+  return Math.sqrt(r2);
+}
 
 export class Podium {
   constructor(canvas) {
@@ -42,7 +68,11 @@ export class Podium {
     this.camera.lookAt(0, -0.05, 0);
 
     const tex = radialTexture();
-    this.accentMats = []; // re-tinted to the ship's accent on setShip
+    // The bay lights up in the livery — but in TWO of its colours, not one.
+    // Tinting every emitter with `accent` washed the whole bay a single hue and
+    // made monochrome-looking hulls look even more monochrome.
+    this.accentMats = []; // dais rim -> livery accent
+    this.secondMats = []; // back-glow + left beam -> livery rim colour
 
     // Floor: a dark disc + concentric neon rings fading outward (the bay floor).
     const floor = new THREE.Mesh(
@@ -92,7 +122,7 @@ export class Podium {
     glow.scale.set(9, 6, 1);
     glow.position.set(0, 0.8, -3.4);
     this.scene.add(glow);
-    this.accentMats.push(glowMat);
+    this.secondMats.push(glowMat);
 
     for (const x of [-3.0, 3.0]) {
       const beamMat = new THREE.MeshBasicMaterial({
@@ -102,7 +132,7 @@ export class Podium {
       const beam = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 6.5), beamMat);
       beam.position.set(x, 1.1, -2.6);
       this.scene.add(beam);
-      if (x < 0) this.accentMats.push(beamMat); // left beam follows the livery
+      if (x < 0) this.secondMats.push(beamMat); // left beam follows the livery
     }
 
     // Scan sweep: a thin bright plane that runs up the hull on ship change.
@@ -131,6 +161,28 @@ export class Podium {
     this.camera.aspect = pw / ph;
     this.camera.updateProjectionMatrix();
     c.style.width = `${pw}px`; c.style.height = `${ph}px`;
+    this._frame(); // the bay goes hero-size in the garage — re-fit the hull
+  }
+
+  // Dolly the fixed 3/4 view out until the spinning hull clears the bay frame
+  // on BOTH axes. The garage bay is portrait, so width is what bites: at the
+  // old fixed distance a side-on hull ran off both edges and got sliced.
+  _frame() {
+    const f = this.fit;
+    if (!f) return;
+    const vHalf = THREE.MathUtils.degToRad(this.camera.fov) * 0.5;
+    const hHalf = Math.atan(Math.tan(vHalf) * this.camera.aspect);
+    const d = Math.max(
+      f.r * FIT / Math.sin(hHalf),
+      f.hy * FIT / Math.sin(vHalf),
+      MIN_DIST,
+    );
+    this.camera.position.copy(CAM_DIR).multiplyScalar(d);
+    this.camera.lookAt(0, f.aimY, 0);
+    // Fog is camera-relative depth cue, not an absolute distance — hold the
+    // same offsets it was authored with or a dollied-out hull sinks into it.
+    this.scene.fog.near = d + 0.9;
+    this.scene.fog.far = d + 11.9;
   }
 
   setShip(variant) {
@@ -158,10 +210,17 @@ export class Podium {
     const dip = BOB + Math.sin(ROLL) * halfSpan;
     this.baseY = PED_TOP + HOVER + dip - box.min.y;
     // Frame the hull we actually have: aim at its middle, not a fixed point.
-    this.camera.lookAt(0, this.baseY + (box.max.y - box.min.y) * 0.35, 0);
+    this.fit = {
+      r: spinRadius(this.ship),
+      hy: (box.max.y - box.min.y) * 0.65 + BOB,
+      aimY: this.baseY + (box.max.y - box.min.y) * 0.35,
+    };
+    this._frame();
     // Tint the bay to the livery accent, and kick off a scan sweep.
     const accent = variant && variant.accent != null ? variant.accent : 0x00f0ff;
+    const second = variant && variant.rim != null ? variant.rim : accent;
     for (const m of this.accentMats) m.color.setHex(accent);
+    for (const m of this.secondMats) m.color.setHex(second);
     this.scanT = 0;
   }
 
