@@ -40,11 +40,17 @@ beta"). Martin writes in Swedish — **reply in Swedish**.
 
 ## Graphics budget
 
-**Fill-bound, not draw-bound.** ~60–100 draws / ~175k tris worst case — huge
-draw/tri headroom; the real limit is **additive overdraw at 4K on iGPUs**.
+**Fill-bound, not draw-bound.** ~60–100 draws / ~230–390k tris worst case —
+huge draw/tri headroom; the real limit is **additive overdraw at 4K on iGPUs**.
 Post = one 12-tap JuicePass + 4×MSAA (no bloom pass); pixelRatio capped 1.5.
 Govern new effects (explosions, shields, beams) by *screen coverage*, pool
 everything, zero per-frame allocations in hot paths.
+
+Because the ceiling is fill and not geometry, **form is the cheap axis**: road
+slicing (`TUNING.SLICE_STEP`), hull cross-section density (`section12`) and
+lengthwise loft smoothing (`loft(..., { smooth: true })`) all buy roundness at
+zero extra draws and zero extra coverage. Spend there before reaching for an
+effect.
 
 ## Dev workflow
 

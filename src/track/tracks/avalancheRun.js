@@ -35,9 +35,11 @@ export const AVALANCHE_RUN = {
     { x: -180, y: 14, z: -80, width: 8 },  // 22 hairpin exit
     { x: -140, y: 14, z: 20, width: 11 },  // 23 ridge back
     { x: -125, y: 14, z: 150, width: 13 }, // 24 run home, climbing past the line
-    { x: -95, y: 14, z: 300, width: 14 },  // 25 wide arc west of the shelf
-    { x: -45, y: 14, z: 385, width: 15 },  // 26 arc top
-    { x: -8, y: 14, z: 372, width: 16 },   // 27 monotonic fall onto the shelf
+    // The run home has to cross the cut climb (15-16) to reach the line, and at
+    // a shared y=14 the two ribbons interpenetrated for ~90m. It flies OVER now.
+    { x: -95, y: 17, z: 300, width: 14 },  // 25 wide arc west of the shelf, rising
+    { x: -45, y: 23, z: 385, width: 15 },  // 26 arc top — bridges above the cut
+    { x: -8, y: 21, z: 372, width: 16 },   // 27 monotonic fall onto the shelf
   ],
   boostPads: [
     { cp: 0.5, d: -4 },   // shelf risk line by the left wall

@@ -34,9 +34,12 @@ export const BREAKER_BAY = {
     { x: 100, y: 2, z: -260, width: 9 },   // 22 exit
     { x: 85, y: 2, z: -160, width: 11 },   // 23 back along the shore, EAST of the pier
     { x: 80, y: 2, z: 0, width: 12 },      // 24 |
-    { x: 74, y: 2, z: 170, width: 12 },    // 25 shore run, climbing past the line
-    { x: 56, y: 2, z: 335, width: 13 },    // 26 wide arc north of it
-    { x: 22, y: 2, z: 392, width: 14 },    // 27 monotonic fall onto the boardwalk
+    // The shore run has to cross the resort-esses entry (13-14) to reach the
+    // line; at sea level both ribbons shared the same 2m of air and clipped
+    // through each other. It climbs onto a raised trestle and bridges over.
+    { x: 74, y: 4, z: 170, width: 12 },    // 25 shore run, up onto the trestle
+    { x: 52, y: 13, z: 342, width: 13 },   // 26 wide arc ABOVE the esses entry
+    { x: 16, y: 12, z: 398, width: 14 },   // 27 monotonic fall onto the boardwalk
   ],
   boostPads: [
     { cp: 0.6, d: -4 },   // boardwalk chain

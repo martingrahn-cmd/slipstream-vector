@@ -242,7 +242,11 @@ export const TUNING = {
   SUN_DIR: [-0.4, 0.25, -1], // normalized at use
 
   // ---- Track geometry ----
-  SLICE_STEP: 2.0,        // meters between cross-sections
+  // Road cross-sections. The budget is fill-bound, not draw- or tri-bound, and
+  // the ribbon is one draw whatever its density — so slice it fine enough that
+  // a 6m-radius hairpin stops reading as a run of flat plates. Floored by the
+  // spline's own LUT_STEP; below that there is nothing left to resolve.
+  SLICE_STEP: 0.8,        // meters between cross-sections
   LUT_STEP: 0.5,          // meters between frame samples
   CROWN: 0.02,            // fraction of half-width
   WALL_HEIGHT: 1.2,

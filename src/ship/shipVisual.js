@@ -510,7 +510,59 @@ export class EngineFXBatch {
 // Small authoring kit: lofts of closed polygon stations, thin slabs from 4
 // midplane corners, flat ribbons. All hard-faceted, baked vertex colors.
 
+// Hull cross-section: the hexagonal silhouette the fleet was authored with,
+// resampled to 12 points so the shoulders and chines read as rounded bevels
+// instead of single hard creases. Same width, same deck, same keel — the extra
+// points sit on a gentle outward blend, so surface detail authored against the
+// old profile still lands on the hull.
+function section12(cx, w, yT, yM, yB) {
+  const sh = 0.86, k = 0.42; // shoulder x pull / how far it rounds toward the deck
+  const yS = (y) => yM + (y - yM) * k;
+  return [
+    [cx - w, yM], [cx - sh * w, yS(yT)], [cx - 0.55 * w, yT],
+    [cx, yT], [cx + 0.55 * w, yT], [cx + sh * w, yS(yT)],
+    [cx + w, yM], [cx + sh * w, yS(yB)], [cx + 0.55 * w, yB],
+    [cx, yB], [cx - 0.55 * w, yB], [cx - sh * w, yS(yB)],
+  ];
+}
+
+// Lengthwise smoothing for a loft: subdivide each span with a Catmull-Rom
+// through the authored stations so a hull CURVES between them instead of
+// stepping in flat plates. Endpoints are clamped (the nose and tail keep the
+// authored point exactly). Requires a uniform point count across stations.
+function smoothStations(stations, sub) {
+  const n = stations.length;
+  if (n < 3 || sub < 2) return stations;
+  const m = stations[0].pts.length;
+  for (const st of stations) if (st.pts.length !== m) return stations;
+  const at = (i) => stations[Math.max(0, Math.min(n - 1, i))];
+  const cr = (p0, p1, p2, p3, t) => {
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+      + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  };
+  const out = [];
+  for (let i = 0; i < n - 1; i++) {
+    const a = at(i - 1), b = at(i), c = at(i + 1), d = at(i + 2);
+    for (let k = 0; k < sub; k++) {
+      const t = k / sub, pts = [];
+      for (let j = 0; j < m; j++) {
+        pts.push([
+          cr(a.pts[j][0], b.pts[j][0], c.pts[j][0], d.pts[j][0], t),
+          cr(a.pts[j][1], b.pts[j][1], c.pts[j][1], d.pts[j][1], t),
+        ]);
+      }
+      out.push({ z: cr(a.z, b.z, c.z, d.z, t), pts });
+    }
+  }
+  out.push(stations[n - 1]);
+  return out;
+}
+
+const LOFT_SUB = 4; // sub-stations per authored span when { smooth: true }
+
 function loft(stations, opts = {}) {
+  if (opts.smooth) stations = smoothStations(stations, LOFT_SUB);
   const v = [];
   const tri = (a, b, c) => v.push(...a, ...b, ...c);
   for (let i = 0; i < stations.length - 1; i++) {
@@ -655,7 +707,7 @@ function quadFin(p0, p1, p2, p3, expand = 0.04, r = 0.13, thick = 0.06) {
   const nrm = new THREE.Vector3().crossVectors(ex, new THREE.Vector3().subVectors(E[3], E[0])).normalize();
   const ey = new THREE.Vector3().crossVectors(nrm, ex).normalize();
   const to2 = (p) => { const d = new THREE.Vector3().subVectors(p, E[0]); return [d.dot(ex), d.dot(ey)]; };
-  const geo = new THREE.ExtrudeGeometry(roundedFinShape(E.map(to2), r), { depth: thick, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 2, steps: 1, curveSegments: 12 });
+  const geo = new THREE.ExtrudeGeometry(roundedFinShape(E.map(to2), r), { depth: thick, bevelEnabled: true, bevelThickness: 0.016, bevelSize: 0.016, bevelSegments: 4, steps: 1, curveSegments: 24 });
   const m = new THREE.Matrix4().makeBasis(ex, ey, nrm); m.setPosition(E[0].clone().addScaledVector(nrm, -thick / 2));
   geo.applyMatrix4(m); return geo;
 }
@@ -665,14 +717,12 @@ function buildPronghorn(V) {
   // colour so a hull is never one hue in eight shades. Unset -> the old dark.
   const trim = (V.trim != null) ? V.trim : C.SHIP_CANOPY;
   const group = new THREE.Group();
-  const hexa = (cx, w, yT, yM, yB) => [
-    [cx - w, yM], [cx - 0.55 * w, yT], [cx + 0.55 * w, yT],
-    [cx + w, yM], [cx + 0.55 * w, yB], [cx - 0.55 * w, yB],
-  ];
+  const hexa = (cx, w, yT, yM, yB) => section12(cx, w, yT, yM, yB);
   const octa = (cx, cy, r) => {
     const pts = [];
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.PI / 2;
+    const N = 16; // was 8 — nacelle rings read as round now, not as a stop sign
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2 + Math.PI / 2;
       pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
     }
     return pts;
@@ -686,7 +736,7 @@ function buildPronghorn(V) {
   // 1. Sponson prongs (the split nose).
   both(loft(
     SPONSON.map(([z, cx, w, yT, yM, yB]) => ({ z, pts: hexa(cx, w, yT, yM, yB) })),
-    { capStart: true, capEnd: true },
+    { capStart: true, capEnd: true, smooth: true },
   ), V.hull);
 
   // 2. Center pod.
@@ -696,7 +746,7 @@ function buildPronghorn(V) {
     { z: 0.35, pts: hexa(0, 0.42, 0.46, 0.12, -0.06) },
     { z: 1.20, pts: hexa(0, 0.36, 0.40, 0.12, -0.04) },
     { z: 2.40, pts: hexa(0, 0.14, 0.24, 0.12, 0.04) },
-  ], { capStart: true, capEnd: true }), V.hull]);
+  ], { capStart: true, capEnd: true, smooth: true }), V.hull]);
 
   // 3. Pilot canopy — a glass teardrop SUNK INTO the centre pod's spine (not
   // perched on the ridge: base below the crest, longer, so it blends in).
@@ -751,7 +801,7 @@ function buildPronghorn(V) {
   opaque.push([loft([
     { z: -3.02, pts: octa(0.62, 0.06, 0.012) },
     { z: -2.55, pts: octa(0.62, 0.06, 0.04) },
-  ], { capStart: true }), C.SHIP_CANOPY]);
+  ], { capStart: true, smooth: true }), C.SHIP_CANOPY]);
 
   // 12. Canards off the prong flanks near the nose.
   both(slab([0.84, 0.03, -1.82], [1.18, 0.11, -1.50], [1.16, 0.09, -1.34], [0.84, 0.01, -1.60], 0.04), V.accent);
@@ -932,9 +982,24 @@ export function buildShipMesh(V = DEFAULT_VARIANT) {
 
 // ===================== shared archetype kit =====================
 // 6-point hull cross-section (x,y): outer at yM, deck at yT, belly at yB.
-function hex6(w, yT, yM, yB) { return [[-w, yM], [-w * 0.5, yT], [w * 0.5, yT], [w, yM], [w * 0.5, yB], [-w * 0.5, yB]]; }
-// 8-point flat lens cross-section (wide, slightly domed top) for the manta.
-function lens8(W, T) { return [[-W, 0], [-W * 0.55, T * 0.55], [0, T], [W * 0.55, T * 0.55], [W, 0], [W * 0.55, -T * 0.45], [0, -T * 0.62], [-W * 0.55, -T * 0.45]]; }
+function hex6(w, yT, yM, yB) { return section12(0, w, yT, yM, yB); }
+// Flat lens cross-section (wide, slightly domed top) for the manta — 16 points,
+// sampled off the same 8 control points the blade was authored with.
+function lens8(W, T) {
+  const ctl = [[-W, 0], [-W * 0.55, T * 0.55], [0, T], [W * 0.55, T * 0.55], [W, 0], [W * 0.55, -T * 0.45], [0, -T * 0.62], [-W * 0.55, -T * 0.45]];
+  const out = [];
+  for (let i = 0; i < 8; i++) {
+    const a = ctl[i], b = ctl[(i + 1) % 8], p = ctl[(i + 7) % 8], q = ctl[(i + 2) % 8];
+    out.push(a);
+    // four-point subdivision midpoint: 9/16 of the span, -1/16 of its
+    // neighbours. Exact on a straight edge, rounds a corner into a chine.
+    out.push([
+      0.5625 * (a[0] + b[0]) - 0.0625 * (p[0] + q[0]),
+      0.5625 * (a[1] + b[1]) - 0.0625 * (p[1] + q[1]),
+    ]);
+  }
+  return out;
+}
 // thin triangular plate (wing / fin / canard), extruded `t` along an axis.
 function tri3d(a, b, c, t, axis) {
   const o = (p, s) => axis === 'y' ? [p[0], p[1] + s, p[2]] : axis === 'x' ? [p[0] + s, p[1], p[2]] : [p[0], p[1], p[2] + s];
@@ -957,14 +1022,14 @@ const xform = (g, x, y, z, rx, ry, rz) => { if (rx) g.rotateX(rx); if (ry) g.rot
 function addEngines(opaque, glows, nozzles, accentHex) {
   for (const n of nozzles) {
     const r = n.r || 0.2, z = n.z;
-    opaque.push([xform(new THREE.CylinderGeometry(r * 0.95, r * 1.12, r * 1.7, 18, 1, true), n.x, n.y, z - r * 0.8, Math.PI / 2), C.SHIP_CANOPY]);
-    glows.push(gcol(discGeo(n.x, n.y, z + 0.03, r * 0.82, 18), C.ENGINE));
+    opaque.push([xform(new THREE.CylinderGeometry(r * 0.95, r * 1.12, r * 1.7, 30, 1, true), n.x, n.y, z - r * 0.8, Math.PI / 2), C.SHIP_CANOPY]);
+    glows.push(gcol(discGeo(n.x, n.y, z + 0.03, r * 0.82, 28), C.ENGINE));
     {
-      opaque.push([xform(new THREE.CylinderGeometry(r, r * 1.18, r * 2.0, 28, 1, true), n.x, n.y, z - r, Math.PI / 2), 0x2e3440]);
-      opaque.push([xform(new THREE.TorusGeometry(r * 1.12, r * 0.16, 12, 40), n.x, n.y, z + r * 0.05), accentHex]);
-      opaque.push([xform(new THREE.CylinderGeometry(r * 0.22, r * 0.22, r * 0.7, 14), n.x, n.y, z - r * 0.5, Math.PI / 2), 0x2e3440]);
-      for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; opaque.push([xform(new THREE.BoxGeometry(r * 0.09, r * 0.72, r * 0.2), n.x + Math.cos(a) * r * 0.5, n.y + Math.sin(a) * r * 0.5, z - r * 0.35, 0, 0, a), 0x2e3440]); }
-      glows.push(gcol(xform(new THREE.TorusGeometry(r * 0.9, r * 0.1, 12, 36), n.x, n.y, z + 0.02), C.ENGINE));
+      opaque.push([xform(new THREE.CylinderGeometry(r, r * 1.18, r * 2.0, 44, 1, true), n.x, n.y, z - r, Math.PI / 2), 0x2e3440]);
+      opaque.push([xform(new THREE.TorusGeometry(r * 1.12, r * 0.16, 18, 60), n.x, n.y, z + r * 0.05), accentHex]);
+      opaque.push([xform(new THREE.CylinderGeometry(r * 0.22, r * 0.22, r * 0.7, 22), n.x, n.y, z - r * 0.5, Math.PI / 2), 0x2e3440]);
+      for (let i = 0; i < 30; i++) { const a = i / 30 * Math.PI * 2; opaque.push([xform(new THREE.BoxGeometry(r * 0.07, r * 0.72, r * 0.2), n.x + Math.cos(a) * r * 0.5, n.y + Math.sin(a) * r * 0.5, z - r * 0.35, 0, 0, a), 0x2e3440]); }
+      glows.push(gcol(xform(new THREE.TorusGeometry(r * 0.9, r * 0.1, 16, 52), n.x, n.y, z + 0.02), C.ENGINE));
     }
   }
 }
@@ -996,11 +1061,11 @@ function assembleShip(V, opaque, glows, nozzles, reactive) {
 // half-length of the dome.
 function addCanopy(opaque, glows, cx, cy, cz, W, H, L, accentHex) {
   // recessed coaming ring the bubble sits IN (reads as a cockpit tub, not a blob)
-  const rim = new THREE.CylinderGeometry(1, 1.05, 0.09, 22, 1, true);
+  const rim = new THREE.CylinderGeometry(1, 1.05, 0.09, 36, 1, true);
   rim.scale(W * 1.08, 1, L * 1.08); rim.translate(cx, cy + 0.03, cz);
   opaque.push([rim, 0x2e3440]);
   // dark glass bubble — upper half-ellipsoid, longer fore-aft than wide
-  const glass = new THREE.SphereGeometry(1, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  const glass = new THREE.SphereGeometry(1, 36, 22, 0, Math.PI * 2, 0, Math.PI * 0.5);
   glass.scale(W, H, L); glass.translate(cx, cy + 0.05, cz);
   opaque.push([glass, C.SHIP_CANOPY]);
   // crown spar: a thin accent rib running nose→tail over the canopy top
@@ -1043,7 +1108,7 @@ function buildManta(V) {
     { z: 1.75, pts: mx(1.50 * bw, 0.18, 0.05, 0.14) },
     { z: 2.1, pts: mx(0.80 * bw, 0.13, 0.05, 0.06) },
     { z: 2.5, pts: mx(0.20 * bw, 0.09, 0.04, 0) },
-  ], { capStart: true, capEnd: true }), V.hull]);
+  ], { capStart: true, capEnd: true, smooth: true }), V.hull]);
 
   // Winglets grow OUT of the curled tip (base sits at the gull-curl height and
   // continues its arc) — editor knobs: tipSize / tipRaise / tipX / tipZ.
@@ -1070,7 +1135,7 @@ function buildManta(V) {
   for (const sx of [-1, 1]) {
     const pod = loft([
       { z: 1.15, pts: lens8(0.12, 0.07) }, { z: 1.55, pts: lens8(0.24, 0.16) }, { z: 2.05, pts: lens8(0.2, 0.14) },
-    ], { capStart: true, capEnd: true });
+    ], { capStart: true, capEnd: true, smooth: true });
     pod.translate(sx * ex, ey - 0.01, 0);
     opaque.push([pod, V.hull]);
   }
@@ -1135,7 +1200,7 @@ function buildDelta(V) {
   opaque.push([loft([
     { z: -3.0, pts: hex6(0.05, 0.05, 0.0, -0.05) }, { z: -1.4, pts: hex6(0.45, 0.1, 0.0, -0.12) },
     { z: 0.4, pts: hex6(1.05, 0.13, 0.0, -0.14) }, { z: 2.0, pts: hex6(1.5, 0.12, 0.0, -0.12) }, { z: 2.5, pts: hex6(1.36, 0.1, 0.0, -0.1) },
-  ], { capStart: true, capEnd: true }), V.hull]);
+  ], { capStart: true, capEnd: true, smooth: true }), V.hull]);
   // big forward-swept delta wings with SOFT tips (not thin pointy blades), with
   // dihedral (tips raised) so a banked wingtip clears the road. wingSpan scales
   // the half-span (x), wingLen scales chord (z) about the wing centre.
@@ -1194,14 +1259,14 @@ function buildTwinboom(V) {
     { z: -2.90, pts: hex6(0.05, 0.04, 0.00, -0.03) }, { z: -1.90, pts: hex6(0.22, 0.20, 0.02, -0.12) },
     { z: -0.60, pts: hex6(0.40, 0.36, 0.04, -0.20) }, { z: 0.60, pts: hex6(0.44, 0.38, 0.04, -0.22) },
     { z: 1.70, pts: hex6(0.30, 0.26, 0.02, -0.14) }, { z: 2.05, pts: hex6(0.15, 0.13, 0.00, -0.07) },
-  ], { capStart: true, capEnd: true }), V.hull]);
+  ], { capStart: true, capEnd: true, smooth: true }), V.hull]);
   // Outrigger booms: pointed intake well forward of the cockpit, swelling all
   // the way back into the engine. Slung LOW so they read as hulls, not shoulders.
   for (const sx of [-1, 1]) {
     const boom = loft([
       { z: -1.70, pts: hex6(0.07, 0.06, 0.00, -0.06) }, { z: -0.90, pts: hex6(0.20, 0.18, 0.00, -0.18) },
       { z: 1.00, pts: hex6(0.28, 0.25, 0.00, -0.25) }, { z: 2.25, pts: hex6(0.35, 0.32, 0.00, -0.32) },
-    ], { capStart: true, capEnd: true });
+    ], { capStart: true, capEnd: true, smooth: true });
     boom.translate(sx * bx, -0.04, 0);
     opaque.push([boom, V.hull]);
   }
