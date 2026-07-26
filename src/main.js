@@ -94,7 +94,7 @@ if (!GFX_MODES.includes(qualityMode)) qualityMode = ADAPTIVE;
 let tierIdx = GFX.length - 1;
 const adaptive = new Adaptive();
 
-function applyTier(i, { announce = false } = {}) {
+function applyTier(i) {
   tierIdx = Math.max(0, Math.min(GFX.length - 1, i));
   const q = GFX[tierIdx];
   renderer.setPixelRatio(Math.min(devicePixelRatio, q.pixelRatio));
@@ -110,7 +110,6 @@ function applyTier(i, { announce = false } = {}) {
   }
   if (track && track.setGloss) track.setGloss(q.gloss);
   applyReflections(q.reflect);
-  if (announce) hud.setStats(`GRAPHICS: ${q.name}`);
 }
 
 // Road reflections. Below FULL each ship keeps its own default (player-only,
@@ -1768,14 +1767,18 @@ function tick(now) {
   // corner cannot hold.
   if (qualityMode === ADAPTIVE && state === 'race' && !paused) {
     const want = adaptive.sample(realDt * 1000);
-    if (want !== null && want !== tierIdx) applyTier(want, { announce: true });
+    if (want !== null && want !== tierIdx) applyTier(want);
   }
 
   // Stats readout, 2x/s. autoReset is off so the composer's passes accumulate.
   frames++;
   statT += realDt;
   if (statT >= 0.5) {
-    hud.setStats(`${Math.round(frames / statT)} fps · ${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1000).toFixed(0)}k tris`);
+    // The tier rides the perf line permanently. A momentary "GRAPHICS: X" toast
+    // here was useless: this readout rewrites itself twice a second, so the
+    // announcement was gone before anyone could read it — and ADAPTIVE is
+    // exactly the mode where you want to see what it settled on.
+    hud.setStats(`${Math.round(frames / statT)} fps · ${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1000).toFixed(0)}k tris · ${qualityLabel()}`);
     statT = 0; frames = 0;
   }
   renderer.info.reset();
