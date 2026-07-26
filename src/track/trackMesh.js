@@ -9,6 +9,7 @@ export function buildTrackMesh(spline, theme) {
   const group = new THREE.Group();
   const surface = buildSurface(spline, theme);
   group.add(surface.mesh);
+  group.add(buildUnderside(spline));
   group.add(buildWalls(spline));
   if (spline.splits && spline.splits.length) group.add(buildSplitIslands(spline));
   group.add(buildEdgeStrips(spline));
@@ -227,6 +228,63 @@ function buildSurface(spline, theme) {
     if (nozzleOff != null) mat.uniforms.uNozzleOff.value = nozzleOff; // align road wake to the player hull's nozzle x
   };
   return { mesh, update };
+}
+
+// ------------------------------------------------------------ underside
+// The road surface faces UP and is single-sided, so from below it does not
+// exist. On flat ground nobody ever sees that — but a loop is road you look at
+// from the outside, and from behind one you saw straight through the track:
+// neon edges and walls hanging in the air with a hole where the road should be.
+//
+// This closes the slab. A dark skin spanning the full width at the wall's
+// bottom lip, wound to face DOWN, so the road reads as a solid extruded ribbon
+// from every angle. One draw, no additive coverage — free on a fill-bound
+// budget. Vertex colours lift the outer edges slightly so the belly catches a
+// hint of the edge neon instead of reading as a dead black plane.
+function buildUnderside(spline) {
+  const n = sliceCount(spline);
+  const across = 5;
+  const pos = new Float32Array((n + 1) * across * 3);
+  const col = new Float32Array((n + 1) * across * 3);
+  const v = new THREE.Vector3();
+  const deep = new THREE.Color(TUNING.COL.WALL);
+  // Outer lips catch a dark bleed of the edge neon they sit under — cyan left,
+  // magenta right, the same gameplay language as the surface, just 12% of it.
+  const lipL = new THREE.Color(TUNING.COL.WALL).lerp(new THREE.Color(TUNING.COL.EDGE_L), 0.12);
+  const lipR = new THREE.Color(TUNING.COL.WALL).lerp(new THREE.Color(TUNING.COL.EDGE_R), 0.12);
+
+  eachSlice(spline, (i, s, f) => {
+    const W = f.width;
+    const xs = [-W, -W / 2, 0, W / 2, W];
+    for (let j = 0; j < across; j++) {
+      v.copy(f.pos).addScaledVector(f.R, xs[j]).addScaledVector(f.U, -0.3);
+      const k = (i * across + j) * 3;
+      pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+      // Slow panel banding along the ribbon so a big belly (a loop seen from
+      // behind is mostly belly) reads as built structure, not as a void.
+      const band = 1 + 0.22 * Math.sin(s * 0.55);
+      const c = j === 0 ? lipL : j === across - 1 ? lipR : deep;
+      col[k] = c.r * band; col[k + 1] = c.g * band; col[k + 2] = c.b * band;
+    }
+  });
+
+  const idx = [];
+  for (let i = 0; i < n; i++) {
+    if (spline.gapAt(((i + 0.5) / n) * spline.length)) continue; // jump gap
+    for (let j = 0; j < across - 1; j++) {
+      const a = i * across + j, b = a + across;
+      idx.push(a, b, a + 1, a + 1, b, b + 1); // reversed vs the surface: faces -U
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geom.setIndex(idx);
+  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+  mesh.frustumCulled = false;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
 }
 
 // ---------------------------------------------------------------- walls
