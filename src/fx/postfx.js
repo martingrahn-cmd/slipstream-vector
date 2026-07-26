@@ -1,11 +1,17 @@
-// EffectComposer with MSAA preserved + ONE custom JuicePass:
-// vignette, speed-scaled chromatic aberration, radial blur, full-screen flash.
-// No UnrealBloom — the neon glow is faked geometrically and reads better.
+// EffectComposer with MSAA preserved, a quarter-res bloom, and ONE custom
+// JuicePass: vignette, speed-scaled chromatic aberration, radial blur,
+// full-screen flash.
+//
+// The geometric fake-glow (additive ribbons under the neon edges) STAYS — it is
+// what gives the road its hard-edged WipEout look, and bloom on its own is
+// mush. Bloom is the layer the fake glow never covered: engine bells, weapon
+// rounds, pad decals, the aurora, the sun gate. It is FULL-tier only.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { TUNING as T } from '../config.js';
 
 const JuiceShader = {
@@ -76,6 +82,114 @@ const JuiceShader = {
   `,
 };
 
+// ------------------------------------------------------------------ bloom
+// A compact threshold bloom: bright-pass to quarter resolution, separable
+// 9-tap blur, add back. Four small draws, and every one of them at 1/16 the
+// pixels — the whole point on a fill-bound budget. UnrealBloomPass would give
+// a softer falloff off five mip levels; that is five times the bandwidth for a
+// look this game does not want, because the neon here should stay hard-edged
+// with a halo, not dissolve.
+const BrightShader = {
+  uniforms: { tDiffuse: { value: null }, threshold: { value: 0.85 }, knee: { value: 0.55 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform float threshold; uniform float knee;
+    varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // Luminance-gated, but keep the SOURCE colour: a magenta engine must
+      // bloom magenta, not white. Soft knee so the threshold has no visible
+      // contour crawling across a gradient.
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      float w = smoothstep(threshold, threshold + knee, l);
+      gl_FragColor = vec4(c * w, 1.0);
+    }
+  `,
+};
+
+const BlurShader = {
+  uniforms: { tDiffuse: { value: null }, dir: { value: new THREE.Vector2(1, 0) }, texel: { value: new THREE.Vector2() } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform vec2 dir; uniform vec2 texel;
+    varying vec2 vUv;
+    void main() {
+      // 9-tap gaussian folded into 5 bilinear fetches.
+      vec2 o1 = dir * texel * 1.3846153846;
+      vec2 o2 = dir * texel * 3.2307692308;
+      vec3 c = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
+      c += texture2D(tDiffuse, vUv + o1).rgb * 0.3162162162;
+      c += texture2D(tDiffuse, vUv - o1).rgb * 0.3162162162;
+      c += texture2D(tDiffuse, vUv + o2).rgb * 0.0702702703;
+      c += texture2D(tDiffuse, vUv - o2).rgb * 0.0702702703;
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `,
+};
+
+const CombineShader = {
+  uniforms: { tDiffuse: { value: null }, tBloom: { value: null }, strength: { value: 0.55 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform sampler2D tBloom; uniform float strength;
+    varying vec2 vUv;
+    void main() {
+      vec3 base = texture2D(tDiffuse, vUv).rgb;
+      gl_FragColor = vec4(base + texture2D(tBloom, vUv).rgb * strength, 1.0);
+    }
+  `,
+};
+
+class BloomPass extends Pass {
+  constructor() {
+    super();
+    this.needsSwap = true;
+    const opts = { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false };
+    this.rtA = new THREE.WebGLRenderTarget(1, 1, opts);
+    this.rtB = new THREE.WebGLRenderTarget(1, 1, opts);
+    this.bright = new THREE.ShaderMaterial({ ...BrightShader, uniforms: THREE.UniformsUtils.clone(BrightShader.uniforms) });
+    this.blur = new THREE.ShaderMaterial({ ...BlurShader, uniforms: THREE.UniformsUtils.clone(BlurShader.uniforms) });
+    this.combine = new THREE.ShaderMaterial({ ...CombineShader, uniforms: THREE.UniformsUtils.clone(CombineShader.uniforms) });
+    this.quad = new FullScreenQuad(this.bright);
+  }
+
+  setSize(w, h) {
+    const dw = Math.max(1, Math.floor(w / 4)), dh = Math.max(1, Math.floor(h / 4));
+    this.rtA.setSize(dw, dh);
+    this.rtB.setSize(dw, dh);
+    this.blur.uniforms.texel.value.set(1 / dw, 1 / dh);
+  }
+
+  render(renderer, writeBuffer, readBuffer) {
+    const oldTarget = renderer.getRenderTarget();
+    this.bright.uniforms.tDiffuse.value = readBuffer.texture;
+    this.quad.material = this.bright;
+    renderer.setRenderTarget(this.rtA); this.quad.render(renderer);
+
+    this.quad.material = this.blur;
+    this.blur.uniforms.tDiffuse.value = this.rtA.texture;
+    this.blur.uniforms.dir.value.set(1, 0);
+    renderer.setRenderTarget(this.rtB); this.quad.render(renderer);
+    this.blur.uniforms.tDiffuse.value = this.rtB.texture;
+    this.blur.uniforms.dir.value.set(0, 1);
+    renderer.setRenderTarget(this.rtA); this.quad.render(renderer);
+
+    this.quad.material = this.combine;
+    this.combine.uniforms.tDiffuse.value = readBuffer.texture;
+    this.combine.uniforms.tBloom.value = this.rtA.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (this.clear) renderer.clear();
+    this.quad.render(renderer);
+    renderer.setRenderTarget(oldTarget);
+  }
+
+  dispose() {
+    this.rtA.dispose(); this.rtB.dispose();
+    this.bright.dispose(); this.blur.dispose(); this.combine.dispose();
+    this.quad.dispose();
+  }
+}
+
 export class PostFX {
   constructor(renderer, scene, camera) {
     this.renderer = renderer;
@@ -96,6 +210,14 @@ export class PostFX {
     const enabled = this.juicePass ? this.juicePass.enabled : true;
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Bloom sits BEFORE the grade: bloom the raw additive scene, then let the
+    // JuicePass grade and vignette the result. The other order haloes the
+    // vignette itself, which reads as a smeared lens rather than bright neon.
+    const bloomWasOn = this.bloomPass ? this.bloomPass.enabled : false;
+    if (this.bloomPass) this.bloomPass.dispose();
+    this.bloomPass = new BloomPass();
+    this.bloomPass.enabled = bloomWasOn;
+    this.composer.addPass(this.bloomPass);
     // Rebuilt targets get a FRESH ShaderPass but must keep the tuned uniforms:
     // theme grade and vignette tint are set once per world, not per frame, and
     // silently losing them on a quality change would flatten the world's look.
@@ -137,6 +259,19 @@ export class PostFX {
     if (this.juicePass) this.juicePass.enabled = !!on;
   }
 
+  setBloomEnabled(on) {
+    if (this.bloomPass) this.bloomPass.enabled = !!on;
+  }
+
+  // Per-world bloom tuning. A night circuit under an aurora wants a lower
+  // threshold than a desert at golden hour, where half the sky is already
+  // above it and everything would haze over.
+  setBloom(threshold, strength) {
+    if (!this.bloomPass) return;
+    this.bloomPass.bright.uniforms.threshold.value = threshold;
+    this.bloomPass.combine.uniforms.strength.value = strength;
+  }
+
   // Per-world grade: contrast/saturation from theme.grade, and a vignette tint
   // pulled from the world's deep sky-zenith colour (darkened so it still reads
   // as a vignette). Variety through grade + composition, not palette swaps.
@@ -147,6 +282,11 @@ export class PostFX {
     u.gradeSat.value = g.saturation ?? 1.13;
     const zenith = theme && theme.sky ? theme.sky.zenith : 0x05030f;
     u.vigTint.value.set(zenith).multiplyScalar(0.6);
+    // Per-world bloom. A night circuit under an aurora can take a low
+    // threshold; a desert at golden hour has half the sky above it already and
+    // would haze over, so it needs a high one. Themes may override both.
+    const b = (theme && theme.bloom) || {};
+    this.setBloom(b.threshold ?? 0.82, b.strength ?? 0.5);
   }
 
   update(speedNorm, juice, heat = 0, t = 0) {

@@ -101,6 +101,7 @@ function applyTier(i, { announce = false } = {}) {
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSamples(q.samples);
   postfx.setPostEnabled(q.post);
+  postfx.setBloomEnabled(q.bloom);
   postfx.setSize(innerWidth, innerHeight);
   sparks.setDensity(q.sparks);
   if (scenery && scenery.setMoteDensity) scenery.setMoteDensity(q.motes);

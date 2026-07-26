@@ -26,6 +26,7 @@ export const TIERS = [
     pixelRatio: 0.75,
     samples: 0,
     post: false,        // skip the JuicePass entirely — one full-screen pass saved
+    bloom: false,
     motes: 0.3,
     sparks: 0.5,
   },
@@ -36,6 +37,7 @@ export const TIERS = [
     pixelRatio: 1.0,
     samples: 2,
     post: true,
+    bloom: false,       // MEDIUM is the safe tier: it gets the grade, not the halo
     motes: 0.7,
     sparks: 0.8,
   },
@@ -50,6 +52,7 @@ export const TIERS = [
     pixelRatio: 2.0,
     samples: 4,
     post: true,
+    bloom: true,        // the thing FULL buys that MEDIUM does not
     motes: 1,
     sparks: 1,
   },
