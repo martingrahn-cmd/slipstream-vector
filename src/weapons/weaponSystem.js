@@ -20,12 +20,57 @@ const WEIGHTS = [
 const MAX_PROJ = 12;          // hard cap on live projectiles (fill-budget)
 const MISSILE_AMMO = 3;
 
-// Per-type look: glow tint + trail tint + billboard size.
+// Per-type look: glow tint + trail tint + billboard size. `body` means the round
+// gets a real dart mesh, and the glow drops to a motor plume BEHIND it instead
+// of a ball centred on it — a fat billboard on the projectile's own position is
+// what made a missile read as "just a coloured light".
 const PROJ_LOOK = {
-  missiles: { col: 0xffc86a, trail: 0xffb13d, size: 1.6, h: 1.0 },
-  homing: { col: 0xff6ade, trail: 0xff2ec8, size: 1.7, h: 1.0 },
+  missiles: { col: 0xffc86a, trail: 0xffb13d, size: 0.92, h: 1.0, body: true, back: 0.95 },
+  homing: { col: 0xff6ade, trail: 0xff2ec8, size: 1.0, h: 1.0, body: true, back: 0.95 },
   mine: { col: 0xff5a30, trail: null, size: 1.3, h: 0.55 },
 };
+
+// A real missile: steel dart with a pointed nose, tail flare and three fins,
+// authored pointing +Z (the direction of travel). Baked vertex colours give it
+// internal shading; the per-instance colour tints the round to its weapon hue.
+function missileGeometry() {
+  const parts = [];
+  let total = 0;
+  const add = (g, hex) => {
+    const geo = g.index ? g.toNonIndexed() : g;
+    const n = geo.attributes.position.count;
+    const c = new Float32Array(n * 3);
+    const col = new THREE.Color(hex);
+    for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    parts.push(geo); total += n;
+  };
+  const toZ = (g) => { g.rotateX(Math.PI / 2); return g; }; // Y-axis part -> +Z
+  const nose = toZ(new THREE.ConeGeometry(0.17, 0.54, 16)); nose.translate(0, 0, 0.62);
+  add(nose, 0xffffff);
+  const body = toZ(new THREE.CylinderGeometry(0.17, 0.17, 0.88, 16)); body.translate(0, 0, -0.09);
+  add(body, 0xd8dae6);
+  const flare = toZ(new THREE.CylinderGeometry(0.17, 0.23, 0.18, 16)); flare.translate(0, 0, -0.62);
+  add(flare, 0x74798f);
+  for (let i = 0; i < 3; i++) {
+    const fin = new THREE.BoxGeometry(0.04, 0.36, 0.38);
+    fin.translate(0, 0.26, -0.44);
+    fin.rotateZ((i * Math.PI * 2) / 3);
+    add(fin, 0x8189a6);
+  }
+  const pos = new Float32Array(total * 3), col = new Float32Array(total * 3);
+  let o = 0;
+  for (const g of parts) {
+    pos.set(g.attributes.position.array, o);
+    col.set(g.attributes.color.array, o);
+    o += g.attributes.position.count * 3;
+    g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return out;
+}
 
 // Small seeded PRNG (mulberry32) — the sim path never touches Math.random().
 function mulberry32(seed) {
@@ -212,12 +257,31 @@ export class WeaponSystem {
       this.mineCores.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       for (let i = 0; i < MAX_PROJ; i++) this.mineCores.setMatrixAt(i, zero);
       scene.add(this.mineCores);
+      // Missiles and homing rounds get a solid dart, same instancing pattern —
+      // one draw for every round in the air, zero-scaled for the slots that
+      // hold a mine or nothing.
+      this.darts = new THREE.InstancedMesh(
+        missileGeometry(),
+        new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }),
+        MAX_PROJ,
+      );
+      this.darts.frustumCulled = false;
+      this.darts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      for (let i = 0; i < MAX_PROJ; i++) this.darts.setMatrixAt(i, zero);
+      scene.add(this.darts);
       this._q = new THREE.Quaternion();
+      this._qRoll = new THREE.Quaternion();
+      this._basis = new THREE.Matrix4();
+      this._bx = new THREE.Vector3();
+      this._fwd = new THREE.Vector3(0, 0, 1);
+      this._glowPos = new THREE.Vector3();
+      this._white = new THREE.Color(0xffffff);
       this._axis = new THREE.Vector3(0, 1, 0);
       this.trails = new ProjTrails(scene, MAX_PROJ);
     } else {
       this.glows = null;
       this.mineCores = null;
+      this.darts = null;
       this.trails = null;
     }
   }
@@ -277,6 +341,7 @@ export class WeaponSystem {
     if (this.trails) this.trails.clearSlot(p.slot);
     if (this.glows) { this._m.makeScale(0, 0, 0); this.glows.setMatrixAt(p.slot, this._m); this.glows.instanceMatrix.needsUpdate = true; }
     if (this.mineCores) { this._m.makeScale(0, 0, 0); this.mineCores.setMatrixAt(p.slot, this._m); this.mineCores.instanceMatrix.needsUpdate = true; }
+    if (this.darts) { this._m.makeScale(0, 0, 0); this.darts.setMatrixAt(p.slot, this._m); this.darts.instanceMatrix.needsUpdate = true; }
   }
 
   // Fire the held weapon. Identical rules for player and AI.
@@ -325,7 +390,7 @@ export class WeaponSystem {
         const ds = sdist(phys.s, other.s, L);
         if (ds > 0.5 && ds < best) { best = ds; target = other; }
       }
-      this._spawn('homing', phys.s + 4, phys.d, phys.v + T.MISSILE_SPEED_REL, phys, T.HOMING_LIFE, target);
+      this._spawn('homing', phys.s + 4, phys.d, phys.v + T.HOMING_SPEED_REL, phys, T.HOMING_LIFE, target);
       phys.heldWeapon = null;
       this.juice.emit('weaponFire', { type, isPlayer, remaining: 0 });
       return;
@@ -470,9 +535,30 @@ export class WeaponSystem {
       const look = PROJ_LOOK[p.type];
       this.spline.frameAt(p.s, this._f);
       this._v.copy(this._f.pos).addScaledVector(this._f.R, p.d).addScaledVector(this._f.U, look.h);
+      // A round with a body: dart on the projectile's own position, aligned to
+      // the track frame and rolling slowly; the glow and the trail move BACK to
+      // the nozzle so they read as its motor, not as the round itself.
+      this._glowPos.copy(this._v);
+      if (look.body && this.darts) {
+        // The spline frame is LEFT-handed (R = T x U), so makeBasis(R, U, T)
+        // has determinant -1 and setFromRotationMatrix flips the round nose to
+        // tail. Rebuild the x axis as U x T — right-handed by construction, and
+        // the missile is symmetric about its roll axis so the side it picks
+        // does not matter.
+        this._bx.crossVectors(this._f.U, this._f.T).normalize();
+        this._basis.makeBasis(this._bx, this._f.U, this._f.T);
+        this._q.setFromRotationMatrix(this._basis);
+        this._qRoll.setFromAxisAngle(this._fwd, performance.now() / 240 + p.slot);
+        this._q.multiply(this._qRoll);
+        this._sc.setScalar(1.45);
+        this._m.compose(this._v, this._q, this._sc);
+        this.darts.setMatrixAt(p.slot, this._m);
+        this.darts.setColorAt(p.slot, this._c.setHex(look.col).lerp(this._white, 0.45));
+        this._glowPos.addScaledVector(this._f.T, -look.back);
+      }
       const pulse = p.type === 'mine' ? (p.armT > 0 ? 0.55 : 0.75 + 0.25 * Math.sin(performance.now() / 90)) : 1;
       this._sc.setScalar(look.size * pulse);
-      this._m.compose(this._v, camera.quaternion, this._sc);
+      this._m.compose(this._glowPos, camera.quaternion, this._sc);
       this.glows.setMatrixAt(p.slot, this._m);
       this.glows.setColorAt(p.slot, this._c.setHex(look.col));
       if (p.type === 'mine' && this.mineCores) {
@@ -481,11 +567,15 @@ export class WeaponSystem {
         this._m.compose(this._v, this._q, this._sc);
         this.mineCores.setMatrixAt(p.slot, this._m);
       }
-      if (this.trails && look.trail != null) this.trails.push(p.slot, this._v);
+      if (this.trails && look.trail != null) this.trails.push(p.slot, this._glowPos);
     }
     this.glows.instanceMatrix.needsUpdate = true;
     if (this.glows.instanceColor) this.glows.instanceColor.needsUpdate = true;
     if (this.mineCores) this.mineCores.instanceMatrix.needsUpdate = true;
+    if (this.darts) {
+      this.darts.instanceMatrix.needsUpdate = true;
+      if (this.darts.instanceColor) this.darts.instanceColor.needsUpdate = true;
+    }
     if (this.trails) this.trails.update(dt, camera);
   }
 
@@ -521,6 +611,12 @@ export class WeaponSystem {
       this.mineCores.geometry.dispose();
       this.mineCores.material.dispose();
       this.mineCores = null;
+    }
+    if (this.darts) {
+      this.scene.remove(this.darts);
+      this.darts.geometry.dispose();
+      this.darts.material.dispose();
+      this.darts = null;
     }
     if (this.trails) { this.trails.dispose(this.scene); this.trails = null; }
   }

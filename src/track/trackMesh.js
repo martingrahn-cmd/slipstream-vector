@@ -554,35 +554,32 @@ function buildGlowRibbons(spline) {
 }
 
 // ------------------------------------------------------- jump warning marks
-// Hazard bands painted across the full road just before every jump gap —
-// gameplay language like the edge neon: identical in every world, so a gap
-// ahead is ALWAYS announced. Two chevron bands (the V points at the jump),
-// alternating warning-yellow / dark stripes, conformed to the surface.
+// Two solid warning lines painted edge to edge across the road before every
+// jump gap — gameplay language like the edge neon: identical in every world, so
+// a gap ahead is ALWAYS announced. These used to be striped chevron bands,
+// which read as a pedestrian crossing rather than a hazard marker. Clean lines
+// say "count down to the edge"; the second is thicker because it means now.
 function buildJumpMarks(spline) {
   if (!spline.gaps || !spline.gaps.length) return null;
   const f = makeFrame();
   const v = new THREE.Vector3();
   const positions = [], colors = [], idx = [];
   const cY = new THREE.Color(TUNING.COL.WARNING);
-  const cK = new THREE.Color(0x17102c);
-  const SLICES = 12, DEPTH = 3.0, LEAD = 2.6; // chevron: centre leads by LEAD
+  const SLICES = 18; // lateral subdivision so a line conforms to crown and bank
   for (const g of spline.gaps) {
-    for (const back of [20, 10]) {           // two bands closing on the edge
+    for (const [back, depth] of [[20, 0.55], [10, 0.9]]) {
       const s0 = g.start - back;
       for (let i = 0; i < SLICES; i++) {
         const base = positions.length / 3;
-        const col = i % 2 === 0 ? cY : cK;
         for (const e of [i, i + 1]) {
           const xn = (e / SLICES) * 2 - 1;
-          const chev = (1 - Math.abs(xn)) * LEAD;
-          for (const ds of [0, DEPTH]) {
-            const s = s0 + chev + ds;
-            spline.frameAt(s, f);
-            const x = xn * (f.width - 0.6);
+          for (const ds of [0, depth]) {
+            spline.frameAt(s0 + ds, f);
+            const x = xn * (f.width - 0.25); // edge to edge, inside the wall lip
             const crownH = Math.max(0, 1 - Math.abs(x) / f.width) * TUNING.CROWN * f.width;
             v.copy(f.pos).addScaledVector(f.R, x).addScaledVector(f.U, crownH + 0.06);
             positions.push(v.x, v.y, v.z);
-            colors.push(col.r, col.g, col.b);
+            colors.push(cY.r, cY.g, cY.b);
           }
         }
         idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);

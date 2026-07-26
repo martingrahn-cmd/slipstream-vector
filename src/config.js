@@ -123,14 +123,19 @@ export const TUNING = {
   WEAPON_TRAUMA: 0.62,       // one hard spike at impact — decay does the rest (no sustained shake)
   WEAPON_FLASH: 0.22,
   WEAPON_HITSTOP: 0.06,
-  MISSILE_SPEED_REL: 25,     // m/s over the shooter's speed at launch
+  // Closing speed over the shooter at launch. This has to beat a BOOST: the
+  // boost cap is 1.25 * VMAX (~21 m/s over flat-out), so at the old +25 a
+  // shooter who hit a pad could overtake their own round. Homing gets the big
+  // number — it is the rare, scary one, and it should arrive like a threat.
+  MISSILE_SPEED_REL: 36,     // m/s over the shooter's speed at launch
   MISSILE_LIFE: 5,           // s until despawn
   MISSILE_HIT_DS: 4.0,       // hit window along the track (m)
   MISSILE_HIT_DD: 2.2,       // hit window laterally (m)
   MISSILE_COOLDOWN: 0.25,    // s between shots of a salvo
   HOMING_RANGE: 90,          // lock range ahead (m)
-  HOMING_D_RATE: 6,          // lateral tracking speed (m/s)
-  HOMING_LIFE: 7,
+  HOMING_D_RATE: 9,          // lateral tracking speed (m/s) — keeps up at the new speed
+  HOMING_SPEED_REL: 62,      // m/s over the shooter: outruns any boosted ship
+  HOMING_LIFE: 5,
   MINE_ARM: 0.5,             // s before a dropped mine is live
   MINE_LIFE: 25,
   MINE_TRIGGER_DS: 3.2,
