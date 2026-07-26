@@ -16,7 +16,7 @@ export const THEMES = {
     grade: { contrast: 1.05, saturation: 1.14 },   // bright late afternoon — open, warm
     // Bloom threshold rides the world's ambient brightness: a bright sky sits
     // near the threshold already, so lift it or the whole frame hazes over.
-    bloom: { threshold: 0.95, strength: 0.42 },
+    bloom: { threshold: 0.95, strength: 0.42, shafts: 0.55 },  // low sun through the gate — the strongest shafts in the game
     adGlow: 0.32,
     // LIGHT PASS (Martin: world 1 too dark): lifted from near-night dusk to a
     // BRIGHT late afternoon — blue-violet sky, sandy warm ground, red-rock
@@ -93,7 +93,7 @@ export const THEMES = {
     name: 'PALM COAST',
     music: 'coast',
     grade: { contrast: 1.10, saturation: 1.12 },   // bright, crisp daylight
-    bloom: { threshold: 0.92, strength: 0.46 },
+    bloom: { threshold: 0.92, strength: 0.46, shafts: 0.34 },  // high daylight sun casts short
     adGlow: 0.0,                                    // daytime — signage isn't lit
     sky: {
       zenith: 0x0d3470,
@@ -157,7 +157,7 @@ export const THEMES = {
     name: 'NEON SPRAWL',
     music: 'sprawl',
     grade: { contrast: 1.08, saturation: 1.10 },   // blue hour — moody but readable
-    bloom: { threshold: 0.74, strength: 0.62 },   // night city: let the neon bleed
+    bloom: { threshold: 0.74, strength: 0.62, shafts: 0.20 },  // night city: let the neon bleed, barely any sun
     adGlow: 0.55,                                   // signage still blazes
     // LIGHT PASS (Martin: world 3 too dark): dead-of-night -> BLUE HOUR. The
     // sky keeps real light in it, the smog and towers lift two stops, and the
@@ -224,7 +224,7 @@ export const THEMES = {
     name: 'FROSTFALL RIDGE',
     music: 'frost',
     grade: { contrast: 1.07, saturation: 0.96 },   // cold dusk — crisp, slightly drained
-    bloom: { threshold: 0.78, strength: 0.58 },   // dusk + aurora: generous
+    bloom: { threshold: 0.78, strength: 0.58, shafts: 0.30 },  // dusk + aurora: generous halo, a moon casts softly
     adGlow: 0.0,
     sky: {
       zenith: 0x060a26,   // deep polar night

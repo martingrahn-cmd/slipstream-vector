@@ -127,15 +127,51 @@ const BlurShader = {
   `,
 };
 
+// Light shafts. The mask is the bloom's own bright pass — everything already
+// bright enough to glow is also what should occlude and cast — radially blurred
+// away from the sun's screen position. That reuse is the whole trick: shafts
+// cost ONE extra quarter-res pass rather than a mask render of their own.
+const ShaftShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uSun: { value: new THREE.Vector2(0.5, 0.5) },
+    uAmount: { value: 0 },
+    uDensity: { value: 0.62 },
+    uDecay: { value: 0.94 },
+  },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform vec2 uSun;
+    uniform float uAmount; uniform float uDensity; uniform float uDecay;
+    varying vec2 vUv;
+    const int SAMPLES = 16;
+    void main() {
+      if (uAmount <= 0.001) { gl_FragColor = vec4(0.0); return; }
+      // Named march, not step: step is a GLSL builtin.
+      vec2 march = (vUv - uSun) * (uDensity / float(SAMPLES));
+      vec2 uv = vUv;
+      vec3 acc = vec3(0.0);
+      float w = 1.0, total = 0.0;
+      for (int i = 0; i < SAMPLES; i++) {
+        acc += texture2D(tDiffuse, uv).rgb * w;
+        total += w;
+        uv -= march;
+        w *= uDecay;
+      }
+      gl_FragColor = vec4(acc / max(total, 1e-4) * uAmount, 1.0);
+    }
+  `,
+};
+
 const CombineShader = {
   uniforms: {
     tDiffuse: { value: null }, tTight: { value: null }, tWide: { value: null },
-    strength: { value: 0.55 },
+    tShaft: { value: null }, strength: { value: 0.55 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse; uniform sampler2D tTight; uniform sampler2D tWide;
-    uniform float strength;
+    uniform sampler2D tShaft; uniform float strength;
     varying vec2 vUv;
     void main() {
       vec3 base = texture2D(tDiffuse, vUv).rgb;
@@ -144,7 +180,9 @@ const CombineShader = {
       // (eighth res) is the broad atmospheric wash a single radius cannot give
       // without smearing the core. Weighted so the core dominates.
       vec3 glow = texture2D(tTight, vUv).rgb * 0.68 + texture2D(tWide, vUv).rgb * 0.55;
-      gl_FragColor = vec4(base + glow * strength, 1.0);
+      // Shafts add on their own terms, NOT scaled by bloom strength: a world can
+      // want a hard sun with a restrained halo, or the reverse.
+      gl_FragColor = vec4(base + glow * strength + texture2D(tShaft, vUv).rgb, 1.0);
     }
   `,
 };
@@ -158,6 +196,7 @@ class BloomPass extends Pass {
     this.rtB = new THREE.WebGLRenderTarget(1, 1, opts);   // quarter res, blur ping-pong
     this.rtC = new THREE.WebGLRenderTarget(1, 1, opts);   // eighth res, wide wash
     this.rtD = new THREE.WebGLRenderTarget(1, 1, opts);   // eighth res, blur ping-pong
+    this.rtS = new THREE.WebGLRenderTarget(1, 1, opts);   // quarter res, light shafts
     this.copy = new THREE.ShaderMaterial({
       uniforms: { tDiffuse: { value: null } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
@@ -166,13 +205,14 @@ class BloomPass extends Pass {
     this.bright = new THREE.ShaderMaterial({ ...BrightShader, uniforms: THREE.UniformsUtils.clone(BrightShader.uniforms) });
     this.blur = new THREE.ShaderMaterial({ ...BlurShader, uniforms: THREE.UniformsUtils.clone(BlurShader.uniforms) });
     this.combine = new THREE.ShaderMaterial({ ...CombineShader, uniforms: THREE.UniformsUtils.clone(CombineShader.uniforms) });
+    this.shaft = new THREE.ShaderMaterial({ ...ShaftShader, uniforms: THREE.UniformsUtils.clone(ShaftShader.uniforms) });
     this.quad = new FullScreenQuad(this.bright);
   }
 
   setSize(w, h) {
     const qw = Math.max(1, Math.floor(w / 4)), qh = Math.max(1, Math.floor(h / 4));
     const ew = Math.max(1, Math.floor(w / 8)), eh = Math.max(1, Math.floor(h / 8));
-    this.rtA.setSize(qw, qh); this.rtB.setSize(qw, qh);
+    this.rtA.setSize(qw, qh); this.rtB.setSize(qw, qh); this.rtS.setSize(qw, qh);
     this.rtC.setSize(ew, eh); this.rtD.setSize(ew, eh);
     this._quarter = [1 / qw, 1 / qh];
     this._eighth = [1 / ew, 1 / eh];
@@ -197,6 +237,12 @@ class BloomPass extends Pass {
     this.quad.material = this.bright;
     renderer.setRenderTarget(this.rtA); this.quad.render(renderer);
 
+    // Shafts read the RAW mask (rtA before the blur) — a pre-blurred source
+    // gives mush instead of beams.
+    this.quad.material = this.shaft;
+    this.shaft.uniforms.tDiffuse.value = this.rtA.texture;
+    renderer.setRenderTarget(this.rtS); this.quad.render(renderer);
+
     this._blur(renderer, this.rtA, this.rtB, this.rtA, this._quarter);
 
     // Downsample the tight level and blur again: the wide halo comes almost
@@ -210,6 +256,7 @@ class BloomPass extends Pass {
     this.combine.uniforms.tDiffuse.value = readBuffer.texture;
     this.combine.uniforms.tTight.value = this.rtA.texture;
     this.combine.uniforms.tWide.value = this.rtC.texture;
+    this.combine.uniforms.tShaft.value = this.rtS.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     if (this.clear) renderer.clear();
     this.quad.render(renderer);
@@ -217,8 +264,8 @@ class BloomPass extends Pass {
   }
 
   dispose() {
-    this.rtA.dispose(); this.rtB.dispose(); this.rtC.dispose(); this.rtD.dispose();
-    this.bright.dispose(); this.blur.dispose(); this.combine.dispose(); this.copy.dispose();
+    this.rtA.dispose(); this.rtB.dispose(); this.rtC.dispose(); this.rtD.dispose(); this.rtS.dispose();
+    this.bright.dispose(); this.blur.dispose(); this.combine.dispose(); this.copy.dispose(); this.shaft.dispose();
     this.quad.dispose();
   }
 }
@@ -296,6 +343,16 @@ export class PostFX {
     if (this.bloomPass) this.bloomPass.enabled = !!on;
   }
 
+  // Sun in screen UV plus how hard it should cast. main.js projects the world
+  // sun direction each frame; amount is already faded for off-screen and
+  // behind-camera there, so this just forwards it.
+  setSunShafts(u, v, amount) {
+    if (!this.bloomPass) return;
+    const s = this.bloomPass.shaft.uniforms;
+    s.uSun.value.set(u, v);
+    s.uAmount.value = amount;
+  }
+
   // Per-world bloom tuning. A night circuit under an aurora wants a lower
   // threshold than a desert at golden hour, where half the sky is already
   // above it and everything would haze over.
@@ -320,6 +377,7 @@ export class PostFX {
     // would haze over, so it needs a high one. Themes may override both.
     const b = (theme && theme.bloom) || {};
     this.setBloom(b.threshold ?? 0.82, b.strength ?? 0.5);
+    this.shaftStrength = b.shafts ?? 0.35;
   }
 
   update(speedNorm, juice, heat = 0, t = 0) {

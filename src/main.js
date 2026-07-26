@@ -112,6 +112,27 @@ function applyTier(i) {
   applyReflections(q.reflect);
 }
 
+// Light shafts: project the world sun direction to screen UV and decide how
+// hard it casts. The sky shader owns the sun's position (azimuth from the
+// theme, elevation sinking with race progress) — this mirrors that maths so
+// the shafts converge on the disc you can actually see, not an approximation
+// of it. Fades to nothing when the sun is behind the camera or off frame,
+// because a radial blur toward a point outside the view is just a smear.
+const _sunV = new THREE.Vector3();
+function updateSunShafts(raceProgress) {
+  const az = (theme && theme.sky && theme.sky.sunAz) || [-0.35, -0.94];
+  const sunY = 0.07 + (-0.03 - 0.07) * raceProgress;      // matches the sky shader
+  _sunV.set(az[0], sunY, az[1]).normalize().multiplyScalar(1500).add(camera.position);
+  _sunV.project(camera);
+  const u = _sunV.x * 0.5 + 0.5, v = _sunV.y * 0.5 + 0.5;
+  // z > 1 means behind the camera; the projection wraps and would cast shafts
+  // from a mirror-image sun.
+  const behind = _sunV.z > 1;
+  const off = Math.max(Math.abs(u - 0.5), Math.abs(v - 0.5)) * 2;  // 0 centre, 1 at the frame edge
+  const fade = behind ? 0 : 1 - THREE.MathUtils.smoothstep(off, 0.85, 1.6);
+  postfx.setSunShafts(u, v, fade * (postfx.shaftStrength ?? 0) * GFX[tierIdx].shafts);
+}
+
 // Road reflections. Below FULL each ship keeps its own default (player-only,
 // glossy worlds); at FULL every ship reflects on every world.
 function applyReflections(full) {
@@ -1758,6 +1779,7 @@ function tick(now) {
   }
   if (state === 'race' && selection.mode !== 2) hud.setPosition(race.positionOf(ship), 8);
   minimap.update(shipVisual.root.position, ship.boosting, now / 1000, race.minimapDots(_dots));
+  updateSunShafts(raceProgress);
   postfx.update(sn, juice, theme && theme.id === 'desert' ? 0.85 : 0, now / 1000);
   postfx.render();
 
@@ -2352,6 +2374,7 @@ window.__game = {
   get rig() { return rig; },
   get spline() { return spline; },
   get trackDef() { return trackDef; },
+  get theme() { return theme; },
   get race() { return race; },
   get ghost() { return ghost; },
   get podiumScene() { return podiumScene; },
