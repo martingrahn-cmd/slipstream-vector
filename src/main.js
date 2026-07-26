@@ -104,8 +104,20 @@ function applyTier(i, { announce = false } = {}) {
   postfx.setBloomEnabled(q.bloom);
   postfx.setSize(innerWidth, innerHeight);
   sparks.setDensity(q.sparks);
-  if (scenery && scenery.setMoteDensity) scenery.setMoteDensity(q.motes);
+  if (scenery && scenery.setMoteDensity) {
+    scenery.setMoteDensity(q.motes);
+    scenery.setLifeDensity(q.life);
+  }
+  applyReflections(q.reflect);
   if (announce) hud.setStats(`GRAPHICS: ${q.name}`);
+}
+
+// Road reflections. Below FULL each ship keeps its own default (player-only,
+// glossy worlds); at FULL every ship reflects on every world.
+function applyReflections(full) {
+  const set = (v) => { if (v) v.reflectOn = full ? true : v.reflectBase; };
+  set(shipVisual);
+  if (race && race.racers) for (const r of race.racers) set(r.vis);
 }
 
 function setQualityMode(mode) {
@@ -306,6 +318,7 @@ function buildWorld(idx) {
   scene.add(track.group);
   scenery = buildScenery(spline, scene, theme);
   scenery.setMoteDensity(GFX[tierIdx].motes); // a fresh world starts at the current tier
+  scenery.setLifeDensity(GFX[tierIdx].life);
   scene.add(scenery.group);
   buildField();
   rig = new CameraRig(spline, camera);
@@ -377,6 +390,7 @@ function buildField() {
   hud.setWeapon(null);
   banter.configure(race, ship);
   ship.reset(12);
+  applyReflections(GFX[tierIdx].reflect); // a rebuilt field starts at the current tier
   podium.setShip(variant);
   localStorage.setItem('sv-team', String(selection.team));
   localStorage.setItem('sv-pilot', String(selection.pilot));

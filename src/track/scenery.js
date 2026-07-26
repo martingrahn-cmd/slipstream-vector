@@ -133,7 +133,7 @@ export function buildScenery(spline, scene, theme) {
   if (birds) group.add(birds.mesh);
   const devils = theme.dustDevils ? buildDustDevils(rng, spline, groundY, cx, cz, theme.dustDevils, theme.devilCol) : null;
   if (devils) group.add(devils.group);
-  const sails = theme.sails ? buildSails(rng, spline, groundY, cx, cz, theme.sails) : null;
+  const sails = theme.sails ? buildSails(rng, spline, groundY, cx, cz, rich(theme.sails)) : null;
   if (sails) group.add(sails.mesh);
   const blimp = theme.blimp ? buildBlimp(rng, groundY, cx, cz) : null;
   if (blimp) group.add(blimp.group);
@@ -142,13 +142,23 @@ export function buildScenery(spline, scene, theme) {
   if (skiers) group.add(skiers.mesh);
   if (theme.huts) group.add(buildHuts(rng, spline, groundY, theme));
 
+  // Base counts captured AFTER the builders ran — that is the FULL density.
+  const lifeMeshes = [birds, drones, skiers, traffic, skyCars, sails]
+    .filter((o) => o && o.mesh && o.mesh.isInstancedMesh)
+    .map((o) => ({ m: o.mesh, base: o.mesh.count }));
+
   let flash = 0;
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
   return {
     group,
     sky: sky.mesh,
-    // Quality tier hook: the only per-frame additive mass the world owns.
+    // Quality tier hooks. Motes are the additive mass; the life families are
+    // the "busier world" the FULL tier pays for. Both thin live via
+    // InstancedMesh.count, so neither needs the field rebuilt.
     setMoteDensity(f) { if (motes && motes.setDensity) motes.setDensity(f); },
+    setLifeDensity(f) {
+      for (const e of lifeMeshes) e.m.count = Math.max(1, Math.round(e.base * f));
+    },
     update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
@@ -2165,7 +2175,7 @@ function buildBridges(rng, spline, groundY, theme) {
   }
 
   // Bridge traffic: a few dashes per deck, both directions.
-  const PER = 6;
+  const PER = rich(6);
   const N = lanes.length * PER;
   let mesh = null;
   const cars = [];
@@ -2679,7 +2689,7 @@ function buildSkiers(rng, spline, groundY, theme) {
     parts.push(bakeFlatColors(ski, 0x2a3050, { rim: false }));
   }
   const geom = mergeGeoms(parts);
-  const N = theme.skiers;
+  const N = rich(theme.skiers);
   const mesh = new THREE.InstancedMesh(geom,
     new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), N);
   mesh.frustumCulled = false;
@@ -2802,7 +2812,7 @@ function buildDrones(rng, spline, theme) {
     spline.frameAt(s, f);
     if (Math.abs(f.kappa) > 0.005 && s - lastS >= 110) { spots.push(s); lastS = s; }
   }
-  const N = Math.min(theme.drones, Math.max(spots.length * 3, 12));
+  const N = rich(Math.min(theme.drones, Math.max(spots.length * 3, 12)));
   const mesh = new THREE.InstancedMesh(
     new THREE.OctahedronGeometry(0.34),
     new THREE.MeshBasicMaterial({
@@ -2848,6 +2858,14 @@ function buildDrones(rng, spline, theme) {
     },
   };
 }
+
+// ---------------------------------------------------------- world density
+// FULL tier buys a busier world. Ambient life (birds, drones, skiers, city
+// traffic, sky cars, sailboats) is now AUTHORED at this richer density, and the
+// quality tier thins it back with InstancedMesh.count — live, no rebuild, so
+// ADAPTIVE can trim it mid-race. MEDIUM lands roughly where the game shipped.
+const RICH = 1.6;
+const rich = (n) => Math.max(1, Math.round(n * RICH));
 
 // ------------------------------------------------------------------ motes
 // Ambient atmosphere along the whole lap: sand motes, sea spray or neon
@@ -2946,7 +2964,7 @@ function buildMotes(rng, spline, theme) {
 // ------------------------------------------------------------- sky traffic
 // Aircars crossing high over the city on straight lanes.
 function buildSkyTraffic(rng, cx, cz, groundY) {
-  const N = 12;
+  const N = rich(12);
   const mesh = new THREE.InstancedMesh(
     new THREE.BoxGeometry(1.1, 0.45, 3.4),
     new THREE.MeshBasicMaterial({
@@ -2992,7 +3010,7 @@ function buildSkyTraffic(rng, cx, cz, groundY) {
 // ------------------------------------------------------------------ birds
 // Two small flocks wheeling over the lagoon.
 function buildBirds(rng, spline, groundY, opts = {}) {
-  const FLOCKS = 2, PER = 7, N = FLOCKS * PER;
+  const FLOCKS = 3, PER = 9, N = FLOCKS * PER;   // was 2x7 — FULL flies a fuller sky
   // A simple chevron silhouette.
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([

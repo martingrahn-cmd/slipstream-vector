@@ -237,6 +237,15 @@ export class Race {
 
   dispose(scene) {
     for (const r of this.racers) {
+      // Pull the reflection out FIRST and dispose only its MATERIALS: its
+      // hull/glow geometry is shared with the live ship and would be freed
+      // twice by the traverse below.
+      if (r.vis.reflection) {
+        scene.remove(r.vis.reflection);
+        r.vis.reflMat.dispose();
+        r.vis.reflGlowMat.dispose();
+        r.vis.reflection = null;
+      }
       scene.remove(r.vis.root, r.vis.shadow);
       r.vis.root.traverse((o) => {
         if (o.geometry) o.geometry.dispose();

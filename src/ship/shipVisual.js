@@ -195,8 +195,20 @@ export class ShipVisual {
     // Mirrored ghost reflection on glossy worlds (player only): a faint,
     // fog-coupled clone of the hull + glow flipped through the road surface plane
     // — reads as a wet reflection with no render target. +2 draws, player-only.
+    // FULL tier extends this two ways: it runs on EVERY world (a dry road still
+    // catches neon, just less than wet asphalt does — reflectMul carries that)
+    // and on EVERY ship, not only the player. Below FULL it stays exactly where
+    // it was: player-only, glossy worlds only.
+    //
+    // The group is always BUILT (shared geometry, two materials, no draw cost
+    // while invisible) and the tier only flips a flag — otherwise ADAPTIVE
+    // could never turn it on mid-race without rebuilding the field.
+    const glossy = opts.groundStyle === 'water' || opts.groundStyle === 'grid';
+    this.reflectMul = glossy ? 1 : 0.55;
+    this.reflectBase = !!(opts.reactive && glossy);
+    this.reflectOn = this.reflectBase;
     this.reflection = null;
-    if (opts.reactive && (opts.groundStyle === 'water' || opts.groundStyle === 'grid')) {
+    {
       const inner = new THREE.Group();
       inner.scale.set(...shipGroup.userData.shipScale); // match the ship's team scale
       // BackSide: a planar reflection flips winding (det -1), so the camera-facing
@@ -413,8 +425,8 @@ export class ShipVisual {
       // ramping to zero as the surface nears vertical and off entirely on
       // loops/corkscrews (f.U.y -> 0 or negative).
       const flat = THREE.MathUtils.smoothstep(f.U.y, 0.30, 0.55);
-      const op = THREE.MathUtils.clamp(0.30 - lift * 0.10, 0, 0.30) * flat;
-      this.reflection.visible = flat > 0 && op > 0.001;
+      const op = THREE.MathUtils.clamp(0.30 - lift * 0.10, 0, 0.30) * flat * this.reflectMul;
+      this.reflection.visible = this.reflectOn !== false && flat > 0 && op > 0.001;
       this.reflMat.opacity = op;
       this.reflGlowMat.opacity = op * 0.7;
     }
