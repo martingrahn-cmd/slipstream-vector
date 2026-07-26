@@ -147,6 +147,8 @@ export function buildScenery(spline, scene, theme) {
   return {
     group,
     sky: sky.mesh,
+    // Quality tier hook: the only per-frame additive mass the world owns.
+    setMoteDensity(f) { if (motes && motes.setDensity) motes.setDensity(f); },
     update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
@@ -2907,6 +2909,10 @@ function buildMotes(rng, spline, theme) {
   const m = new THREE.Matrix4();
   return {
     mesh,
+    // Quality tier: InstancedMesh.count is a live draw ceiling, so thinning the
+    // weather costs nothing and needs no rebuild — the flakes that remain keep
+    // their motion. Never below a handful, or "snowing" turns into "not".
+    setDensity(f) { mesh.count = Math.max(12, Math.round(N * f)); },
     update(t, cam) {
       for (let i = 0; i < N; i++) {
         const b = bases[i];

@@ -78,20 +78,63 @@ const JuiceShader = {
 
 export class PostFX {
   constructor(renderer, scene, camera) {
+    this.renderer = renderer;
+    this.scene = scene;
+    this.camera = camera;
+    this.samples = 4;
     const size = renderer.getSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, {
-      samples: 4,
+    this._build(size.x * renderer.getPixelRatio(), size.y * renderer.getPixelRatio());
+    this.setSize(size.x, size.y);
+  }
+
+  _build(w, h) {
+    const old = this.composer;
+    const rt = new THREE.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), {
+      samples: this.samples,
       type: THREE.HalfFloatType,
     });
-    this.composer = new EffectComposer(renderer, rt);
-    this.composer.addPass(new RenderPass(scene, camera));
+    const enabled = this.juicePass ? this.juicePass.enabled : true;
+    this.composer = new EffectComposer(this.renderer, rt);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Rebuilt targets get a FRESH ShaderPass but must keep the tuned uniforms:
+    // theme grade and vignette tint are set once per world, not per frame, and
+    // silently losing them on a quality change would flatten the world's look.
+    const prev = this.juicePass;
     this.juicePass = new ShaderPass(JuiceShader);
+    this.juicePass.enabled = enabled;
+    if (prev) {
+      for (const k of Object.keys(this.juicePass.uniforms)) {
+        if (prev.uniforms[k] === undefined) continue;
+        const a = this.juicePass.uniforms[k].value, b = prev.uniforms[k].value;
+        if (a && a.copy && b && b.isColor === a.isColor) a.copy(b);
+        else this.juicePass.uniforms[k].value = b;
+      }
+      prev.dispose && prev.dispose();
+    }
     this.composer.addPass(this.juicePass);
     this.composer.addPass(new OutputPass());
+    if (old) old.dispose();
   }
 
   setSize(w, h) {
     this.composer.setSize(w, h);
+  }
+
+  // MSAA sample count on the composer's target. WebGL cannot change the sample
+  // count of a live framebuffer, so this rebuilds the chain — call it on a
+  // settings change, never per frame.
+  setSamples(n) {
+    if (n === this.samples) return;
+    this.samples = n;
+    const size = this.renderer.getSize(new THREE.Vector2());
+    this._build(size.x * this.renderer.getPixelRatio(), size.y * this.renderer.getPixelRatio());
+    this.setSize(size.x, size.y);
+  }
+
+  // Bypass the 12-tap JuicePass. The grade goes with it, so LOW looks flatter —
+  // that is the honest trade, and it is a whole full-screen pass saved.
+  setPostEnabled(on) {
+    if (this.juicePass) this.juicePass.enabled = !!on;
   }
 
   // Per-world grade: contrast/saturation from theme.grade, and a vignette tint

@@ -52,6 +52,12 @@ lengthwise loft smoothing (`loft(..., { smooth: true })`) all buy roundness at
 zero extra draws and zero extra coverage. Spend there before reaching for an
 effect.
 
+`src/fx/quality.js` holds the LOW/MEDIUM/FULL tiers and the ADAPTIVE
+controller. Tiers only touch **fill**: pixelRatio, MSAA samples, the JuicePass,
+and additive particle volume — never scenery or geometry density, because
+cutting those makes a weak machine look like a different game rather than the
+same game rendered softer. New effects need a knob here if they add coverage.
+
 ## Dev workflow
 
 - Serve statically with caching off: `.claude/launch.json` name **"game"**

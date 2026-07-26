@@ -29,11 +29,21 @@ export class Sparks {
       this.pool.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, maxLife: 1 });
     }
     this.cursor = 0;
+    this.budget = n;   // live pool ceiling — the quality tier trims it
     this.colA = new THREE.Color(T.COL.SPARK_A);
     this.colB = new THREE.Color(T.COL.SPARK_B);
     this._c = new THREE.Color();
     this.rng = mulberry32(7);
     scene.add(this.mesh);
+  }
+
+  // Quality tier: shrink the live pool rather than the spawn count, so a burst
+  // still LOOKS like a burst — it just recycles sooner and the tail is shorter.
+  // Sparks are additive, so this is straight overdraw saved.
+  setDensity(f) {
+    this.budget = Math.max(24, Math.round(this.pool.length * f));
+    if (this.cursor >= this.budget) this.cursor = 0;
+    for (let i = this.budget; i < this.pool.length; i++) this.pool[i].alive = false;
   }
 
   // normal (optional): a contact normal; sparks fan AWAY from it (wall hits).
@@ -42,7 +52,7 @@ export class Sparks {
   spawn(pos, vel, spread, count, colA, colB, normal, floorY) {
     for (let i = 0; i < count; i++) {
       const p = this.pool[this.cursor];
-      this.cursor = (this.cursor + 1) % this.pool.length;
+      this.cursor = (this.cursor + 1) % this.budget;
       p.alive = true;
       p.pos.copy(pos);
       p.vel.set(

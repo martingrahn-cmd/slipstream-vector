@@ -17,6 +17,7 @@ import { Juice } from './fx/juice.js';
 import { Sparks, ExhaustTrails } from './fx/particles.js';
 import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
+import { TIERS as GFX, MODES as GFX_MODES, ADAPTIVE, Adaptive } from './fx/quality.js';
 import { Hud, fmt } from './ui/hud.js';
 import { BanterFeed } from './ui/banter.js';
 import { Minimap } from './ui/minimap.js';
@@ -83,6 +84,46 @@ let lastPlace = 0; // for the overtake trophy
 const podium = new Podium(document.getElementById('podium'));
 const podiumScene = new PodiumScene(document.getElementById('podium-scene'));
 const postfx = new PostFX(renderer, scene, camera);
+
+// ---------------------------------------------------------------- quality
+// qualityMode is what the player picked ('low'|'medium'|'full'|'adaptive');
+// tierIdx is what is actually running. In ADAPTIVE the controller moves
+// tierIdx and the menu shows both ("ADAPTIVE · MEDIUM").
+let qualityMode = localStorage.getItem('sv-quality') || ADAPTIVE;
+if (!GFX_MODES.includes(qualityMode)) qualityMode = ADAPTIVE;
+let tierIdx = GFX.length - 1;
+const adaptive = new Adaptive();
+
+function applyTier(i, { announce = false } = {}) {
+  tierIdx = Math.max(0, Math.min(GFX.length - 1, i));
+  const q = GFX[tierIdx];
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q.pixelRatio));
+  renderer.setSize(innerWidth, innerHeight);
+  postfx.setSamples(q.samples);
+  postfx.setPostEnabled(q.post);
+  postfx.setSize(innerWidth, innerHeight);
+  sparks.setDensity(q.sparks);
+  if (scenery && scenery.setMoteDensity) scenery.setMoteDensity(q.motes);
+  if (announce) hud.setStats(`GRAPHICS: ${q.name}`);
+}
+
+function setQualityMode(mode) {
+  qualityMode = mode;
+  localStorage.setItem('sv-quality', mode);
+  if (mode === ADAPTIVE) {
+    // Re-enter optimistically: hardware the player may have just plugged in
+    // (or a browser that has warmed up) deserves another look at FULL.
+    adaptive.ceiling = GFX.length - 1;
+    adaptive.reset(GFX.length - 1);
+    applyTier(GFX.length - 1);
+  } else {
+    applyTier(GFX_MODES.indexOf(mode));
+  }
+}
+
+function qualityLabel() {
+  return qualityMode === ADAPTIVE ? `ADAPTIVE · ${GFX[tierIdx].name}` : GFX[tierIdx].name;
+}
 
 // HERO SHOT for the circuit dossier: rendered from a showcase point in the
 // real world at a fixed high resolution, then scaled to fit by CSS — so the
@@ -263,6 +304,7 @@ function buildWorld(idx) {
   track = buildTrackMesh(spline, theme);
   scene.add(track.group);
   scenery = buildScenery(spline, scene, theme);
+  scenery.setMoteDensity(GFX[tierIdx].motes); // a fresh world starts at the current tier
   scene.add(scenery.group);
   buildField();
   rig = new CameraRig(spline, camera);
@@ -533,6 +575,7 @@ function updateMenu() {
       + `<span class="cf__swap">SWITCH &#9656;</span>`
     + `</button>`);
 
+  setTxt('opt-quality', qualityLabel());
   setHTML('opt-music', volBar(audio.musicVolume));
   setHTML('opt-sfx', volBar(audio.sfxVolume));
   setHTML('opt-voice', volBar(audio.voiceVolume));
@@ -549,7 +592,7 @@ function updateMenu() {
 
   setTxt('ns-single', trackDef.name);
   setTxt('ns-garage', team.name);
-  setTxt('ns-options', `MUSIC ${audio.musicVolume}`);
+  setTxt('ns-options', qualityLabel());
   setTxt('ns-records', `${recordsSet()}/${TRACKS.length} SET`);
   setTxt('ns-trophies', `${achievements.count()}/${achievements.total()}`);
   setHTML('status-tele', `CLASS &#9656; <b>${cls.name}</b> &middot; RIVALS &#9656; <b>${diff.name}</b> &middot; &#9672; ${achievements.count()}/${achievements.total()}`);
@@ -1702,6 +1745,15 @@ function tick(now) {
   postfx.update(sn, juice, theme && theme.id === 'desert' ? 0.85 : 0, now / 1000);
   postfx.render();
 
+  // ADAPTIVE: judge the tier on real frame time. Only while a race is actually
+  // running — menus and the attract camera are not representative of load, and
+  // a paused game reporting 200fps would happily climb to a tier the next
+  // corner cannot hold.
+  if (qualityMode === ADAPTIVE && state === 'race' && !paused) {
+    const want = adaptive.sample(realDt * 1000);
+    if (want !== null && want !== tierIdx) applyTier(want, { announce: true });
+  }
+
   // Stats readout, 2x/s. autoReset is off so the composer's passes accumulate.
   frames++;
   statT += realDt;
@@ -1744,6 +1796,8 @@ function editRow(row, dir) {
   } else if (row === 'pilot') {
     selection.pilot = n(2, selection.pilot, dir);   // which of the team's 2 drivers you are —
     buildField();                                   // each driver wears their own signature livery
+  } else if (row === 'quality') {
+    setQualityMode(GFX_MODES[n(GFX_MODES.length, GFX_MODES.indexOf(qualityMode), dir)]);
   } else if (row === 'music') {
     audio.setMusicVolume(audio.musicVolume + dir);
   } else if (row === 'sfx') {
@@ -2163,6 +2217,9 @@ function applyDebugCam() {
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  // Re-assert the tier's pixelRatio: going fullscreen fires a resize, and the
+  // renderer would otherwise keep whatever ratio it had at the old size.
+  renderer.setPixelRatio(Math.min(devicePixelRatio, GFX[tierIdx].pixelRatio));
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSize(innerWidth, innerHeight);
 });
@@ -2261,6 +2318,7 @@ if (selection.mode === 0) trackIndex = 0; // championship always opens on round 
 buildWorld(trackIndex);
 hud.showOverlay(true);
 applyReducedMotion();
+setQualityMode(qualityMode);   // after the first world exists — it tunes the scenery too
 wireClicks();
 refreshPrompts(); // paint the initial (keyboard) button prompts before the first frame
 _promptDev = input.lastDevice; _promptKind = input.padKind; // seed so the first tick isn't a redundant repaint
@@ -2286,6 +2344,14 @@ window.__game = {
   state: () => state,
   menu,
   menuKey: applyMenuKey,
+  setQuality: (m) => setQualityMode(m),
+  qualityState: () => ({
+    mode: qualityMode, tier: GFX[tierIdx].name,
+    pr: renderer.getPixelRatio(), samples: postfx.samples,
+    post: postfx.juicePass.enabled,
+    motes: scenery && scenery.setMoteDensity ? scenery.group.children.length : null,
+    sparkBudget: sparks.budget,
+  }),
   enter: onEnter,
   escape: onEscape,
   // Jump straight to the podium ceremony with the player at a given overall
