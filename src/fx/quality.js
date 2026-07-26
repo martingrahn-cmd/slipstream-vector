@@ -43,7 +43,11 @@ export const TIERS = [
     id: 'full',
     name: 'FULL',
     blurb: 'Everything on. What the game is authored to look like.',
-    pixelRatio: 1.5,
+    // 1.5 was the old global cap, chosen when ONE setting had to be safe on
+    // every machine. With MEDIUM underneath it and ADAPTIVE watching, FULL can
+    // ask for the display's native resolution: on a HiDPI panel that is the
+    // difference between soft neon edges and clean ones.
+    pixelRatio: 2.0,
     samples: 4,
     post: true,
     motes: 1,
