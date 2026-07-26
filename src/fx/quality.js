@@ -110,7 +110,13 @@ export class Adaptive {
       this.ema = 1000 / 60; // re-measure from scratch at the new tier
       return this.idx;
     }
-    if (fps > this.target + 8) {
+    // Climb on "comfortably AT target", not "target plus headroom". The obvious
+    // version — require target + 8 — is broken on any vsync-capped display:
+    // a 60Hz panel physically cannot report 66fps, so a machine that dipped
+    // once could never climb back and would sit at LOW for the rest of the
+    // session. The ceiling below is what stops this from turning into hunting:
+    // a tier that fails once is not retried until the 45s probe.
+    if (fps > this.target - 2) {
       this.goodT += dt;
       if (this.idx < this.ceiling && this.goodT > 12) {
         // Twelve unbroken seconds of headroom below a ceiling we already trust.
