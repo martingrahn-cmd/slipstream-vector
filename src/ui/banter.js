@@ -48,7 +48,7 @@ export const LINES = {
   'KIRA NOX': {
     glad: ["Target neutralized.", "Probability: you lose.", "Overtake logged.", "You are inefficient.", "Zero lap-time wasted.", "Outcome: expected.",
       "Efficiency: optimal.", "Victory subroutine engaged.", "Your defeat: scheduled.", "Processing... satisfaction?", "Resistance was statistical noise."],
-    arg: ["Anomaly detected.", "That won't compute twice.", "Err—err—rebooting.", "Recalculating your defeat.", "Threat logged.",
+    arg: ["Anomaly detected.", "That won't compute twice.", "You just became a priority.", "Recalculating your defeat.", "Threat logged.",
       "Damage report: irrelevant.", "Hostility logged. Response queued.", "Countermeasures loading.", "This unit holds grudges.", "Error. ERROR. ...Recovered."],
   },
   'LYRA STORM': {

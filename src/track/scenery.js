@@ -171,7 +171,7 @@ export function buildScenery(spline, scene, theme) {
       if (canyon) canyon.update(t);
       if (traffic) traffic.update(t);
       if (drones) drones.update(t);
-      if (motes) motes.update(t);
+      if (motes) motes.update(t, cameraPos);
       if (skyCars) skyCars.update(t);
       if (bridges) bridges.update(t);
       if (birds) birds.update(t);
@@ -2851,23 +2851,49 @@ function buildDrones(rng, spline, theme) {
 // Ambient atmosphere along the whole lap: sand motes, sea spray or neon
 // rain depending on the world. Motion in the air sells "alive" more than
 // any static prop.
+// Wrap a world coordinate into a ±R window centred on c — the flake keeps a
+// world position (so it parallaxes correctly), and only teleports at the far
+// edge of the box where a 14cm speck is invisible anyway.
+function wrapTo(v, c, R) {
+  const d = v - c;
+  return c + d - Math.floor((d + R) / (2 * R)) * 2 * R;
+}
+
 function buildMotes(rng, spline, theme) {
   const rain = theme.ambient.mode === 'rain';
   const snow = theme.ambient.mode === 'snow';
-  const N = rain ? 170 : snow ? 200 : 140;
+  // SNOW is camera-local: the old build scattered 200 flakes along the WHOLE
+  // lap, so on a 4km circuit you drove through roughly six of them and the
+  // weather may as well not have existed. These live in a box that follows the
+  // camera and wrap around it, so the same one draw call buys real snowfall.
+  const N = rain ? 170 : snow ? 850 : 140;
+  const BOX = 44, VR = 11, V_MID = 5; // half-extents of the snow box, and its centre above the camera
   const geom = rain
     ? new THREE.BoxGeometry(0.045, 1.6, 0.045)
-    : snow ? new THREE.BoxGeometry(0.14, 0.14, 0.14)
+    : snow ? new THREE.BoxGeometry(0.13, 0.13, 0.13)
       : new THREE.BoxGeometry(0.17, 0.17, 0.17);
   const mesh = new THREE.InstancedMesh(geom, new THREE.MeshBasicMaterial({
     color: theme.ambient.color, transparent: true,
-    opacity: rain ? 0.3 : snow ? 0.6 : 0.45,
+    opacity: rain ? 0.3 : snow ? 0.55 : 0.45,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
   }), N);
   mesh.frustumCulled = false;
   const f = makeFrame();
   const bases = [];
+  spline.frameAt(0, f);
   for (let i = 0; i < N; i++) {
+    if (snow) {
+      // Seeded anywhere in the box; the wrap makes the start position moot.
+      bases.push({
+        x: f.pos.x + (rng() * 2 - 1) * BOX,
+        y: f.pos.y + (rng() * 2 - 1) * VR,
+        z: f.pos.z + (rng() * 2 - 1) * BOX,
+        ph: rng() * 100,
+        sp: 0.5 + rng(),
+        sz: 0.6 + rng() * 1.1,      // thick flakes and fine ones in the same fall
+      });
+      continue;
+    }
     spline.frameAt(rng() * spline.length, f);
     bases.push({
       x: f.pos.x + f.R.x * (rng() - 0.5) * 56,
@@ -2875,12 +2901,13 @@ function buildMotes(rng, spline, theme) {
       z: f.pos.z + f.R.z * (rng() - 0.5) * 56,
       ph: rng() * 100,
       sp: 0.5 + rng(),
+      sz: 1,
     });
   }
   const m = new THREE.Matrix4();
   return {
     mesh,
-    update(t) {
+    update(t, cam) {
       for (let i = 0; i < N; i++) {
         const b = bases[i];
         let x = b.x, y = b.y, z = b.z;
@@ -2888,15 +2915,21 @@ function buildMotes(rng, spline, theme) {
           y = b.y + 9 - ((t * 26 * b.sp + b.ph) % 18);
         } else if (snow) {
           // Slow tumbling fall with a lateral waft — unhurried, thick flakes.
-          y = b.y + 8 - ((t * 3.6 * b.sp + b.ph) % 15);
-          x += Math.sin(t * 0.7 * b.sp + b.ph) * 1.5;
-          z += Math.cos(t * 0.5 * b.sp + b.ph * 1.3) * 1.2;
+          x = b.x + Math.sin(t * 0.7 * b.sp + b.ph) * 1.6;
+          z = b.z + Math.cos(t * 0.5 * b.sp + b.ph * 1.3) * 1.3;
+          y = b.y - t * 3.6 * b.sp;
+          if (cam) {
+            x = wrapTo(x, cam.x, BOX);
+            z = wrapTo(z, cam.z, BOX);
+            y = wrapTo(y, cam.y + V_MID, VR);
+          }
         } else {
           x += Math.sin(t * 0.35 * b.sp + b.ph) * 3.2;
           y += Math.sin(t * 0.6 * b.sp + b.ph * 2) * 1.4;
           z += Math.cos(t * 0.3 * b.sp + b.ph) * 3.2;
         }
-        m.makeTranslation(x, y, z);
+        m.makeScale(b.sz, b.sz, b.sz);
+        m.setPosition(x, y, z);
         mesh.setMatrixAt(i, m);
       }
       mesh.instanceMatrix.needsUpdate = true;
