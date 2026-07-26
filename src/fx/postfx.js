@@ -128,14 +128,23 @@ const BlurShader = {
 };
 
 const CombineShader = {
-  uniforms: { tDiffuse: { value: null }, tBloom: { value: null }, strength: { value: 0.55 } },
+  uniforms: {
+    tDiffuse: { value: null }, tTight: { value: null }, tWide: { value: null },
+    strength: { value: 0.55 },
+  },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; uniform sampler2D tBloom; uniform float strength;
+    uniform sampler2D tDiffuse; uniform sampler2D tTight; uniform sampler2D tWide;
+    uniform float strength;
     varying vec2 vUv;
     void main() {
       vec3 base = texture2D(tDiffuse, vUv).rgb;
-      gl_FragColor = vec4(base + texture2D(tBloom, vUv).rgb * strength, 1.0);
+      // Two radii, not one. The tight level (quarter res) keeps the halo close
+      // to the source so neon still reads as a hard line; the wide level
+      // (eighth res) is the broad atmospheric wash a single radius cannot give
+      // without smearing the core. Weighted so the core dominates.
+      vec3 glow = texture2D(tTight, vUv).rgb * 0.68 + texture2D(tWide, vUv).rgb * 0.55;
+      gl_FragColor = vec4(base + glow * strength, 1.0);
     }
   `,
 };
@@ -145,8 +154,15 @@ class BloomPass extends Pass {
     super();
     this.needsSwap = true;
     const opts = { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false };
-    this.rtA = new THREE.WebGLRenderTarget(1, 1, opts);
-    this.rtB = new THREE.WebGLRenderTarget(1, 1, opts);
+    this.rtA = new THREE.WebGLRenderTarget(1, 1, opts);   // quarter res, tight halo
+    this.rtB = new THREE.WebGLRenderTarget(1, 1, opts);   // quarter res, blur ping-pong
+    this.rtC = new THREE.WebGLRenderTarget(1, 1, opts);   // eighth res, wide wash
+    this.rtD = new THREE.WebGLRenderTarget(1, 1, opts);   // eighth res, blur ping-pong
+    this.copy = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }',
+    });
     this.bright = new THREE.ShaderMaterial({ ...BrightShader, uniforms: THREE.UniformsUtils.clone(BrightShader.uniforms) });
     this.blur = new THREE.ShaderMaterial({ ...BlurShader, uniforms: THREE.UniformsUtils.clone(BlurShader.uniforms) });
     this.combine = new THREE.ShaderMaterial({ ...CombineShader, uniforms: THREE.UniformsUtils.clone(CombineShader.uniforms) });
@@ -154,10 +170,25 @@ class BloomPass extends Pass {
   }
 
   setSize(w, h) {
-    const dw = Math.max(1, Math.floor(w / 4)), dh = Math.max(1, Math.floor(h / 4));
-    this.rtA.setSize(dw, dh);
-    this.rtB.setSize(dw, dh);
-    this.blur.uniforms.texel.value.set(1 / dw, 1 / dh);
+    const qw = Math.max(1, Math.floor(w / 4)), qh = Math.max(1, Math.floor(h / 4));
+    const ew = Math.max(1, Math.floor(w / 8)), eh = Math.max(1, Math.floor(h / 8));
+    this.rtA.setSize(qw, qh); this.rtB.setSize(qw, qh);
+    this.rtC.setSize(ew, eh); this.rtD.setSize(ew, eh);
+    this._quarter = [1 / qw, 1 / qh];
+    this._eighth = [1 / ew, 1 / eh];
+  }
+
+  // Separable blur helper: src -> dst via a ping-pong buffer, at the texel
+  // scale of whichever level we are on.
+  _blur(renderer, src, mid, dst, texel) {
+    this.quad.material = this.blur;
+    this.blur.uniforms.texel.value.set(texel[0], texel[1]);
+    this.blur.uniforms.tDiffuse.value = src.texture;
+    this.blur.uniforms.dir.value.set(1, 0);
+    renderer.setRenderTarget(mid); this.quad.render(renderer);
+    this.blur.uniforms.tDiffuse.value = mid.texture;
+    this.blur.uniforms.dir.value.set(0, 1);
+    renderer.setRenderTarget(dst); this.quad.render(renderer);
   }
 
   render(renderer, writeBuffer, readBuffer) {
@@ -166,17 +197,19 @@ class BloomPass extends Pass {
     this.quad.material = this.bright;
     renderer.setRenderTarget(this.rtA); this.quad.render(renderer);
 
-    this.quad.material = this.blur;
-    this.blur.uniforms.tDiffuse.value = this.rtA.texture;
-    this.blur.uniforms.dir.value.set(1, 0);
-    renderer.setRenderTarget(this.rtB); this.quad.render(renderer);
-    this.blur.uniforms.tDiffuse.value = this.rtB.texture;
-    this.blur.uniforms.dir.value.set(0, 1);
-    renderer.setRenderTarget(this.rtA); this.quad.render(renderer);
+    this._blur(renderer, this.rtA, this.rtB, this.rtA, this._quarter);
+
+    // Downsample the tight level and blur again: the wide halo comes almost
+    // free because it is 1/64 of the frame's pixels.
+    this.quad.material = this.copy;
+    this.copy.uniforms.tDiffuse.value = this.rtA.texture;
+    renderer.setRenderTarget(this.rtC); this.quad.render(renderer);
+    this._blur(renderer, this.rtC, this.rtD, this.rtC, this._eighth);
 
     this.quad.material = this.combine;
     this.combine.uniforms.tDiffuse.value = readBuffer.texture;
-    this.combine.uniforms.tBloom.value = this.rtA.texture;
+    this.combine.uniforms.tTight.value = this.rtA.texture;
+    this.combine.uniforms.tWide.value = this.rtC.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     if (this.clear) renderer.clear();
     this.quad.render(renderer);
@@ -184,8 +217,8 @@ class BloomPass extends Pass {
   }
 
   dispose() {
-    this.rtA.dispose(); this.rtB.dispose();
-    this.bright.dispose(); this.blur.dispose(); this.combine.dispose();
+    this.rtA.dispose(); this.rtB.dispose(); this.rtC.dispose(); this.rtD.dispose();
+    this.bright.dispose(); this.blur.dispose(); this.combine.dispose(); this.copy.dispose();
     this.quad.dispose();
   }
 }

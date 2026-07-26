@@ -108,6 +108,7 @@ function applyTier(i, { announce = false } = {}) {
     scenery.setMoteDensity(q.motes);
     scenery.setLifeDensity(q.life);
   }
+  if (track && track.setGloss) track.setGloss(q.gloss);
   applyReflections(q.reflect);
   if (announce) hud.setStats(`GRAPHICS: ${q.name}`);
 }
@@ -319,6 +320,7 @@ function buildWorld(idx) {
   scenery = buildScenery(spline, scene, theme);
   scenery.setMoteDensity(GFX[tierIdx].motes); // a fresh world starts at the current tier
   scenery.setLifeDensity(GFX[tierIdx].life);
+  track.setGloss(GFX[tierIdx].gloss);
   scene.add(scenery.group);
   buildField();
   rig = new CameraRig(spline, camera);

@@ -28,6 +28,7 @@ export const TIERS = [
     post: false,        // skip the JuicePass entirely — one full-screen pass saved
     bloom: false,
     reflect: false,
+    gloss: 0.8,
     life: 0.45,         // thinner sky and roadside, never empty
     motes: 0.3,
     sparks: 0.5,
@@ -41,6 +42,7 @@ export const TIERS = [
     post: true,
     bloom: false,       // MEDIUM is the safe tier: it gets the grade, not the halo
     reflect: false,     // player-only on glossy worlds, as the game always was
+    gloss: 1.0,         // the wet-sheen value the game shipped with
     life: 0.62,         // lands where the game shipped before FULL got richer
     motes: 0.7,
     sparks: 0.8,
@@ -58,6 +60,7 @@ export const TIERS = [
     post: true,
     bloom: true,        // the thing FULL buys that MEDIUM does not
     reflect: true,      // every ship reflects, on every world
+    gloss: 1.7,         // road drinks its own edge neon — free, it is shader maths
     life: 1,            // the busier world, as authored
     motes: 1,
     sparks: 1,

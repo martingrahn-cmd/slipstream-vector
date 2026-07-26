@@ -24,6 +24,8 @@ export function buildTrackMesh(spline, theme) {
   // update(t, speedNorm): pads scroll on t; the surface energy spine flows with speed.
   return {
     group,
+    // Quality tier: the wet-sheen multiplier on the road's own edge reflection.
+    setGloss: (m) => surface.setGloss(m),
     update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, weaponCd = null, playerFull = false) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
@@ -96,6 +98,10 @@ function buildSurface(spline, theme) {
   const C = TUNING.COL;
   // Wet sheen: glossier on water/grid worlds so the neon reflects harder.
   const gloss = (theme.groundStyle === 'water' || theme.groundStyle === 'grid') ? 0.55 : 0.30;
+  // uGloss is the live multiplier the quality tier drives. The wet sheen is the
+  // road reflecting its own edge neon, and it is pure shader maths on fragments
+  // already being shaded — no extra pass, no extra coverage — so FULL can lean
+  // on it hard and MEDIUM keeps the value the game shipped with.
   const mat = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
@@ -107,6 +113,7 @@ function buildSurface(spline, theme) {
         edgeL: { value: new THREE.Color(C.EDGE_L) },
         edgeR: { value: new THREE.Color(C.EDGE_R) },
         gloss: { value: gloss },
+        uGloss: { value: 1 },
         trackLen: { value: spline.length },
         uTime: { value: 0 },
         uSpeed: { value: 0 },
@@ -136,7 +143,7 @@ function buildSurface(spline, theme) {
     `,
     fragmentShader: /* glsl */ `
       uniform vec3 baseCol, bandCol, lineCol, warnCol, edgeL, edgeR, engCol;
-      uniform float trackLen, uTime, uSpeed, gloss, uShipDist, uShipLat, uShipGlow, uNozzleOff;
+      uniform float trackLen, uTime, uSpeed, gloss, uGloss, uShipDist, uShipLat, uShipGlow, uNozzleOff;
       varying float vLat;
       varying float vDist;
       varying float vWidth;
@@ -188,7 +195,7 @@ function buildSurface(spline, theme) {
         float edgeProx = smoothstep(vWidth - 4.5, vWidth - 0.4, abs(vLat));
         vec3 reflCol = vLat < 0.0 ? edgeL : edgeR;
         float shimmer = 0.72 + 0.28 * sin(vDist * 0.5 + uTime * 1.5);
-        col += reflCol * edgeProx * edgeProx * gloss * shimmer * 0.5;
+        col += reflCol * edgeProx * edgeProx * gloss * uGloss * shimmer * 0.5;
         // Engine wake: two streaks trailing the NOZZLES, laid down by the ship's
         // motion — the trail lengthens with speed and a pattern streams backward,
         // so it reads as a wake rather than a glow that toggles on with throttle.
@@ -202,7 +209,7 @@ function buildSurface(spline, theme) {
         float lobeL = smoothstep(0.7, 0.0, abs(vLat - (uShipLat - uNozzleOff)));
         float lobeR = smoothstep(0.7, 0.0, abs(vLat - (uShipLat + uNozzleOff)));
         float pool = poolAlong * poolFlow * max(lobeL, lobeR) * uShipGlow;
-        col += engCol * pool * (0.6 + 0.5 * gloss);
+        col += engCol * pool * (0.6 + 0.5 * gloss * uGloss);
         // Start/finish checker band across the first 4 meters.
         if (vDist < 4.0 || vDist > trackLen - 0.5) {
           float checker = mod(floor(vLat / 1.0) + floor(vDist / 1.0), 2.0);
@@ -227,7 +234,8 @@ function buildSurface(spline, theme) {
     if (engColor) mat.uniforms.engCol.value.copy(engColor);
     if (nozzleOff != null) mat.uniforms.uNozzleOff.value = nozzleOff; // align road wake to the player hull's nozzle x
   };
-  return { mesh, update };
+  const setGloss = (m) => { mat.uniforms.uGloss.value = m; };
+  return { mesh, update, setGloss };
 }
 
 // ------------------------------------------------------------ underside
