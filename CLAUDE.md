@@ -62,7 +62,14 @@ effect.
 - Debug: `window.__game` exposes ship/rig/spline/race/weapons/juice/menu plus
   `warp(seconds, {throttle,...})` for deterministic no-rAF simulation.
 - **QA gate:** every unmanned full-throttle lap
-  (`__game.warp(120,{throttle:1})`) must complete on every track.
+  (`__game.warp(120,{throttle:1})`) must complete on every track, **and**
+  `node tools/audit-tracks.mjs` must pass (needs a one-off `npm i three`). The
+  audit is the guard against a circuit's road cutting through itself where the
+  loop crosses over — never eyeball that from one camera angle. It samples the
+  real banked section plus wall tops, because a centreline check misses the
+  ~4m the outer edge gains on a banked corner and everything a corkscrew does.
+  Track-shape changes must clear **3.5m** surface-to-surface; the circuits that
+  have always looked right sit at 3.7–4.5m.
 - Headless/browser-pane testing: rAF is throttled — screenshots force frames;
   to teleport the player set **both** `ship.s` and `ship.sTotal`.
 - Verify per stage by panning the horizon on each track; regressions-check all

@@ -21,12 +21,15 @@ export const MOONLIT_MILE = {
     { x: 480, y: 4, z: 130, width: 18 },   // 10 SPLIT around the erratic
     { x: 430, y: 5, z: 260, width: 18 },   // 11 lanes glide in parallel
     { x: 350, y: 6, z: 360, width: 15 },   // 12 merge
-    { x: 240, y: 7, z: 420, width: 13 },   // 13 north sweeper
-    { x: 120, y: 8, z: 440, width: 12 },   // 14 pine belt in (corkscrew)
-    { x: 0, y: 8, z: 420, width: 12 },     // 15 rolling through the pines
-    { x: -110, y: 7, z: 380, width: 13 },  // 16 rollout
-    { x: -220, y: 6, z: 330, width: 11 },  // 17 tightening left
-    { x: -300, y: 5, z: 240, width: 9 },   // 18 the only pinch — commit
+    // The pine belt rides a raised bank: the run home (25-27) has to pass under
+    // it to reach the line, and at the old y=7-8 the two ribbons were 4m apart
+    // — less than the banked outer edges alone, so they cut through each other.
+    { x: 240, y: 9, z: 420, width: 13 },   // 13 north sweeper
+    { x: 120, y: 16, z: 440, width: 12 },  // 14 pine belt in (corkscrew)
+    { x: 0, y: 19, z: 420, width: 12 },    // 15 rolling through the pines
+    { x: -110, y: 18, z: 380, width: 13 }, // 16 rollout — bridges the run home
+    { x: -220, y: 10, z: 330, width: 11 }, // 17 tightening left
+    { x: -300, y: 7, z: 240, width: 9 },   // 18 the only pinch — commit
     { x: -340, y: 4, z: 130, width: 11 },  // 19 exit swings wide
     { x: -350, y: 3, z: 10, width: 13 },   // 20 west straight
     { x: -320, y: 3, z: -110, width: 14 }, // 21 |

@@ -32,9 +32,13 @@ export const SKYLINE_RUSH = {
     { x: -60, y: 40, z: -60, width: 14 }, // 17 over the top (landing room)
     { x: -160, y: 30, z: -20, width: 14 },// 18 descent (jump — keep wide)
     { x: -200, y: 20, z: 90, width: 14 }, // 19 diving left (jump landing room)
-    { x: -120, y: 16, z: 120, width: 18 },// 20 lining up the crossover — FORK opens here
-    { x: 20, y: 13, z: 140, width: 20 },  // 21 FLYOVER: island divides inside/outside
-    { x: 120, y: 6, z: 220, width: 19 },  // 22 lanes run parallel, hooking back
+    // The crossover clears the launch straight by a lot more than it used to.
+    // That straight is CORKSCREWED into the loop, so its road rolls right over
+    // — its edges sweep a full road-width of vertical, and 10m of centreline
+    // separation left the two ribbons touching.
+    { x: -120, y: 22, z: 120, width: 18 },// 20 lining up the crossover — FORK opens here
+    { x: 20, y: 21, z: 140, width: 20 },  // 21 FLYOVER: island divides inside/outside
+    { x: 120, y: 11, z: 220, width: 19 }, // 22 lanes run parallel, hooking back
     { x: 80, y: 4, z: 330, width: 16 },   // 23 fork merges, sweeper exit
     { x: -10, y: 4, z: 350, width: 8 },   // 24 final corner onto the line — PINCH
   ],

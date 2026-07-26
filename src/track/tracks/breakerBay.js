@@ -20,11 +20,14 @@ export const BREAKER_BAY = {
     { x: -390, y: 5, z: 100, width: 13 },  //  8 rolling along the wall
     { x: -360, y: 5, z: 220, width: 12 },  //  9 rollout
     { x: -290, y: 4, z: 310, width: 10 },  // 10 lighthouse islet approach
-    { x: -190, y: 4, z: 370, width: 17 },  // 11 SPLIT around the islet
-    { x: -80, y: 4, z: 390, width: 17 },   // 12 lanes parallel
-    { x: 30, y: 4, z: 370, width: 13 },    // 13 merge
-    { x: 130, y: 4, z: 320, width: 11 },   // 14 resort esses in
-    { x: 200, y: 5, z: 250, width: 8 },    // 15 esses — PINCH
+    // The islet run is a RAISED causeway. It has to clear the shore run home
+    // (25-27), which comes back along the boardwalk at sea level — at a shared
+    // y=4 the two ribbons' banked edges cut straight through each other.
+    { x: -190, y: 8, z: 370, width: 17 },  // 11 SPLIT around the islet
+    { x: -80, y: 15, z: 390, width: 17 },  // 12 lanes parallel, up on the deck
+    { x: 30, y: 15, z: 370, width: 13 },   // 13 merge — bridges the shore run
+    { x: 130, y: 9, z: 320, width: 11 },   // 14 resort esses in, back down
+    { x: 200, y: 6, z: 250, width: 8 },    // 15 esses — PINCH
     { x: 260, y: 5, z: 170, width: 8 },    // 16 esses — PINCH
     { x: 300, y: 4, z: 70, width: 11 },    // 17 inlet approach
     { x: 320, y: 5, z: -40, width: 13 },   // 18 JUMP the marina inlet
@@ -34,12 +37,10 @@ export const BREAKER_BAY = {
     { x: 100, y: 2, z: -260, width: 9 },   // 22 exit
     { x: 85, y: 2, z: -160, width: 11 },   // 23 back along the shore, EAST of the pier
     { x: 80, y: 2, z: 0, width: 12 },      // 24 |
-    // The shore run has to cross the resort-esses entry (13-14) to reach the
-    // line; at sea level both ribbons shared the same 2m of air and clipped
-    // through each other. It climbs onto a raised trestle and bridges over.
-    { x: 74, y: 4, z: 170, width: 12 },    // 25 shore run, up onto the trestle
-    { x: 52, y: 13, z: 342, width: 13 },   // 26 wide arc ABOVE the esses entry
-    { x: 16, y: 12, z: 398, width: 14 },   // 27 monotonic fall onto the boardwalk
+    // The shore run stays at boardwalk level and passes UNDER the causeway.
+    { x: 74, y: 2, z: 170, width: 12 },    // 25 shore run, climbing past the line
+    { x: 52, y: 2, z: 342, width: 13 },    // 26 wide arc north of it
+    { x: 16, y: 2, z: 398, width: 14 },    // 27 monotonic fall onto the boardwalk
   ],
   boostPads: [
     { cp: 0.6, d: -4 },   // boardwalk chain

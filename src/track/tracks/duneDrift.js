@@ -24,12 +24,15 @@ export const DUNE_DRIFT = {
     { x: 390, y: 4, z: 320, width: 16 },   // 12 turn 3 entry
     { x: 290, y: 6, z: 390, width: 14 },   // 13 the only chicane complex
     { x: 200, y: 7, z: 360, width: 9 },    // 14 chicane L — PINCH
-    { x: 130, y: 8, z: 400, width: 9 },    // 15 chicane R — PINCH
-    { x: 40, y: 9, z: 420, width: 14 },    // 16 exit — the dune ridge ahead
-    { x: -70, y: 10, z: 400, width: 15 },  // 17 JUMP off the ridge
-    { x: -180, y: 8, z: 360, width: 16 },  // 18 landing
-    { x: -280, y: 6, z: 290, width: 16 },  // 19 turn 4 sweep (corkscrew)
-    { x: -350, y: 5, z: 180, width: 17 },  // 20 rolling through
+    // The dune ridge stands higher than it used to: the run home (27-28) passes
+    // under it onto the grid, and at the old height the banked outer edges of
+    // the two ribbons overlapped by a metre.
+    { x: 130, y: 11, z: 400, width: 9 },   // 15 chicane R — PINCH
+    { x: 40, y: 15, z: 420, width: 14 },   // 16 exit — the dune ridge ahead
+    { x: -70, y: 16, z: 400, width: 15 },  // 17 JUMP off the ridge
+    { x: -180, y: 13, z: 360, width: 16 }, // 18 landing
+    { x: -280, y: 9, z: 290, width: 16 },  // 19 turn 4 sweep (corkscrew)
+    { x: -350, y: 7, z: 180, width: 17 },  // 20 rolling through
     { x: -370, y: 4, z: 60, width: 17 },   // 21 rollout
     { x: -350, y: 3, z: -60, width: 18 },  // 22 lower sweep back
     { x: -280, y: 2, z: -140, width: 18 }, // 23 SPLIT 2 — the desert fork
