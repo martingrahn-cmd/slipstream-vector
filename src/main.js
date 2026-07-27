@@ -1744,7 +1744,7 @@ function tick(now) {
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
   updateSunGate(realDt); // sun-gate bloom + scripted last-lap meteor (desert)
-  scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz, _auroraFlare);
+  scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz, _auroraFlare, camera.quaternion);
 
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {
@@ -2397,6 +2397,8 @@ window.__game = {
   get shipVisual() { return shipVisual; },
   get rig() { return rig; },
   get spline() { return spline; },
+  get scenery() { return scenery; },
+  get camera() { return camera; },
   get trackDef() { return trackDef; },
   get theme() { return theme; },
   get race() { return race; },

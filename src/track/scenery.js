@@ -185,6 +185,8 @@ export function buildScenery(spline, scene, theme) {
   if (theme.sculptures) group.add(buildIceSculptures(rng, spline, groundY, theme));
   const skiers = theme.skiers ? buildSkiers(rng, spline, groundY, theme) : null;
   if (skiers) group.add(skiers.mesh);
+  const stands = buildStands(rng, spline, groundY, theme);
+  if (stands) group.add(stands.group);
   if (theme.huts) group.add(buildHuts(rng, spline, groundY, theme));
 
   // Base counts captured AFTER the builders ran — that is the FULL density.
@@ -203,8 +205,9 @@ export function buildScenery(spline, scene, theme) {
     setMoteDensity(f) { if (motes && motes.setDensity) motes.setDensity(f); },
     setLifeDensity(f) {
       for (const e of lifeMeshes) e.m.count = Math.max(1, Math.round(e.base * f));
+      if (stands) stands.setDensity(f);
     },
-    update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0) {
+    update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0, camQuat = null) {
       sky.mesh.position.copy(cameraPos);
       sky.mat.uniforms.time.value = t;
       sky.mat.uniforms.progress.value = raceProgress;
@@ -236,6 +239,7 @@ export function buildScenery(spline, scene, theme) {
       if (sails) sails.update(t);
       if (blimp) blimp.update(t);
       if (skiers) skiers.update(t);
+      if (stands) stands.update(t, camQuat, cameraPos);
     },
   };
 }
@@ -2545,6 +2549,253 @@ function buildCity(rng, groundY, cx, cz, cityAng, theme = {}, spline = null) {
 
 // Desert: slow-wandering dust devils — tall sand columns spinning far off the
 // racing line, drifting a lazy figure around their anchor.
+// ---------------------------------------------------------------- stands
+// Grandstands, and the reason they exist: the world had props but no PEOPLE.
+// Birds, drones, skiers and traffic are all motion in the distance, and none of
+// them is anybody watching you — which is the single strongest "this place is
+// alive" cue a racing game has. A circuit without spectators reads as a test
+// track no matter how much scenery is bolted to it.
+//
+// Three meshes, whatever the track: the raked structure (baked, static), an
+// instanced CROWD that breathes, and an instanced set of camera FLASHES. The
+// flashes are the cheap trick that does most of the work — a dark stand with
+// stray pinpricks popping in it reads as thousands of people instantly, at a
+// couple of hundred additive pixels a frame.
+function buildStands(rng, spline, groundY, theme) {
+  const f = makeFrame();
+  const LEN = 42, ROWS = 7, PER_ROW = 36, DEPTH = 14;
+
+  // A coarse sample of the whole centreline, kept for the footprint test below.
+  // The track is a loop that crosses OVER itself on several circuits, so "9m to
+  // the right of the road here" can be "on top of the road there" — the same
+  // trap the surface audit exists to catch, one storey up.
+  const path = [];
+  for (let s = 0; s < spline.length; s += 10) {
+    spline.frameAt(s, f);
+    path.push({ s, x: f.pos.x, y: f.pos.y, z: f.pos.z, w: f.width });
+  }
+  const CLEAR = Math.hypot(LEN / 2, DEPTH / 2) + 4;   // stand footprint radius + margin
+  const footprintFree = (px, py, pz, ownS) => {
+    for (const p of path) {
+      const ds = Math.abs(p.s - ownS);
+      if (Math.min(ds, spline.length - ds) < 70) continue;   // our own stretch
+      if (Math.abs(p.y - py) > 16) continue;                 // a flyover well clear above/below
+      if (Math.hypot(p.x - px, p.z - pz) < CLEAR + p.w) return false;
+    }
+    return true;
+  };
+
+  // Where a real circuit puts them: the start/finish, then the outside of the
+  // biggest corners, well spaced. Never on a jump gap, a split or a bank.
+  const cand = [{ s: 42, side: -1 }];
+  let lastS = 42;
+  for (let s = 120; s < spline.length - 120; s += 8) {
+    spline.frameAt(s, f);
+    if (Math.abs(f.kappa) < 0.007 || s - lastS < 420) continue;
+    if (spline.gapAt(s) || spline.gapAt(s + 40)) continue;
+    if (Math.abs(f.U.y) < 0.86) continue;            // banked hard, a loop, a corkscrew
+    cand.push({ s, side: Math.sign(f.kappa) });      // outside of the turn
+    lastS = s;
+  }
+
+  const opa = [], glo = [];
+  const seat = [];   // world position of every spectator, filled below
+  const spotPos = [];   // where each stand actually landed (debug / QA seam)
+  const deck = new THREE.Color(theme.trackBase ?? 0x241448);
+  const neonL = new THREE.Color(0x35e8ff), neonR = new THREE.Color(0xff4fd0);
+
+  const X = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  let placed = 0;
+  for (const spot of cand) {
+    spline.frameAt(spot.s, f);
+    const rl = Math.hypot(f.R.x, f.R.z) || 1;
+    const nx = (f.R.x / rl) * spot.side, nz = (f.R.z / rl) * spot.side;
+    const dist = f.width + 7;   // close enough to the barrier to loom at speed
+    const px = f.pos.x + nx * dist, pz = f.pos.z + nz * dist;
+    const py = Math.max(groundY, f.pos.y - 1.2);
+    if (!footprintFree(px, py, pz, spot.s)) continue;
+    placed++;
+    spotPos.push({ s: spot.s, side: spot.side, x: px, y: py, z: pz, rx: f.pos.x, ry: f.pos.y, rz: f.pos.z });
+    Z.set(-nx, 0, -nz);                 // facing the track
+    X.crossVectors(Y, Z).normalize();
+    m.makeBasis(X, Y, Z);
+    const place = (geom, ox, oy, oz) => {
+      m.setPosition(px + X.x * ox + Z.x * oz, py + oy, pz + X.z * ox + Z.z * oz);
+      return geom.applyMatrix4(m);
+    };
+    const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const backZ = -(ROWS * 1.5);
+    // The deck sits at road height, and beside an ELEVATED road that leaves it
+    // hanging in the air. Same answer as the start gantry: drop legs to the
+    // ground plane, capped so a crest does not grow absurd stilts.
+    const legBottom = Math.min(0, Math.max(groundY - py, -11));
+    if (legBottom < -0.5) {
+      const h = -legBottom + 0.6;
+      for (const sx of [-1, -0.34, 0.34, 1]) {
+        opa.push(bakeFlatColors(place(box(1.5, h, 1.5), sx * (LEN / 2 - 1.2), legBottom + h / 2 - 0.3, backZ / 2), 0x161028, { rim: false }));
+      }
+      opa.push(bakeFlatColors(place(box(LEN + 1.0, 0.7, DEPTH), 0, legBottom + 0.35, backZ / 2), 0x1c1434, { rim: false }));
+    }
+    // Raked deck: each row a step further back and higher — the shape reads as
+    // a stand from any angle without a single custom vertex.
+    for (let r = 0; r < ROWS; r++) {
+      const h = 1.1 + r * 1.15, back = -(r * 1.5);
+      opa.push(bakeFlatColors(place(box(LEN, 0.55, 1.5), 0, h, back), deck.getHex(), { rim: false }));
+      for (let i = 0; i < PER_ROW; i++) {
+        const ox = (i / (PER_ROW - 1) - 0.5) * (LEN - 2.2) + (rng() - 0.5) * 0.4;
+        seat.push({
+          si: placed - 1,
+          x: px + X.x * ox + Z.x * back, y: py + h + 0.75, z: pz + X.z * ox + Z.z * back,
+          ph: rng() * 100, sp: 0.7 + rng() * 0.8, hue: rng(),
+          // Only about one seat in six owns a camera. Everyone flashing at once
+          // is a sparkler, not a crowd — the gaps are what sell the scale.
+          fl: rng() < 0.17 ? 4 + rng() * 9 : 0,
+          // ...until the pack actually arrives, and then EVERY seat fires on a
+          // short cycle. This is the whole point of the system: a diorama does
+          // not notice you, and a place does.
+          flN: 0.9 + rng() * 2.4,
+        });
+      }
+    }
+    // Back wall + a roof lip, so the stand has a silhouette against the sky.
+    opa.push(bakeFlatColors(place(box(LEN + 1.4, 9.5, 0.7), 0, 4.6, backZ), 0x1a1230, { rim: false }));
+    opa.push(bakeFlatColors(place(box(LEN + 2.4, 0.5, 8.0), 0, 9.6, backZ + 4.0), 0x2c2050, { rim: false }));
+    for (const sx of [-1, 1]) {
+      opa.push(bakeFlatColors(place(box(0.8, 9.6, 0.8), sx * (LEN / 2 + 0.9), 4.8, backZ + 7.6), 0x1a1230, { rim: false }));
+    }
+    // Neon: a strip under the front row and one along the roof edge, in the
+    // circuit's own two colours. This is what makes a stand read as part of
+    // THIS game rather than a grey lump borrowed from a sim — and at night it
+    // is the only thing that separates the structure from the sky.
+    const c = placed % 2 ? neonL : neonR;
+    glo.push(colorTint(place(box(LEN, 0.3, 0.22), 0, 0.55, 1.0), c));
+    glo.push(colorTint(place(box(LEN + 2.4, 0.28, 0.22), 0, 9.9, backZ + 8.1), c));
+  }
+
+  if (!opa.length) return null;
+
+  // Thin the crowd EVENLY. Density lowers InstancedMesh.count, which keeps a
+  // prefix of the array — and the array is built stand by stand, so without a
+  // shuffle LOW would render the first stands packed and the last ones as empty
+  // shells. Seeded shuffle, so a prefix is a fair sample of every stand.
+  for (let i = seat.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = seat[i]; seat[i] = seat[j]; seat[j] = tmp;
+  }
+  const N = seat.length;
+
+  const group = new THREE.Group();
+  group.name = 'stands';
+  group.userData.spots = spotPos;
+  group.matrixAutoUpdate = false;
+  const body = new THREE.Mesh(mergeGeoms(opa), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
+  body.frustumCulled = false;
+  body.matrixAutoUpdate = false;
+  group.add(body);
+  if (glo.length) {
+    const glowMesh = new THREE.Mesh(mergeGeoms(glo), new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    glowMesh.frustumCulled = false; glowMesh.matrixAutoUpdate = false;
+    group.add(glowMesh);
+  }
+
+  // The crowd: one small box each, bobbing on its own phase. Individually
+  // invisible at speed; collectively a surface that MOVES, which is the point.
+  //
+  // The base geometry is baked WHITE rather than left bare. `vertexColors` with
+  // no `color` attribute reads the missing attribute as (0,0,0) and the whole
+  // crowd renders black — which is exactly what it did the first time. Baking
+  // white gives the shader something to multiply the per-instance tint into,
+  // and throws in the three-step shading every other solid in the world has.
+  const crowd = new THREE.InstancedMesh(
+    bakeFlatColors(new THREE.BoxGeometry(0.4, 0.9, 0.4), 0xffffff, { rim: false, gradient: 0.16, grain: 0 }),
+    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }),
+    N,
+  );
+  crowd.frustumCulled = false;
+  crowd.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  const cc = new THREE.Color();
+  const warm = new THREE.Color(theme.warm ?? 0xffedc4);
+  seat.forEach((p, i) => {
+    // A crowd is not a colour, it is a spread. Three bands of muted clothing
+    // plus the world's own warm light keeps it from reading as confetti.
+    const base = p.hue < 0.34 ? 0x9a5a7a : p.hue < 0.68 ? 0x4a5f9a : 0x8a6f4a;
+    cc.setHex(base).lerp(warm, 0.15 + p.hue * 0.2).multiplyScalar(0.75 + p.hue * 0.4);
+    crowd.setColorAt(i, cc);
+  });
+  group.add(crowd);
+
+  // Camera flashes: tiny additive quads that pop for a moment. Deterministic
+  // per seat, so they do not all fire at once and never repeat a pattern the
+  // eye can latch on to.
+  const flash = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(0.85, 0.85),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
+    }),
+    N,
+  );
+  flash.frustumCulled = false;
+  flash.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  group.add(flash);
+
+  const mm = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < N; i++) flash.setMatrixAt(i, zero);
+  const near = new Float32Array(spotPos.length);
+  return {
+    group,
+    setDensity(d) {
+      const k = Math.max(1, Math.round(N * Math.max(0.15, d)));
+      crowd.count = k; flash.count = k;
+    },
+    update(t, cameraQuat, cameraPos) {
+      const q = cameraQuat || _flashQuat;   // menu/podium call without a camera
+      // How close the race is to each stand, 0..1. Computed ONCE per stand, not
+      // per seat — a handful of distance checks a frame buys the reaction.
+      for (let i = 0; i < spotPos.length; i++) {
+        const sp = spotPos[i];
+        const d = cameraPos
+          ? Math.hypot(cameraPos.x - sp.x, cameraPos.z - sp.z)
+          : 9999;
+        near[i] = d > 190 ? 0 : d < 70 ? 1 : (190 - d) / 120;
+      }
+      const k = crowd.count;
+      for (let i = 0; i < k; i++) {
+        const p = seat[i];
+        const nr = near[p.si] || 0;
+        // Bob: a crowd never stands still. Amplitude is small — this should
+        // read as a shimmer across the stand, not as a wave of pogo sticks —
+        // until you are on top of them, and then they get to their feet.
+        const bob = Math.sin(t * p.sp * (2.2 + nr * 3.4) + p.ph) * (0.11 + nr * 0.26);
+        mm.makeTranslation(p.x, p.y + bob, p.z);
+        crowd.setMatrixAt(i, mm);
+        // Flash: a short pop on the seat's own cycle. Far away only the seats
+        // that own a camera fire at all (fl === 0 for the rest); near, every
+        // seat switches to its short cycle and the stand lights up.
+        const per = nr > 0.45 ? p.flN : p.fl;
+        if (!per) { flash.setMatrixAt(i, zero); continue; }
+        const u = (t / per + p.ph) % 1;
+        if (u < 0.05) {
+          const a = Math.sin((u / 0.05) * Math.PI);
+          mm.compose(_flashPos.set(p.x, p.y + 0.55, p.z), q, _flashScale.setScalar(a * (0.8 + nr * 0.5)));
+          flash.setMatrixAt(i, mm);
+        } else {
+          flash.setMatrixAt(i, zero);
+        }
+      }
+      crowd.instanceMatrix.needsUpdate = true;
+      flash.instanceMatrix.needsUpdate = true;
+    },
+  };
+}
+const _flashPos = new THREE.Vector3();
+const _flashScale = new THREE.Vector3();
+const _flashQuat = new THREE.Quaternion();
+
 function buildDustDevils(rng, spline, groundY, cx, cz, count, color = 0xd8b06a) {
   const group = new THREE.Group();
   const devils = [];
