@@ -44,15 +44,22 @@ export const TIERS = [
   {
     id: 'medium',
     name: 'MEDIUM',
-    blurb: 'Balanced. The safe default on unknown hardware.',
+    blurb: 'The full look at half the pixels. Safe on unknown hardware.',
     pixelRatio: 1.0,
     maxPixels: 2.6e6,
     samples: 2,
     post: true,
-    bloom: false,       // MEDIUM is the safe tier: it gets the grade, not the halo
-    shafts: 0,          // shafts ride the bloom's mask, so they go with it
-    reflect: false,     // player-only on glossy worlds, as the game always was
-    gloss: 1.0,         // the wet-sheen value the game shipped with
+    // MEDIUM gets the LOOK, not just the grade. Bloom, shafts and the wet road
+    // were gated to FULL under a cost model that turned out to be wrong: the
+    // expensive thing was pixelRatio x MSAA, which buys no beauty at all, while
+    // these three are 4 small passes and some shader maths. Measured on a
+    // 4K panel, adding them to MEDIUM costs 10.0 -> 13.2 GB/s — half of FULL,
+    // and a third of what the old uncapped FULL was demanding. There was never
+    // a good reason most players should see the plain version.
+    bloom: true,
+    shafts: 1,
+    reflect: false,     // 8 ships x 2 draws + additive coverage stays FULL-only
+    gloss: 1.7,         // free: shader maths on fragments already being shaded
     life: 0.62,         // lands where the game shipped before FULL got richer
     motes: 0.7,
     sparks: 0.8,
@@ -76,10 +83,10 @@ export const TIERS = [
     // edges. 2x plus the downscale is indistinguishable and half the bandwidth.
     samples: 2,
     post: true,
-    bloom: true,        // the thing FULL buys that MEDIUM does not
+    bloom: true,
     shafts: 1,
-    reflect: true,      // every ship reflects, on every world
-    gloss: 1.7,         // road drinks its own edge neon — free, it is shader maths
+    reflect: true,      // every ship reflects, on every world — the FULL exclusive
+    gloss: 1.7,
     life: 1,            // the busier world, as authored
     motes: 1,
     sparks: 1,

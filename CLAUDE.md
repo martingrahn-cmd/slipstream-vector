@@ -40,11 +40,11 @@ beta"). Martin writes in Swedish — **reply in Swedish**.
 
 ## Graphics budget
 
-**Fill-bound, not draw-bound.** ~60–100 draws / ~230–390k tris worst case —
-huge draw/tri headroom; the real limit is **additive overdraw at 4K on iGPUs**.
-Post = one 12-tap JuicePass + 4×MSAA (no bloom pass); pixelRatio capped 1.5.
-Govern new effects (explosions, shields, beams) by *screen coverage*, pool
-everything, zero per-frame allocations in hot paths.
+**Bandwidth-bound first, fill-bound second.** ~60–110 draws / ~230–390k tris
+worst case — huge draw/tri headroom. Post = quarter-res bloom + light shafts +
+one 12-tap JuicePass, on a 2×MSAA HalfFloat target. Govern new effects
+(explosions, shields, beams) by *screen coverage*, pool everything, zero
+per-frame allocations in hot paths.
 
 Because the ceiling is fill and not geometry, **form is the cheap axis**: road
 slicing (`TUNING.SLICE_STEP`), hull cross-section density (`section12`) and
@@ -53,10 +53,19 @@ zero extra draws and zero extra coverage. Spend there before reaching for an
 effect.
 
 `src/fx/quality.js` holds the LOW/MEDIUM/FULL tiers and the ADAPTIVE
-controller. Tiers only touch **fill**: pixelRatio, MSAA samples, the JuicePass,
-and additive particle volume — never scenery or geometry density, because
-cutting those makes a weak machine look like a different game rather than the
-same game rendered softer. New effects need a knob here if they add coverage.
+controller. Tiers carry a **pixel budget**, not a bare pixelRatio: cost scales
+with buffer AREA, so a bare ratio lets a 4K panel quietly ask for 4x the work a
+1080p one does. Measured on an M4: uncapped FULL wanted 44-78 GB/s of
+framebuffer traffic against ~120 GB/s of TOTAL system bandwidth, and ran at
+20fps. Never cut scenery or geometry density — that makes a weak machine look
+like a different game rather than the same game rendered softer.
+
+**Before blaming an effect for a frame-rate problem, price the framebuffer.**
+pixelRatio² × MSAA samples × HalfFloat is almost always the answer, and it buys
+no beauty at all. Effects like bloom and shafts are 4-8 passes at 1/16 the
+pixels — an order of magnitude cheaper than the resolution they were being
+blamed for. The tiers were wrong about this for weeks and it kept the game
+uglier than it needed to be for everyone.
 
 ## Dev workflow
 
