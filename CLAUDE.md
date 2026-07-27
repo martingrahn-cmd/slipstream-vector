@@ -111,6 +111,10 @@ uglier than it needed to be for everyone.
     position so gusts sweep. Zero draws, zero triangles, one uniform a frame
     for the whole world. Amplitude is per archetype (palm ≫ spruce ≫ cactus)
     times `theme.wind`. Uniforms are exposed on `material.userData.wind`.
+  - `buildGround` is a **flat** `CircleGeometry(1600, 48)` — every dune, ripple
+    and grain is painted in the fragment shader, so the world has no relief,
+    no parallax and nothing that occludes anything. `TERRAIN.md` is the design
+    note for fixing that; it is a proposal, not built.
 - `src/track/tracks/` — one data file per track + `index.js` roster (the
   "add a track" seam). Stunts via `features: [{type:'loop'|'corkscrew'|'jump'}]`.
 - `src/weapons/weaponSystem.js` — pads, five weapons, projectiles, hit/disable
