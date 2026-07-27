@@ -1393,14 +1393,29 @@ function buildArches(spline, theme) {
     else if (!ok && start !== null) { if (s - start >= MIN_RUN) runs.push([start, s]); start = null; }
   }
   if (start !== null && spline.length - start >= MIN_RUN) runs.push([start, spline.length]);
+  // Keep the LAUNCH clear. Arches want long straights, and the start/finish is
+  // on one by definition, so the run that begins at s=0 always won — every race
+  // in the game opened with the grid under a rib tunnel and the first thing a
+  // player saw of a new circuit was its ceiling. Hold them off until the field
+  // is properly moving, and leave the grid itself under open sky. Approaching
+  // the line THROUGH a tunnel at the end of a lap is fine and stays.
+  const GRID_CLEAR = 48, LAUNCH_CLEAR = 205;
+  const nearStart = (s) => {
+    const d = s > spline.length - GRID_CLEAR ? s - spline.length : s;  // signed, wrapped
+    return d > -GRID_CLEAR && d < LAUNCH_CLEAR;
+  };
   const positions = [];
   for (const [a, b] of runs) {
-    for (let s = a + EDGE; s <= b - EDGE && positions.length < theme.archMax; s += SPACING) positions.push(s);
+    for (let s = a + EDGE; s <= b - EDGE && positions.length < theme.archMax; s += SPACING) {
+      if (!nearStart(s)) positions.push(s);
+    }
     if (positions.length >= theme.archMax) break;
   }
   if (!positions.length) return null;
 
   const LIFT = 0.5, cut = Math.asin(LIFT);
+  // Exposed for QA: where the ribs actually landed, so the launch-clear rule
+  // above can be checked rather than eyeballed from one camera angle.
   const ribGeo = new THREE.TorusGeometry(1, 0.14, 6, 26, Math.PI + 2 * cut);
   ribGeo.rotateZ(-cut);
   const ribMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide });
@@ -1429,6 +1444,7 @@ function buildArches(spline, theme) {
   ribMesh.matrixAutoUpdate = false; lipMesh.matrixAutoUpdate = false;
   const group = new THREE.Group();
   group.add(ribMesh, lipMesh);
+  group.userData.archS = positions.slice();
   group.matrixAutoUpdate = false;
   return { group, update: (t) => { lipMat.opacity = 0.5 + 0.18 * Math.sin(t * 2.2); } };
 }

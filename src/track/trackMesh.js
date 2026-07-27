@@ -26,10 +26,10 @@ export function buildTrackMesh(spline, theme) {
     group,
     // Quality tier: the wet-sheen multiplier on the road's own edge reflection.
     setGloss: (m) => surface.setGloss(m),
-    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, weaponCd = null, playerFull = false) => {
+    update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, playerFull = false) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
-      if (wpads) wpads.update(t, weaponCd, playerFull);
+      if (wpads) wpads.update(t, playerFull);
     },
   };
 }
@@ -698,9 +698,8 @@ function buildWeaponPads(spline) {
   const C = TUNING.COL;
   const f = makeFrame();
   const v = new THREE.Vector3();
-  const positions = [], locals = [], phases = [], cds = [], idx = [];
+  const positions = [], locals = [], phases = [], idx = [];
   const LEN = 6, HW = 2, SLICES = 6;
-  const VPP = (SLICES + 1) * 2; // vertices per pad
 
   for (const pad of spline.weaponPads) {
     const base = positions.length / 3;
@@ -714,7 +713,6 @@ function buildWeaponPads(spline) {
         positions.push(v.x, v.y, v.z);
         locals.push(e ? 1 : 0, i / SLICES);
         phases.push(pad.s * 0.5);
-        cds.push(0); // per-vertex cooldown 0..1, written each frame from weapons.padCd
       }
     }
     for (let i = 0; i < SLICES; i++) {
@@ -727,7 +725,6 @@ function buildWeaponPads(spline) {
   geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
   geom.setAttribute('aLocal', new THREE.BufferAttribute(new Float32Array(locals), 2));
   geom.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(phases), 1));
-  geom.setAttribute('aCd', new THREE.BufferAttribute(new Float32Array(cds), 1));
   geom.setIndex(idx);
 
   const mat = new THREE.ShaderMaterial({
@@ -740,12 +737,10 @@ function buildWeaponPads(spline) {
     vertexShader: /* glsl */ `
       attribute vec2 aLocal;
       attribute float aPhase;
-      attribute float aCd;
       varying vec2 vLocal;
       varying float vPhase;
-      varying float vCd;
       void main() {
-        vLocal = aLocal; vPhase = aPhase; vCd = aCd;
+        vLocal = aLocal; vPhase = aPhase;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -755,7 +750,6 @@ function buildWeaponPads(spline) {
       uniform float uFull;
       varying vec2 vLocal;
       varying float vPhase;
-      varying float vCd;
       void main() {
         // Centered coords: x -1..1 across, y -1..1 along the 6m decal.
         float x = vLocal.x * 2.0 - 1.0;
@@ -769,20 +763,18 @@ function buildWeaponPads(spline) {
         float frame = smoothstep(0.12, 0.02, abs(max(abs(x), abs(y)) - 0.92)); // thin outer border
         float edge = smoothstep(1.0, 0.85, abs(x));
         vec3 col = baseCol * 1.5 + glowCol * (0.22 + ring * 1.7 + core * 1.2 + frame * 0.8);
-        // Spent state: not just a dead brown slab — a RECHARGE readout. The pad
-        // goes dark, then a bright gold charge-line sweeps bottom-to-top as the
-        // cooldown runs out (vCd 1->0), soft-filling behind it; at 0 it pops
-        // back to the live pulsing diamond. "Lit = grabbable" stays true.
-        float spent = clamp(vCd * 8.0, 0.0, 1.0);
-        float chargeUp = 1.0 - vCd;            // fill level 0..1 while recharging
-        float yn = vLocal.y;                    // 0..1 along the decal
-        float fillLine = smoothstep(0.07, 0.0, abs(yn - chargeUp));
-        float filled = step(yn, chargeUp);
-        vec3 spentCol = baseCol * 0.55
-          + glowCol * (0.05 + 0.12 * filled + 0.95 * fillLine + frame * 0.3);
-        col = mix(col, spentCol, spent);
-        // Holding a weapon dims the LIVE pads (spent ones already read busy).
-        col = mix(col, baseCol * 0.35, uFull * (1.0 - spent));
+        // Holding a weapon: the pad is not GONE, it is just not yours right
+        // now — an empty-handed rival can still take it, because pickups are
+        // per-driver and always have been. So keep the gold border and a faint
+        // diamond lit and only kill the wash and the breathing core.
+        //
+        // The old version multiplied the whole decal by 0.35 of a dark brown
+        // base, which lands near black: every pad on the circuit read as broken
+        // for as long as you were carrying anything. "Lit = grabbable" is the
+        // rule, but "dark = broken" is what a player actually infers, and a
+        // pickup that looks broken is worse than one that looks busy.
+        vec3 fullCol = baseCol * 0.9 + glowCol * (0.07 + frame * 0.55 + ring * 0.28);
+        col = mix(col, fullCol, uFull);
         gl_FragColor = vec4(col * edge, 1.0);
       }
     `,
@@ -794,26 +786,12 @@ function buildWeaponPads(spline) {
   const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  const aCd = geom.attributes.aCd;
-  let hadCd = false;
   return {
     mesh,
-    update: (t, cd, full) => {
+    update: (t, full) => {
       mat.uniforms.time.value = t;
-      // ease the "you're holding a weapon" dim (runs every frame, even when the
-      // per-pad cooldown state is unchanged)
+      // ease the "you're holding a weapon" dim
       mat.uniforms.uFull.value += ((full ? 1 : 0) - mat.uniforms.uFull.value) * 0.18;
-      if (!cd) return;
-      let any = false;
-      for (let p = 0; p < spline.weaponPads.length; p++) if (cd[p] > 0) { any = true; break; }
-      if (!any && !hadCd) return; // nothing lit and nothing to clear — skip the upload
-      hadCd = any;
-      const arr = aCd.array;
-      for (let p = 0; p < spline.weaponPads.length; p++) {
-        const val = cd[p] || 0;
-        for (let k = 0; k < VPP; k++) arr[p * VPP + k] = val;
-      }
-      aCd.needsUpdate = true;
     },
   };
 }

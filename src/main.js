@@ -1739,7 +1739,7 @@ function tick(now) {
   _engPool.setHex(shipVisual ? shipVisual.engBase : T.COL.ENGINE).lerp(_WHITE_C, juice.boostFactor * 0.15); // road wake runs the ship's glow hue (hint hotter on boost)
   const nozOff = shipVisual && shipVisual.nozzles[0] ? Math.abs(shipVisual.nozzles[0].x) : 1.05;
   track.update(now / 1000, sn, ship.s, ship.d, poolGlow, _engPool, nozOff,
-    weapons ? weapons.padCd : null, state === 'race' && ship.heldWeapon != null);
+    state === 'race' && ship.heldWeapon != null);
   const raceProgress = state === 'race'
     ? Math.max(0, Math.min(1, ((ship.lap - 1) + ship.s / spline.length) / TOTAL_LAPS))
     : 0;
@@ -2238,6 +2238,12 @@ function backToMenu() {
   document.body.classList.remove('paused');
   state = 'attract';
   paused = false;
+  // The pilots do not follow you into the menu. Two separate things have to
+  // stop: the FEED (queued chips that would keep popping over the title screen)
+  // and the VOICES (already scheduled on the WebAudio clock — up to 2.2s of
+  // backlog that plays no matter what the game state says).
+  banter.reset();
+  audio.stopVoices();
   hud.hideResults();
   hud.setCenter(null);
   hud.setSub(null);

@@ -506,8 +506,42 @@ export class AudioEngine {
     const g = ctx.createGain(); g.gain.value = 1.2;
     src.connect(hp); hp.connect(lp); lp.connect(pk); pk.connect(g); g.connect(this.voiceBus);
     src.start(startAt); src.stop(startAt + dur + 0.05);
+    this._track(src);
     this._squelch(startAt, dur);
     this._duckMusic();
+  }
+
+  // Keep a handle on every scheduled voice node. Lines are queued AHEAD on the
+  // WebAudio clock — up to 2.2s of backlog — so "stop talking" cannot mean
+  // "stop calling playVoice": the transmissions are already on the timeline and
+  // will fire into whatever screen you are looking at. Quitting mid-race used to
+  // carry the pilots straight into the menu because of exactly this.
+  _track(node) {
+    if (!this._liveVoice) this._liveVoice = [];
+    this._liveVoice.push(node);
+    node.onended = () => {
+      const i = this._liveVoice.indexOf(node);
+      if (i >= 0) this._liveVoice.splice(i, 1);
+    };
+  }
+
+  // Kill every scheduled and playing voice, static bed and squelch. Called when
+  // the race ends in a way the pilots should not survive (quit to menu).
+  stopVoices() {
+    if (this._liveVoice) {
+      for (const n of this._liveVoice) { try { n.stop(); } catch { /* already stopped */ } }
+      this._liveVoice.length = 0;
+    }
+    this._voiceEndsAt = 0;
+    if (this.musicDuck && this.ctx) {
+      // Release the duck immediately — otherwise the menu music stays quiet for
+      // as long as the cancelled backlog would have run.
+      const now = this.ctx.currentTime;
+      const g = this.musicDuck.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(1.0, now + 0.18);
+    }
   }
 
   // Radio texture around a transmission: a faint static bed for its whole
@@ -523,6 +557,7 @@ export class AudioEngine {
     bg.gain.linearRampToValueAtTime(0.0001, t + dur + 0.07);
     bed.connect(bf); bf.connect(bg); bg.connect(this.voiceBus);
     bed.start(t); bed.stop(t + dur + 0.12);
+    this._track(bed);
     const kss = (bt, gain) => {
       if (bt < ctx.currentTime) bt = ctx.currentTime;
       const b = ctx.createBufferSource(); b.buffer = this.noiseBuf;
@@ -532,6 +567,7 @@ export class AudioEngine {
       gg.gain.exponentialRampToValueAtTime(0.0004, bt + 0.09);
       b.connect(f); f.connect(gg); gg.connect(this.voiceBus);
       b.start(bt); b.stop(bt + 0.11);
+      this._track(b);
     };
     kss(t, 0.05);            // key open
     kss(t + dur + 0.02, 0.04); // key close

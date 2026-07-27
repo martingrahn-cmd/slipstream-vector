@@ -52,14 +52,35 @@ const JuiceShader = {
       // horizon — band-limited and tiny so it never reads as the radial blur.
       float hband = exp(-pow((vUv.y - 0.54) * 6.0, 2.0));
       vec2 heatOff = vec2(sin(vUv.y * 90.0 + uTime * 3.0) * 0.0016, 0.0) * heat * hband;
-      // 4 radial-blur taps; chromatic offset folded into each tap (12 reads).
-      for (int i = 0; i < 4; i++) {
-        vec2 o = vUv - dir * rad * (float(i) / 3.0) + heatOff;
-        col.r += texture2D(tDiffuse, o + dir * ch).r;
-        col.g += texture2D(tDiffuse, o).g;
-        col.b += texture2D(tDiffuse, o - dir * ch).b;
+      // Radial-blur taps; chromatic offset folded into each tap.
+      //
+      // Four EVENLY WEIGHTED taps over a smear up to 0.18 of the frame is not a
+      // streak, it is four copies of the picture 4.5% apart, all at full
+      // strength. Behind the ship — bright engine bells against a dark hull —
+      // that read as a repeating chevron ladder trailing off the back of the
+      // craft, which is the single ugliest thing on screen at speed.
+      //
+      // Three changes, all of them cheap:
+      //   6 taps instead of 4      — halves the gap between copies
+      //   tapered weights          — the far tap is a fifth of the near one, so
+      //                              it fades into a streak instead of stamping
+      //   per-pixel jitter         — breaks whatever banding survives into
+      //                              grain, which the eye reads as motion
+      // Six taps is 18 texture reads instead of 12 on one pass. Against a
+      // framebuffer already moving tens of GB/s that is noise, and unlike the
+      // resolution it was competing with, it buys something.
+      float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      float wsum = 0.0;
+      for (int i = 0; i < 6; i++) {
+        float fi = (float(i) + jit * 0.9) / 6.0;
+        float w = 1.0 - fi * 0.8;
+        vec2 o = vUv - dir * rad * fi + heatOff;
+        col.r += texture2D(tDiffuse, o + dir * ch).r * w;
+        col.g += texture2D(tDiffuse, o).g * w;
+        col.b += texture2D(tDiffuse, o - dir * ch).b * w;
+        wsum += w;
       }
-      col /= 4.0;
+      col /= wsum;
       // Vignette: darken the corners (monotonic — never lightens), then lean
       // the darkened corner slightly toward the world's sky-zenith colour so the
       // frame edge melts into the backdrop without inverting on bright worlds.

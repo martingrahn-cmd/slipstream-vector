@@ -221,7 +221,6 @@ export class WeaponSystem {
     // Vestigial per-pad state fed to the pad decal: pads no longer dim/lock
     // (every empty-handed racer that crosses gets armed), so this stays 0 and
     // the pad reads as always-live; the pickup flash is the gold spark burst.
-    this.padCd = new Float32Array((spline.weaponPads && spline.weaponPads.length) || 0);
     this.projectiles = [];       // {slot, type, s, d, v, owner, life, armT, target}
     this._freeSlots = Array.from({ length: MAX_PROJ }, (_, i) => MAX_PROJ - 1 - i);
 
@@ -586,7 +585,6 @@ export class WeaponSystem {
     this._cool.clear();
     this._holdT.clear();
     this._aiDelay.clear();
-    this.padCd.fill(0);
     while (this.projectiles.length) this._despawn(this.projectiles[0]);
     for (const phys of this._ships()) {
       phys.heldWeapon = null;
