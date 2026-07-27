@@ -1787,15 +1787,12 @@ function tick(now) {
   // running — menus and the attract camera are not representative of load, and
   // a paused game reporting 200fps would happily climb to a tier the next
   // corner cannot hold.
+  // ONLY race frames. The menu is a different workload — attract camera, podium
+  // canvas, DOM blur — and letting it vote is how a player who had just picked
+  // ADAPTIVE in OPTIONS found themselves starting the race at LOW. Climbs
+  // earned here are parked and applied at the next race start (see startRace).
   if (qualityMode === ADAPTIVE && state === 'race' && !paused) {
-    // Climbing is only permitted OUT of a race — a tier change is visible, and
-    // the game getting prettier mid-corner is a worse experience than staying
-    // one notch low until the flag. Dropping is always allowed: that is an
-    // emergency, and the alternative is playing at 20fps.
     const want = adaptive.sample(realDt * 1000, false);
-    if (want !== null && want !== tierIdx) applyTier(want);
-  } else if (qualityMode === ADAPTIVE && (state === 'attract' || state === 'podium' || paused)) {
-    const want = adaptive.sample(realDt * 1000, true);
     if (want !== null && want !== tierIdx) applyTier(want);
   }
 
@@ -1879,6 +1876,13 @@ function editRow(row, dir) {
 
 // Start the race for the current selection (mode set on section entry).
 function startRace() {
+  // Cash in a climb the last race earned, and re-arm the measurement: a fresh
+  // race is a fresh judgement, and the world was just rebuilt.
+  if (qualityMode === ADAPTIVE) {
+    const up = adaptive.takePending();
+    if (up !== null && up !== tierIdx) applyTier(up);
+    adaptive.reset(tierIdx);
+  }
   if (selection.mode === 0) {
     champ.active = true; champ.cup = selection.cup; champ.round = 0; champ.done = 0;
     // Championship is gated by the unlock ladder — clamp here so a class picked

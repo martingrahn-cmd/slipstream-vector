@@ -125,6 +125,14 @@ export class Adaptive {
     this.ceiling = maxIdx;  // highest tier still believed reachable
     this.hold = 2.5;        // seconds before the first decision (let things warm up)
     this.goodT = 0;         // seconds spent comfortably above target
+    this.pending = null;    // a climb earned mid-race, waiting for the flag
+  }
+
+  // Cash in a climb earned during a race. Called at the next race start.
+  takePending() {
+    const p = this.pending;
+    this.pending = null;
+    return p;
   }
 
   // Feed it real frame times. Returns a new tier index when it wants a change,
@@ -134,7 +142,12 @@ export class Adaptive {
   // `allowClimb` is the asymmetry that matters in play: a DROP is an emergency
   // and happens the instant it is needed, mid-corner if it has to. A CLIMB is a
   // luxury, and the game changing how it looks while you are racing is worse
-  // than staying a notch low — so the caller only allows it between races.
+  // than staying a notch low — so a climb earned during a race is PARKED in
+  // `pending` and the caller applies it at the next race start.
+  //
+  // Only ever feed this frames from an actual race. The menu is a different
+  // workload — attract camera, podium canvas, DOM effects — and judging the
+  // race by it is how a player who picked ADAPTIVE ended up starting at LOW.
   sample(dtMs, allowClimb = true) {
     if (!(dtMs > 0) || dtMs > 250) return null;
     this.ema += (dtMs - this.ema) * 0.06;
@@ -159,7 +172,12 @@ export class Adaptive {
     // a tier that fails once is not retried until the 45s probe.
     if (fps > this.target - 2) {
       this.goodT += dt;
-      if (!allowClimb) return null;   // credit still accrues; the move waits
+      if (this.idx < this.ceiling && this.goodT > 12 && !allowClimb) {
+        this.pending = this.idx + 1;  // earned it; cash it in at the next start
+        this.goodT = 0;
+        return null;
+      }
+      if (!allowClimb) return null;
       if (this.idx < this.ceiling && this.goodT > 12) {
         // Twelve unbroken seconds of headroom below a ceiling we already trust.
         this.idx++;
@@ -189,5 +207,6 @@ export class Adaptive {
     this.ema = 1000 / 60;
     this.hold = 2.5;
     this.goodT = 0;
+    this.pending = null;
   }
 }
