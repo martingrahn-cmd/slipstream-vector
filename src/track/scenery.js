@@ -32,8 +32,29 @@ export function setBakeTheme(rimHex, shadowTintHex, warmHex) {
   BAKE_WARM = warmHex ?? 0xffd9a0;
 }
 
-// Quantized 3-step flat-shade bake — the Horizon Chase tell.
-// Returns a non-indexed geometry with baked vertex colors.
+// Deterministic hash from a world position — the same vertex always gets the
+// same value, so nothing shimmers between frames or between rebuilds.
+function vhash(x, y, z) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+// Quantized 3-step flat-shade bake — the Horizon Chase tell — PLUS the two
+// things that stop an untextured world reading as unfinished.
+//
+// The 3-step directional term alone paints every triangle ONE solid colour, and
+// a big surface built from coplanar triangles collapses into a single dead
+// fill. That flatness is what reads as "no textures", not the absence of image
+// maps. Two fixes, both baked at build time, so they cost exactly nothing per
+// frame and add no fill, no draws and no memory beyond the colours already
+// being written:
+//
+//   GRADIENT — each VERTEX gets its own colour rather than each face, shaded by
+//     height within the object. Dark at the base, lighter toward the top: fake
+//     ambient occlusion plus skylight. This alone turns a flat mesa wall into a
+//     surface with depth, because the colour now varies ACROSS a triangle.
+//   GRAIN — a tiny deterministic per-vertex hash breaks the remaining large
+//     even areas, the way a subtle noise texture would, at zero cost.
 export function bakeFlatColors(geometry, baseColorHex, opts = {}) {
   const geom = geometry.index ? geometry.toNonIndexed() : geometry;
   const pos = geom.getAttribute('position');
@@ -46,6 +67,21 @@ export function bakeFlatColors(geometry, baseColorHex, opts = {}) {
   const rim = new THREE.Color(BAKE_RIM);
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const n = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  const tint = new THREE.Color();
+
+  // Object-local height range, for the gradient. Flat objects (a decal, a
+  // ribbon) get no gradient — dividing by a near-zero span would blow it up.
+  let loY = Infinity, hiY = -Infinity;
+  for (let i = 0; i < count; i++) {
+    const y = pos.getY(i);
+    if (y < loY) loY = y;
+    if (y > hiY) hiY = y;
+  }
+  const span = hiY - loY;
+  const grad = (opts.gradient ?? 0.30) * (span > 0.35 ? 1 : 0);
+  const grain = opts.grain ?? 0.045;
+
   for (let i = 0; i < count; i += 3) {
     a.fromBufferAttribute(pos, i);
     b.fromBufferAttribute(pos, i + 1);
@@ -58,9 +94,18 @@ export function bakeFlatColors(geometry, baseColorHex, opts = {}) {
       col = col.clone().lerp(rim, 0.35);
     }
     for (let j = 0; j < 3; j++) {
-      colors[(i + j) * 3] = col.r;
-      colors[(i + j) * 3 + 1] = col.g;
-      colors[(i + j) * 3 + 2] = col.b;
+      v.fromBufferAttribute(pos, i + j);
+      // Height gradient: -grad at the base, +grad*0.55 at the top. Weighted
+      // toward darkening, because occlusion is the half the eye reads as form.
+      const h = span > 0 ? (v.y - loY) / span : 0.5;
+      let k = 1 + grad * (h * 1.55 - 1);
+      // Grain: deterministic, symmetric around 1, small enough to read as
+      // surface rather than as noise.
+      k *= 1 + (vhash(v.x, v.y, v.z) - 0.5) * grain;
+      tint.copy(col).multiplyScalar(k);
+      colors[(i + j) * 3] = tint.r;
+      colors[(i + j) * 3 + 1] = tint.g;
+      colors[(i + j) * 3 + 2] = tint.b;
     }
   }
   geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
