@@ -17,7 +17,7 @@ import { Juice } from './fx/juice.js';
 import { Sparks, ExhaustTrails } from './fx/particles.js';
 import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
-import { TIERS as GFX, MODES as GFX_MODES, ADAPTIVE, Adaptive } from './fx/quality.js';
+import { TIERS as GFX, MODES as GFX_MODES, ADAPTIVE, Adaptive, effectiveRatio } from './fx/quality.js';
 import { Hud, fmt } from './ui/hud.js';
 import { BanterFeed } from './ui/banter.js';
 import { Minimap } from './ui/minimap.js';
@@ -97,7 +97,7 @@ const adaptive = new Adaptive();
 function applyTier(i) {
   tierIdx = Math.max(0, Math.min(GFX.length - 1, i));
   const q = GFX[tierIdx];
-  renderer.setPixelRatio(Math.min(devicePixelRatio, q.pixelRatio));
+  renderer.setPixelRatio(effectiveRatio(q, innerWidth, innerHeight));
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSamples(q.samples);
   postfx.setPostEnabled(q.post);
@@ -1788,7 +1788,14 @@ function tick(now) {
   // a paused game reporting 200fps would happily climb to a tier the next
   // corner cannot hold.
   if (qualityMode === ADAPTIVE && state === 'race' && !paused) {
-    const want = adaptive.sample(realDt * 1000);
+    // Climbing is only permitted OUT of a race — a tier change is visible, and
+    // the game getting prettier mid-corner is a worse experience than staying
+    // one notch low until the flag. Dropping is always allowed: that is an
+    // emergency, and the alternative is playing at 20fps.
+    const want = adaptive.sample(realDt * 1000, false);
+    if (want !== null && want !== tierIdx) applyTier(want);
+  } else if (qualityMode === ADAPTIVE && (state === 'attract' || state === 'podium' || paused)) {
+    const want = adaptive.sample(realDt * 1000, true);
     if (want !== null && want !== tierIdx) applyTier(want);
   }
 
@@ -2015,7 +2022,7 @@ function openPause() {
   paused = true;
   document.body.classList.add('paused');
   audio.setPaused(true);
-  pauseMenu.open(audio.sfxVolume, !!document.fullscreenElement);
+  pauseMenu.open(audio.sfxVolume, !!document.fullscreenElement, qualityLabel());
   input.clearPressed();
   audio.uiSelect();
 }
@@ -2058,8 +2065,12 @@ function applyPauseKeys() {
   }
   if (pauseMenu.inOptions) {
     for (const [code, dir] of [['ArrowLeft', -1], ['KeyA', -1], ['ArrowRight', 1], ['KeyD', 1]]) {
-      if (input.consume(code) && pauseMenu.currentOptRow() === 'audio') {
-        audio.setVolume(audio.sfxVolume + dir); audio.uiMove();
+      if (!input.consume(code)) continue;
+      const row = pauseMenu.currentOptRow();
+      if (row === 'audio') { audio.setVolume(audio.sfxVolume + dir); audio.uiMove(); }
+      else if (row === 'quality') {
+        setQualityMode(GFX_MODES[((GFX_MODES.indexOf(qualityMode) + dir) % GFX_MODES.length + GFX_MODES.length) % GFX_MODES.length]);
+        audio.uiMove();
       }
     }
   }
@@ -2068,7 +2079,7 @@ function applyPauseKeys() {
   // Backspace is the reliable "back" — Escape is hijacked by the browser to
   // leave fullscreen, so we never use it (gamepad B emits Backspace too).
   else if (input.consume('Backspace')) backPause();
-  if (paused) pauseMenu.render(audio.sfxVolume, !!document.fullscreenElement);
+  if (paused) pauseMenu.render(audio.sfxVolume, !!document.fullscreenElement, qualityLabel());
 }
 
 function handleKeys() {
@@ -2261,7 +2272,7 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   // Re-assert the tier's pixelRatio: going fullscreen fires a resize, and the
   // renderer would otherwise keep whatever ratio it had at the old size.
-  renderer.setPixelRatio(Math.min(devicePixelRatio, GFX[tierIdx].pixelRatio));
+  renderer.setPixelRatio(effectiveRatio(GFX[tierIdx], innerWidth, innerHeight));
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSize(innerWidth, innerHeight);
 });
@@ -2332,7 +2343,7 @@ function wireClicks() {
   const clickRow = (name) => {
     pauseMenu.focusRow(name);
     confirmPause();
-    if (paused) pauseMenu.render(audio.sfxVolume, fsOn());
+    if (paused) pauseMenu.render(audio.sfxVolume, fsOn(), qualityLabel());
   };
   for (const name of ['resume', 'restart', 'options', 'quit']) {
     document.getElementById(`prow-${name}`).addEventListener('click', () => clickRow(name));
@@ -2342,13 +2353,22 @@ function wireClicks() {
       e.stopPropagation();
       audio.setVolume(audio.sfxVolume + (i === 0 ? -1 : 1));
       pauseMenu.focusOptRow('audio');
-      pauseMenu.render(audio.sfxVolume, fsOn());
+      pauseMenu.render(audio.sfxVolume, fsOn(), qualityLabel());
+    });
+  });
+  document.getElementById('popt-quality').querySelectorAll('.arrow').forEach((a, i) => {
+    a.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const d = i === 0 ? -1 : 1;
+      setQualityMode(GFX_MODES[((GFX_MODES.indexOf(qualityMode) + d) % GFX_MODES.length + GFX_MODES.length) % GFX_MODES.length]);
+      pauseMenu.focusOptRow('quality');
+      pauseMenu.render(audio.sfxVolume, fsOn(), qualityLabel());
     });
   });
   document.getElementById('popt-fullscreen').addEventListener('click', () => {
     toggleFullscreen();
     pauseMenu.focusOptRow('fullscreen');
-    pauseMenu.render(audio.sfxVolume, fsOn());
+    pauseMenu.render(audio.sfxVolume, fsOn(), qualityLabel());
   });
 
   // The in-race pause button opens the menu without the P key.

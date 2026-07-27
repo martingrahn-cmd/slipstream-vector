@@ -4,9 +4,15 @@
 // the tiers are ordered by how much screen coverage they buy back, not by how
 // much geometry they remove:
 //
-//   1. pixelRatio      — every fragment cost scales with it. The big lever.
-//   2. MSAA samples    — the composer's render target is HalfFloat; 4x samples
-//                        on a 4K-ish buffer is real bandwidth on an iGPU.
+//   1. pixel BUDGET    — not a bare pixelRatio. Cost scales with the drawing
+//                        buffer AREA, and a bare ratio lets a 4K panel quietly
+//                        ask for four times the work a 1080p one does. Each
+//                        tier caps total pixels; the ratio is just the ceiling.
+//   2. MSAA samples    — the composer's target is HalfFloat (8 bytes/px) and
+//                        MSAA multiplies THAT. It is the most expensive thing
+//                        in the renderer per unit of visible improvement, and
+//                        it is nearly redundant once the buffer is already
+//                        supersampled relative to the display.
 //   3. additive volume — motes, sparks, trails, glow ribbons: the overdraw the
 //                        budget is actually spent on.
 //
@@ -24,6 +30,7 @@ export const TIERS = [
     name: 'LOW',
     blurb: 'For integrated graphics and old laptops.',
     pixelRatio: 0.75,
+    maxPixels: 1.2e6,
     samples: 0,
     post: false,        // skip the JuicePass entirely — one full-screen pass saved
     bloom: false,
@@ -39,6 +46,7 @@ export const TIERS = [
     name: 'MEDIUM',
     blurb: 'Balanced. The safe default on unknown hardware.',
     pixelRatio: 1.0,
+    maxPixels: 2.6e6,
     samples: 2,
     post: true,
     bloom: false,       // MEDIUM is the safe tier: it gets the grade, not the halo
@@ -58,7 +66,15 @@ export const TIERS = [
     // ask for the display's native resolution: on a HiDPI panel that is the
     // difference between soft neon edges and clean ones.
     pixelRatio: 2.0,
-    samples: 4,
+    // ~4.2 Mpx is the ceiling: measured on an M4 Mac mini, an uncapped 2.0 on a
+    // 4K panel meant an 8.3 Mpx buffer which, with 4x MSAA on HalfFloat, asked
+    // for ~44 GB/s of framebuffer traffic on a chip with ~120 GB/s TOTAL. It
+    // ran at 20fps while MEDIUM ran at 60 — and none of that gap was the
+    // effects. Cap the area and the tier is bounded on any display.
+    maxPixels: 4.2e6,
+    // 4x MSAA on top of a supersampled buffer is paying twice for the same
+    // edges. 2x plus the downscale is indistinguishable and half the bandwidth.
+    samples: 2,
     post: true,
     bloom: true,        // the thing FULL buys that MEDIUM does not
     shafts: 1,
@@ -72,6 +88,16 @@ export const TIERS = [
 
 export const ADAPTIVE = 'adaptive';
 export const MODES = ['low', 'medium', 'full', ADAPTIVE];
+
+// The pixelRatio a tier may actually use on a given canvas: never above the
+// tier's ceiling, and never enough to blow the tier's pixel budget. This is
+// what keeps FULL affordable on a 4K panel instead of quietly quadrupling the
+// work — and it is a BUDGET, not a display match, so on a plain 1080p monitor
+// FULL still renders above native and downscales, which is free antialiasing.
+export function effectiveRatio(tier, cssW, cssH) {
+  const area = Math.max(1, cssW * cssH);
+  return Math.min(tier.pixelRatio, Math.sqrt(tier.maxPixels / area));
+}
 
 export function tierById(id) {
   return TIERS.find((t) => t.id === id) || TIERS[2];
@@ -97,7 +123,12 @@ export class Adaptive {
   // Feed it real frame times. Returns a new tier index when it wants a change,
   // or null. Frames while the tab is throttled or a world is building are
   // rejected outright — a 400ms hitch is not evidence about steady-state speed.
-  sample(dtMs) {
+  //
+  // `allowClimb` is the asymmetry that matters in play: a DROP is an emergency
+  // and happens the instant it is needed, mid-corner if it has to. A CLIMB is a
+  // luxury, and the game changing how it looks while you are racing is worse
+  // than staying a notch low — so the caller only allows it between races.
+  sample(dtMs, allowClimb = true) {
     if (!(dtMs > 0) || dtMs > 250) return null;
     this.ema += (dtMs - this.ema) * 0.06;
     const dt = dtMs / 1000;
@@ -121,6 +152,7 @@ export class Adaptive {
     // a tier that fails once is not retried until the 45s probe.
     if (fps > this.target - 2) {
       this.goodT += dt;
+      if (!allowClimb) return null;   // credit still accrues; the move waits
       if (this.idx < this.ceiling && this.goodT > 12) {
         // Twelve unbroken seconds of headroom below a ceiling we already trust.
         this.idx++;

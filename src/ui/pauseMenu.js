@@ -1,11 +1,11 @@
 // In-race pause menu: a centered panel with Resume / Restart / Options / Quit,
-// plus an Options sub-panel (audio volume + fullscreen). It mirrors the attract
+// plus an Options sub-panel (graphics preset + audio volume + fullscreen). It mirrors the attract
 // menu's focus model so keyboard and gamepad navigation feel identical. Pure UI
 // — main.js owns the actions and the paused flag.
 export class PauseMenu {
   constructor() {
     this.rows = ['resume', 'restart', 'options', 'quit'];
-    this.optRows = ['audio', 'fullscreen'];
+    this.optRows = ['quality', 'audio', 'fullscreen'];
     this.focus = 0;
     this.optFocus = 0;
     this.inOptions = false;
@@ -18,15 +18,16 @@ export class PauseMenu {
     this.optRowEls = {};
     for (const r of this.optRows) this.optRowEls[r] = document.getElementById(`popt-${r}`);
     this.volEl = document.getElementById('pause-volume');
+    this.qualEl = document.getElementById('pause-quality');
     this.fsEl = document.getElementById('pause-fullscreen');
   }
 
-  open(volume, fsOn) {
+  open(volume, fsOn, quality = '') {
     this.focus = 0;
     this.optFocus = 0;
     this.inOptions = false;
     this.el.classList.remove('hidden');
-    this.render(volume, fsOn);
+    this.render(volume, fsOn, quality);
   }
 
   close() { this.el.classList.add('hidden'); }
@@ -45,7 +46,7 @@ export class PauseMenu {
   focusRow(name) { const i = this.rows.indexOf(name); if (i >= 0) { this.focus = i; this.inOptions = false; } }
   focusOptRow(name) { const i = this.optRows.indexOf(name); if (i >= 0) { this.optFocus = i; this.inOptions = true; } }
 
-  render(volume, fsOn) {
+  render(volume, fsOn, quality = '') {
     const opts = this.inOptions;
     this.listEl.classList.toggle('dim', opts);
     this.optEl.classList.toggle('hidden', !opts);
@@ -59,5 +60,6 @@ export class PauseMenu {
     for (let i = 0; i < 10; i++) cells += `<i class="${i < volume ? 'on' : ''}"></i>`;
     this.volEl.innerHTML = `<span class="bar">${cells}</span>`;
     this.fsEl.textContent = fsOn ? 'ON' : 'OFF';
+    if (this.qualEl) this.qualEl.textContent = quality;
   }
 }
