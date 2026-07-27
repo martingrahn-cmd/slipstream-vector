@@ -2722,6 +2722,9 @@ function buildStands(rng, spline, groundY, theme) {
           si: placed - 1,
           x: px + X.x * ox + Z.x * back, y: py + h + 0.75, z: pz + X.z * ox + Z.z * back,
           ph: rng() * 100, sp: 0.7 + rng() * 0.8, hue: rng(),
+          // Height, build and which way they are turned all vary. A row of
+          // identical boxes at identical spacing reads as freight, not people.
+          yaw: (rng() - 0.5) * 1.3, sx: 0.8 + rng() * 0.45, sy: 0.82 + rng() * 0.5,
           // Only about one seat in six owns a camera. Everyone flashing at once
           // is a sparkler, not a crowd — the gaps are what sell the scale.
           fl: rng() < 0.17 ? 4 + rng() * 9 : 0,
@@ -2820,6 +2823,23 @@ function buildStands(rng, spline, groundY, theme) {
   const mm = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
   for (let i = 0; i < N; i++) flash.setMatrixAt(i, zero);
   const near = new Float32Array(spotPos.length);
+
+  // The crowd's matrices are built ONCE, yaw and build and all, and the bob
+  // afterwards only rewrites element 13 — the Y translation. One float per
+  // spectator per frame instead of a sixteen-float compose, which is what
+  // makes it affordable to have every seat in the world animating at once.
+  const cm = crowd.instanceMatrix.array;
+  const _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+  const _up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < N; i++) {
+    const p = seat[i];
+    _q.setFromAxisAngle(_up, p.yaw);
+    _p.set(p.x, p.y, p.z);
+    _s.set(p.sx, p.sy, p.sx);
+    mm.compose(_p, _q, _s);
+    mm.toArray(cm, i * 16);
+  }
+  crowd.instanceMatrix.needsUpdate = true;
   return {
     group,
     setDensity(d) {
@@ -2845,8 +2865,7 @@ function buildStands(rng, spline, groundY, theme) {
         // read as a shimmer across the stand, not as a wave of pogo sticks —
         // until you are on top of them, and then they get to their feet.
         const bob = Math.sin(t * p.sp * (2.2 + nr * 3.4) + p.ph) * (0.11 + nr * 0.26);
-        mm.makeTranslation(p.x, p.y + bob, p.z);
-        crowd.setMatrixAt(i, mm);
+        cm[i * 16 + 13] = p.y + bob;
         // Flash: a short pop on the seat's own cycle. Far away only the seats
         // that own a camera fire at all (fl === 0 for the rest); near, every
         // seat switches to its short cycle and the stand lights up.

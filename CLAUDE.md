@@ -95,7 +95,22 @@ uglier than it needed to be for everyone.
 - `src/worlds/themes.js` — one theme per world; knobs include palette, fog,
   `sunAz`, `horizonMask`, `landmark {type}` (sunGate/lighthouse/spire),
   `monumentZones`, `rockCut`, `mesaStyle`, `mountainStyle`, `floraCol`,
-  `birdCol`, `sky.event` ('planet' = sister planet + meteors).
+  `birdCol`, `wind` (per-world sway multiplier), `sky.event` ('planet' =
+  sister planet + meteors).
+- `src/track/scenery.js` — the world builders. Two things there are about
+  making the place feel INHABITED rather than decorated, which is a different
+  axis from detail and the one that was missing longest:
+  - `buildStands` — grandstands at the start/finish and the outside of the
+    biggest corners, with an instanced crowd and camera flashes. It **reacts**:
+    far away only the one seat in six that owns a camera fires, inside ~70m
+    every seat switches to a short cycle and the crowd gets to its feet. It
+    footprint-tests against the whole centreline so a stand never lands on the
+    road where the loop crosses over itself.
+  - `windify(material, geom, amp)` — vertex-shader sway injected into
+    vegetation materials, weighted by vertex height squared, phased off world
+    position so gusts sweep. Zero draws, zero triangles, one uniform a frame
+    for the whole world. Amplitude is per archetype (palm ≫ spruce ≫ cactus)
+    times `theme.wind`. Uniforms are exposed on `material.userData.wind`.
 - `src/track/tracks/` — one data file per track + `index.js` roster (the
   "add a track" seam). Stunts via `features: [{type:'loop'|'corkscrew'|'jump'}]`.
 - `src/weapons/weaponSystem.js` — pads, five weapons, projectiles, hit/disable
