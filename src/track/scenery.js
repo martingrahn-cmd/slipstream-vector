@@ -114,11 +114,74 @@ export function bakeFlatColors(geometry, baseColorHex, opts = {}) {
   return geom;
 }
 
+// ------------------------------------------------------------------- wind
+// Nothing in the world moved unless it was an animated prop with its own
+// update(). Every plant, tuft and frond on twelve tracks stood in dead air,
+// and a still landscape is the fastest way to make a detailed one read as a
+// diorama — the eye notices the ABSENCE of motion long before it counts
+// polygons.
+//
+// This is the cheapest possible fix: a vertex-shader displacement injected
+// into the materials that should bend, weighted by the vertex's own height so
+// bases stay planted and tips travel. No new draws, no new triangles, no CPU
+// work beyond one uniform write a frame for the whole world.
+const WIND = [];  // live uniform sets — reset per world build, see below
+
+function windify(material, geom, amp) {
+  geom.computeBoundingBox();
+  const bb = geom.boundingBox;
+  const h = Math.max(0.4, bb.max.y - Math.min(0, bb.min.y));
+  const u = { uWindT: { value: 0 }, uWindH: { value: h }, uWindAmp: { value: amp } };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, u);
+    shader.vertexShader = 'uniform float uWindT;\nuniform float uWindH;\nuniform float uWindAmp;\n'
+      + shader.vertexShader.replace('#include <begin_vertex>', [
+        '#include <begin_vertex>',
+        '{',
+        // Height weight, squared: a stem barely moves at the root and a lot at
+        // the tip, which is what separates a plant bending from a plant sliding.
+        '  float wh = clamp(transformed.y / uWindH, 0.0, 1.0);',
+        '  #ifdef USE_INSTANCING',
+        '    vec3 wp = (instanceMatrix * vec4(transformed, 1.0)).xyz;',
+        '  #else',
+        '    vec3 wp = transformed;',
+        '  #endif',
+        // Phase from WORLD position, so gusts sweep across a field instead of
+        // every plant twitching on its own clock.
+        '  float ph = uWindT + wp.x * 0.055 + wp.z * 0.041;',
+        '  float gust = 0.62 + 0.38 * sin(uWindT * 0.21 + wp.x * 0.004 + wp.z * 0.003);',
+        '  vec3 d = vec3(sin(ph) + 0.35 * sin(ph * 2.7), 0.0, 0.42 * cos(ph * 0.9));',
+        '  d *= uWindAmp * uWindH * wh * wh * gust;',
+        // d is a WORLD-space offset but `transformed` is pre-instance local, so
+        // rotate it back through the instance basis. The matrix is compose(pos,
+        // yaw, uniform scale), so the inverse of its 3x3 is the transpose over
+        // the scale squared — written out by hand rather than via transpose(),
+        // which needs GLSL ES 3.00.
+        '  #ifdef USE_INSTANCING',
+        '    mat3 im = mat3(instanceMatrix);',
+        '    float s2 = max(1e-4, dot(im[0], im[0]));',
+        '    transformed += vec3(dot(im[0], d), dot(im[1], d), dot(im[2], d)) / s2;',
+        '  #else',
+        '    transformed += d;',
+        '  #endif',
+        '}',
+      ].join('\n'));
+  };
+  // Without a distinct cache key three reuses the program it already compiled
+  // for an identical-looking material and the injection silently does nothing.
+  material.customProgramCacheKey = () => `wind${amp}_${h.toFixed(2)}`;
+  material.userData.wind = u;   // reachable from the scene graph, for tuning/QA
+  WIND.push(u);
+  return material;
+}
+
 export function buildScenery(spline, scene, theme) {
   const rng = mulberry32(1337);
   const group = new THREE.Group();
   group.matrixAutoUpdate = false;
   setBakeTheme(theme.mesaRim, theme.ground, theme.warm);
+  // One world at a time: a rebuild replaces the wind list rather than growing it.
+  WIND.length = 0;
 
   // Track bounds for placement. The ground must clear the LOWEST point of the
   // banked track edge (a 32-degree bank drops the low edge ~5m below the
@@ -209,6 +272,8 @@ export function buildScenery(spline, scene, theme) {
     },
     update(t, cameraPos, raceProgress = 0, sunFlare = 0, meteor = -1, meteorAz = 0, auroraFlare = 0, camQuat = null) {
       sky.mesh.position.copy(cameraPos);
+      // One clock for every plant in the world.
+      for (let i = 0; i < WIND.length; i++) WIND[i].uWindT.value = t * 0.85;
       sky.mat.uniforms.time.value = t;
       sky.mat.uniforms.progress.value = raceProgress;
       sky.mat.uniforms.sunFlare.value = sunFlare;
@@ -1528,7 +1593,8 @@ function buildScrub(rng, spline, groundY, theme) {
   const geom = mergeGeoms(parts);
   const count = theme.scrubCount;
   const mesh = new THREE.InstancedMesh(geom,
-    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+    windify(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), geom, 0.06 * (theme.wind ?? 1)),
+    count);
   mesh.frustumCulled = false;
   const f = makeFrame();
   const m = new THREE.Matrix4();
@@ -1616,8 +1682,13 @@ function buildRoadside(rng, spline, groundY, theme) {
   }
   const geom = mergeGeoms(parts);
   const count = theme.roadsideCount ?? 300;
-  const mesh = new THREE.InstancedMesh(geom,
-    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+  // Grass is the loosest thing on the track and should read that way; a snow
+  // stake only flexes; mooring posts are driven into the seabed; barrier blocks
+  // and vent boxes are concrete and stay put.
+  const AMP = { tufts: 0.13, poles: 0.05, marina: 0.03, street: 0 };
+  const amp = (AMP[style] ?? 0.06) * (theme.wind ?? 1);
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
+  const mesh = new THREE.InstancedMesh(geom, amp > 0 ? windify(mat, geom, amp) : mat, count);
   const f = makeFrame();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -1719,8 +1790,11 @@ function buildFlora(rng, spline, groundY, theme) {
   const geom = mergeGeoms(parts);
 
   const count = theme.floraCount ?? 80;
+  // A palm whips, a spruce shrugs, a cactus is basically a post — the same
+  // sway on all three would look like the whole world was made of rubber.
+  const amp = (style === 'palms' ? 0.085 : style === 'pines' ? 0.032 : 0.012) * (theme.wind ?? 1);
   const mesh = new THREE.InstancedMesh(geom,
-    new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
+    windify(new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), geom, amp), count);
   const f = makeFrame();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
