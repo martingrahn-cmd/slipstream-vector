@@ -579,8 +579,8 @@ const CREDITS = [
   { grp: 'THE CALENDAR', roster: 'worlds' },
   { grp: 'ENGINE', name: 'THREE.JS r172', sub: 'WebGL2 · ES modules · no build step' },
   { grp: 'TYPE', name: 'ORBITRON & RAJDHANI', sub: 'Google Fonts' },
-  { grp: 'PLAYTESTING', name: 'OUR TEST PILOTS', sub: 'who drove it before it was ready' },
-  { grp: 'THANKS', name: 'EVERYONE WHO RACED IT', sub: 'and told me what was wrong with it' },
+  { grp: 'CHIEF TEST PILOT', name: 'AMANDUS', sub: 'my son &mdash; and the best driver in the house' },
+  { grp: 'PLAYTESTING', name: 'THE REDDIT GRID', sub: 'everyone who raced an early build and said what was wrong' },
 ];
 
 function creditsRollHTML() {
