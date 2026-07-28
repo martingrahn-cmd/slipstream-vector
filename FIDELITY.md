@@ -1,7 +1,8 @@
 # FIDELITY.md — where the picture can still get better
 
-**Four of the items below have since been built** (frost sun direction, the LOW
-grade, the ULTRA rung, contact shading). They are marked DONE in place; the
+**Six of the items below have since been built** (frost sun direction, the LOW
+grade, the ULTRA rung, contact shading, neon edge width, crowd update culling)
+and one was **dropped after the reasoning turned out to be wrong** — see §5.2. They are marked DONE in place; the
 reasoning is kept because it is the record of why, and the numbers are still the
 baseline anything new gets measured against.
 
@@ -145,11 +146,13 @@ Ranked by visible gain per unit of work.
    costs *zero draws*: darken the ground disc's own vertex colours in a radius
    around every large scatterer at build time, the same way the terrain is
    displaced at build time. It will not track a moving sun — nothing here does.
-3. **Neon edge antialiasing.** The track edge strips are thin, very bright
-   geometry against dark road: the single worst aliasing in the game, and the
-   thing MSAA helps least because the contrast is enormous. Widening the strip
-   slightly with distance (a fixed *screen-space* width rather than world width)
-   would do more than another MSAA sample.
+3. **Neon edge antialiasing.** DONE — the strips now hold a minimum width in
+   PIXELS. Each vertex carries the strip's centre line and its half-width
+   offset; the vertex shader projects both, measures the half-width in pixels,
+   and pushes the vertex out along the same screen direction if it is under the
+   floor (1.35px). Near strips are untouched. Far ones hold a steady thin line
+   instead of dissolving into a crawling row of dots — which is what they did,
+   and it was the worst aliasing in the frame.
 4. **More lengthwise road slicing on stunts.** `SLICE_STEP` is uniform; loops
    and corkscrews are where faceting shows and where the camera lingers.
 5. **Ship interiors.** Canopies are opaque shells. A visible pilot silhouette is
@@ -159,19 +162,25 @@ Ranked by visible gain per unit of work.
 
 1. **Give LOW the grade back** (§2b). DONE — the JuicePass now always runs and
    only compiles out the 18-read smear.
-2. **Tier the ground disc.** 27.5k tris, fixed cost, on every world, at every
-   tier. LOW could take a 48x64 disc for ~6k. It is built once, so this can only
-   apply at load, not on a live tier switch — which is fine, LOW is usually a
-   deliberate choice or an early ADAPTIVE decision.
+2. ~~**Tier the ground disc.**~~ **DROPPED, and the reasoning was wrong.** The
+   idea was that 27.5k fixed triangles is worth cutting at LOW. But the disc's
+   cost is not its triangles — it is *fill*: it covers most of the screen, and a
+   coarser disc covers exactly as many pixels. Tiering it would have bought ~5%
+   of the vertex count, 0% of the fill, and cost the dunes their shape. This is
+   the same mistake the tiers made the first time round, made by me, in a
+   document written to warn against it.
 3. **Price the additive overdraw properly.** Sparks, camera flashes, exhaust
    ribbons, motes, glow ribbons and ship reflections are all transparent and all
    stack. This is the real fill cost on weak GPUs and the tiers currently guess
    at it with density knobs rather than measuring coverage. Worth an actual
    measurement pass before tuning further.
-4. **Cap the crowd by distance, not by density.** `setDensity` thins every stand
-   equally; a stand 800m away contributes nothing but instances. Distance
-   culling per stand would let LOW keep a *full* nearby crowd, which is the one
-   the player sees.
+4. **Cap the crowd by distance, not by density.** DONE, though not as written.
+   The instances still draw — it is one instanced call either way, and culling
+   them would need the seat array recompacted. What was removed is the per-frame
+   CPU work: a stand beyond 190m no longer gets its bob and flash cycle
+   recomputed, and the instance buffer is only re-uploaded when something
+   actually moved. That is most of the system's cost on a weak machine and it is
+   invisible, because `near` was already 0 out there.
 
 ## 6. Things that would NOT help
 

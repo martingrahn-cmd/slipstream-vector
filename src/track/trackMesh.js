@@ -12,7 +12,8 @@ export function buildTrackMesh(spline, theme) {
   group.add(buildUnderside(spline));
   group.add(buildWalls(spline));
   if (spline.splits && spline.splits.length) group.add(buildSplitIslands(spline));
-  group.add(buildEdgeStrips(spline));
+  const edges = buildEdgeStrips(spline);
+  group.add(edges);
   group.add(buildGlowRibbons(spline));
   const jumpMarks = buildJumpMarks(spline);
   if (jumpMarks) group.add(jumpMarks);
@@ -26,6 +27,8 @@ export function buildTrackMesh(spline, theme) {
     group,
     // Quality tier: the wet-sheen multiplier on the road's own edge reflection.
     setGloss: (m) => surface.setGloss(m),
+    // Drawing-buffer size, for the neon strips' minimum screen width.
+    setRes: (w, h) => edges.userData.setRes(w, h),
     update: (t, speed = 0, shipDist = 0, shipLat = 0, glow = 0, engColor = null, nozzleOff = null, playerFull = false) => {
       surface.update(t, speed, shipDist, shipLat, glow, engColor, nozzleOff);
       pads.update(t);
@@ -458,6 +461,13 @@ function buildEdgeStrips(spline) {
   const cl = new THREE.Color(TUNING.COL.EDGE_L);
   const cr = new THREE.Color(TUNING.COL.EDGE_R);
 
+  // Each vertex carries the strip's CENTRE line and the half-width offset that
+  // takes it to its own side, so the vertex shader can widen the strip in
+  // SCREEN space. See the material below for why.
+  const half = new Float32Array((n + 1) * strips * 2 * 3);
+  const side = new Float32Array((n + 1) * strips * 2);
+  const hv = new THREE.Vector3();
+
   eachSlice(spline, (i, s, f) => {
     const W = f.width;
     const defs = [
@@ -469,10 +479,15 @@ function buildEdgeStrips(spline) {
     ];
     for (let j = 0; j < strips; j++) {
       const [x0, x1, y, c] = defs[j];
+      const xc = (x0 + x1) / 2, xh = (x1 - x0) / 2;
+      // Strip centre and the half-width offset, both in world space.
+      v.copy(f.pos).addScaledVector(f.R, xc).addScaledVector(f.U, y);
+      hv.copy(f.R).multiplyScalar(xh);
       for (let e = 0; e < 2; e++) {
-        v.copy(f.pos).addScaledVector(f.R, e ? x1 : x0).addScaledVector(f.U, y);
         const k = ((i * strips + j) * 2 + e) * 3;
         pos[k] = v.x; pos[k + 1] = v.y; pos[k + 2] = v.z;
+        half[k] = hv.x; half[k + 1] = hv.y; half[k + 2] = hv.z;
+        side[((i * strips + j) * 2 + e)] = e ? 1 : -1;
         col[k] = c.r; col[k + 1] = c.g; col[k + 2] = c.b;
       }
     }
@@ -489,13 +504,69 @@ function buildEdgeStrips(spline) {
 
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geom.setAttribute('aHalf', new THREE.BufferAttribute(half, 3));
+  geom.setAttribute('aSide', new THREE.BufferAttribute(side, 1));
+  geom.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
   geom.setIndex(idx);
-  const mesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({
-    vertexColors: true, fog: false, side: THREE.DoubleSide,
-  }));
+
+  // MINIMUM SCREEN WIDTH.
+  //
+  // These strips are 0.33m of very bright colour against a near-black road, and
+  // they are the single most recognisable thing in the game. In world space
+  // they shrink with distance like everything else, and somewhere down the
+  // straight they fall under one pixel — at which point they stop being a line
+  // and start being a row of flickering dots that crawls as the camera moves.
+  // MSAA helps this least of anything on screen, because the contrast either
+  // side of the edge is enormous.
+  //
+  // So: project the strip's centre and one edge, measure the half-width in
+  // PIXELS, and if it is under the floor, push the vertex out along the same
+  // screen direction until it reaches it. Near strips are untouched (the
+  // measured width already exceeds the floor); far ones hold a steady thin
+  // line instead of dissolving. One extra matrix multiply per vertex on a mesh
+  // that is a few thousand vertices — nothing, and it fixes the worst aliasing
+  // in the frame.
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uRes: { value: new THREE.Vector2(1, 1) },
+      uMinPx: { value: 1.35 },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec3 aHalf;
+      attribute float aSide;
+      attribute vec3 aCol;
+      uniform vec2 uRes;
+      uniform float uMinPx;
+      varying vec3 vColor;
+      void main() {
+        vColor = aCol;
+        vec4 cC = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 cE = projectionMatrix * modelViewMatrix * vec4(position + aHalf, 1.0);
+        // Behind the camera: leave it alone, the clip stage will discard it.
+        if (cC.w <= 0.0001) { gl_Position = cC; return; }
+        vec2 hs = uRes * 0.5;
+        vec2 sC = (cC.xy / cC.w) * hs;
+        vec2 sE = (cE.w > 0.0001) ? (cE.xy / cE.w) * hs : sC;
+        vec2 d = sE - sC;
+        float px = length(d);
+        vec2 dir = px > 1e-5 ? d / px : vec2(1.0, 0.0);
+        float wpx = max(px, uMinPx);
+        vec2 sV = sC + dir * wpx * aSide;
+        gl_Position = vec4((sV / hs) * cC.w, cC.z, cC.w);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec3 vColor;
+      void main() { gl_FragColor = vec4(vColor, 1.0); }
+    `,
+    fog: false,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geom, mat);
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
+  mesh.userData.setRes = (w, h) => mat.uniforms.uRes.value.set(w, h);
   return mesh;
 }
 

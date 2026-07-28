@@ -99,6 +99,7 @@ function applyTier(i) {
   const q = GFX[tierIdx];
   renderer.setPixelRatio(effectiveRatio(q, innerWidth, innerHeight));
   renderer.setSize(innerWidth, innerHeight);
+  syncTrackRes();
   postfx.setSamples(q.samples);
   postfx.setPostFull(q.post);
   postfx.setBloomEnabled(q.bloom);
@@ -153,6 +154,14 @@ function setQualityMode(mode) {
   } else {
     applyTier(GFX_MODES.indexOf(mode));
   }
+}
+
+// The neon edge strips hold a minimum width in PIXELS, so they need the real
+// drawing-buffer size — which changes with the tier as well as with the window.
+function syncTrackRes() {
+  if (!track || !track.setRes) return;
+  const r = renderer.getPixelRatio();
+  track.setRes(innerWidth * r, innerHeight * r);
 }
 
 function qualityLabel() {
@@ -336,6 +345,7 @@ function buildWorld(idx) {
 
   spline = new TrackSpline(trackDef);
   track = buildTrackMesh(spline, theme);
+  syncTrackRes();   // a new world needs the current buffer size straight away
   scene.add(track.group);
   scenery = buildScenery(spline, scene, theme);
   scenery.setMoteDensity(GFX[tierIdx].motes); // a fresh world starts at the current tier
@@ -2284,6 +2294,7 @@ addEventListener('resize', () => {
   // renderer would otherwise keep whatever ratio it had at the old size.
   renderer.setPixelRatio(effectiveRatio(GFX[tierIdx], innerWidth, innerHeight));
   renderer.setSize(innerWidth, innerHeight);
+  syncTrackRes();
   postfx.setSize(innerWidth, innerHeight);
 });
 

@@ -3100,9 +3100,18 @@ function buildStands(rng, spline, groundY, theme) {
         near[i] = d > 190 ? 0 : d < 70 ? 1 : (190 - d) / 120;
       }
       const k = crowd.count;
+      let touched = false;
       for (let i = 0; i < k; i++) {
         const p = seat[i];
         const nr = near[p.si] || 0;
+        // A stand the far side of the circuit still DRAWS — it is one instanced
+        // call either way — but there is no point spending CPU animating a bob
+        // and a flash cycle nobody can resolve. Skipping the far ones is most
+        // of the per-frame cost of this system on a weak machine, and it is
+        // invisible: `near` is already 0 beyond 190m.
+        if (nr <= 0 && !p.wasNear) continue;
+        p.wasNear = nr > 0;
+        touched = true;
         // Bob: a crowd never stands still. Amplitude is small — this should
         // read as a shimmer across the stand, not as a wave of pogo sticks —
         // until you are on top of them, and then they get to their feet.
@@ -3122,8 +3131,10 @@ function buildStands(rng, spline, groundY, theme) {
           flash.setMatrixAt(i, zero);
         }
       }
-      crowd.instanceMatrix.needsUpdate = true;
-      flash.instanceMatrix.needsUpdate = true;
+      if (touched) {
+        crowd.instanceMatrix.needsUpdate = true;
+        flash.instanceMatrix.needsUpdate = true;
+      }
     },
   };
 }
