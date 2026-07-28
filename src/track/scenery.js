@@ -484,29 +484,57 @@ function buildSky(S) {
           col += mCol * (body * 1.0 + head * 1.9) * life;
           col += hot * life * head * 0.2;                     // faint warm wash at the head
         }
-        // Sky event (frost): the AURORA — two flowing curtains whose bases
-        // ripple along the azimuth, combed by fine vertical rays. Green core,
-        // violet fringe; deepens as the race night wears on (progress).
-        if (aurora > 0.5 && y > 0.04) {
+        // Sky event (frost): the AURORA.
+        //
+        // The old version was two horizontal bands whose HEIGHT rippled along
+        // the azimuth. That reads as banding, not as an aurora, because a real
+        // aurora is a CURTAIN: a thin hot hem at the bottom with light hanging
+        // upward from it in rays, folded so it is bright where it turns face-on
+        // and nearly invisible where it turns edge-on. Three things carry that
+        // and none of them were there — the hem, the fold gate, and rays that
+        // thin out with height.
+        if (aurora > 0.5 && y > 0.02) {
           float aAz = atan(d.x, d.z);
-          float wave1 = sin(aAz * 2.2 + time * 0.11) + 0.6 * sin(aAz * 4.7 - time * 0.07);
-          float wave2 = sin(aAz * 3.1 - time * 0.09 + 2.1) + 0.5 * sin(aAz * 6.3 + time * 0.05);
-          float y1 = 0.26 + 0.07 * wave1;
-          float y2 = 0.44 + 0.09 * wave2;
-          float band1 = smoothstep(y1 - 0.03, y1 + 0.10, y) * (1.0 - smoothstep(y1 + 0.10, y1 + 0.5, y));
-          float band2 = smoothstep(y2 - 0.03, y2 + 0.12, y) * (1.0 - smoothstep(y2 + 0.12, y2 + 0.55, y));
-          float rays = 0.55 + 0.45 * sin(aAz * 38.0 + time * (0.35 + 0.5 * auroraFlare) + 3.0 * sin(aAz * 3.0 + time * 0.06));
-          // Builds all race; SURGES on the final lap (auroraFlare) — brighter,
-          // faster, plus a third low curtain flooding toward the horizon.
           float amp = (0.4 + 0.5 * progress) * (1.0 + 1.4 * auroraFlare);
-          vec3 aGreen = vec3(0.15, 0.95, 0.55);
-          vec3 aViolet = vec3(0.5, 0.35, 0.98);
-          col += (aGreen * band1 + mix(aGreen, aViolet, 0.72) * band2) * rays * amp * 0.5;
-          if (auroraFlare > 0.01) {
-            float y3 = 0.13 + 0.05 * sin(aAz * 2.7 + time * 0.14);
-            float band3 = smoothstep(y3 - 0.02, y3 + 0.08, y) * (1.0 - smoothstep(y3 + 0.08, y3 + 0.4, y));
-            col += mix(aViolet, aGreen, 0.4) * band3 * rays * auroraFlare * 0.4;
+          vec3 aGreen  = vec3(0.16, 0.99, 0.52);
+          vec3 aTeal   = vec3(0.22, 0.88, 0.84);
+          vec3 aViolet = vec3(0.64, 0.28, 1.00);
+          vec3 acc = vec3(0.0);
+          // Three curtains at different heights and drift rates. The far ones
+          // are dimmer and slower, so the sky has depth instead of a stripe.
+          for (int i = 0; i < 3; i++) {
+            float fi = float(i);
+            // A meandering hem: three harmonics, not one wave.
+            float fold = sin(aAz * (2.1 + fi * 0.9) + time * (0.10 + fi * 0.030) + fi * 2.3)
+                       + 0.55 * sin(aAz * (4.6 + fi * 1.3) - time * (0.07 + fi * 0.020))
+                       + 0.30 * sin(aAz * (9.1 + fi * 2.0) + time * 0.05 + fi);
+            float base = (0.12 + fi * 0.17) + 0.055 * fold;
+            float hgt = 0.26 + fi * 0.10;
+            float t = (y - base) / hgt;              // 0 at the hem, 1 at the top
+            if (t < -0.09 || t > 1.5) continue;   // let the hem feather below its own base
+            // The hem is the signature: a thin, much brighter line at the base
+            // with a long exponential fade hanging above it.
+            float hem = exp(-t * t * 90.0);
+            float body = exp(-t * 2.6) * smoothstep(-0.02, 0.05, t);
+            // Rays: two frequencies drifting at different speeds, combed by the
+            // fold, and thinning toward the top the way real rays do.
+            float r1 = 0.5 + 0.5 * sin(aAz * 46.0 + time * (0.30 + 0.60 * auroraFlare)
+                                       + 2.2 * sin(aAz * 3.0 + time * 0.05));
+            float r2 = 0.5 + 0.5 * sin(aAz * 97.0 - time * (0.17 + 0.40 * auroraFlare) + fi * 1.7);
+            float rays = mix(1.0, r1 * (0.50 + 0.50 * r2), 0.92 - 0.52 * clamp(t, 0.0, 1.0));
+            // Fold gate: bright where the sheet turns toward you, thin where it
+            // turns edge-on. This is what stops it reading as a painted band.
+            float gate = 0.22 + 0.78 * smoothstep(-0.5, 1.3, fold);
+            // Oxygen green low, nitrogen violet high — and it is the real
+            // colour ramp, which is a nice coincidence.
+            vec3 c = mix(aGreen, aViolet, clamp(t * 1.2, 0.0, 1.0));
+            c = mix(c, aTeal, 0.28 * (1.0 - clamp(t, 0.0, 1.0)) * (1.0 - abs(fi - 1.0)));
+            acc += c * (hem * 1.9 + body * 0.72) * rays * gate * (1.0 - fi * 0.22);
           }
+          col += acc * amp * 0.46;
+          // The whole sky picks up a faint green cast under a strong display —
+          // aurora light is real light and the air scatters it.
+          col += aGreen * amp * 0.035 * smoothstep(0.55, 0.0, y);
         }
         // Stars above the horizon band.
         if (y > 0.18) {
@@ -515,17 +543,30 @@ function buildSky(S) {
           float h = hash(id);
           if (h > starLevel) {
             vec2 f = fract(cell) - 0.5;
-            float star = 1.0 - smoothstep(0.02, 0.09, length(f));
+            // Magnitude: mostly faint pinpricks with a few bright ones, and a
+            // blue-to-warm spread. A field of identical dots reads as a texture;
+            // a field with a few standouts reads as a sky.
+            float mag = hash(id + vec2(11.3, 4.7));
+            mag *= mag;
+            float star = 1.0 - smoothstep(0.02, 0.055 + 0.070 * mag, length(f));
             float tw = 0.7 + 0.3 * sin(time * 2.0 + h * 40.0);
-            col += vec3(0.9, 0.9, 1.0) * star * tw * smoothstep(0.18, 0.3, y);
+            vec3 sc = mix(vec3(0.74, 0.83, 1.0), vec3(1.0, 0.92, 0.80), hash(id + vec2(5.1, 9.4)));
+            col += sc * star * tw * (0.55 + 1.1 * mag) * smoothstep(0.18, 0.3, y);
           }
         }
         // Drifting bands: thin dusk streaks (puff=1) up to fat cumulus banks
         // or smog (puff>2) — width and lobe frequency scale together.
         float az = atan(d.x, d.z);
-        float c1 = exp(-pow((y - 0.085) * 60.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 3.0 / cloudPuff + time * 0.05));
-        float c2 = exp(-pow((y - 0.16) * 40.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 5.0 / cloudPuff - time * 0.04 + 2.0));
-        float c3 = exp(-pow((y - 0.30) * 30.0 / cloudPuff, 2.0)) * (0.3 + 0.7 * sin(az * 7.0 / cloudPuff + time * 0.07 + 4.0));
+        // Ragged edges. A single sine per band gives an airbrushed stripe; a
+        // second, faster harmonic multiplied in gives it lumps and gaps, and
+        // nudging each band's CENTRE height by the same term stops the three
+        // from reading as parallel rules across the sky.
+        float rag1 = 0.60 + 0.40 * sin(az * 9.0 / cloudPuff + time * 0.045 + 1.3) * sin(az * 3.7 - time * 0.020);
+        float rag2 = 0.60 + 0.40 * sin(az * 13.0 / cloudPuff - time * 0.035) * sin(az * 5.1 + time * 0.030 + 2.4);
+        float rag3 = 0.60 + 0.40 * sin(az * 17.0 / cloudPuff + time * 0.026 + 3.1) * sin(az * 6.9 - time * 0.015);
+        float c1 = exp(-pow((y - 0.085 - 0.014 * (rag1 - 0.6)) * 60.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 3.0 / cloudPuff + time * 0.05)) * rag1;
+        float c2 = exp(-pow((y - 0.16 - 0.020 * (rag2 - 0.6)) * 40.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 5.0 / cloudPuff - time * 0.04 + 2.0)) * rag2;
+        float c3 = exp(-pow((y - 0.30 - 0.026 * (rag3 - 0.6)) * 30.0 / cloudPuff, 2.0)) * (0.3 + 0.7 * sin(az * 7.0 / cloudPuff + time * 0.07 + 4.0)) * rag3;
         col = mix(col, cloud, clamp(c1 + c2 + c3 * step(0.4, cloudAmp), 0.0, 1.0) * cloudAmp);
         // Time-of-day mood drift: the world deepens as the race progresses.
         col *= mix(1.0, 0.78, progress);

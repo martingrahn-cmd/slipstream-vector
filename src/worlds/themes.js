@@ -181,7 +181,10 @@ export const THEMES = {
       sunSize: 0.09,
       sunStripes: 0.0,
       starLevel: 0.992,   // light pollution
-      cloudAmp: 0.35,
+      cloudAmp: 0.42,
+      cloudPuff: 3.2,     // smog BANKS lit from below by the city, not thin streaks
+                          // — at puff 1.0 the layer was too narrow to read at all
+                          // and the blue hour had nothing in it above the towers
     },
     fog: 0xd668a8,
     ground: 0x1e1a38,     // lifted asphalt
