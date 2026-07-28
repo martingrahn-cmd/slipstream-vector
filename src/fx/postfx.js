@@ -69,6 +69,14 @@ const JuiceShader = {
       // Six taps is 18 texture reads instead of 12 on one pass. Against a
       // framebuffer already moving tens of GB/s that is noise, and unlike the
       // resolution it was competing with, it buys something.
+      #ifdef CHEAP
+        // LOW: one read, no smear, no chromatic split. Everything BELOW this
+        // point still runs — the grade, the vignette and the dither are the
+        // world's colour identity, not an effect, and switching the whole pass
+        // off to save them was making LOW a different-looking game rather than
+        // the same game rendered softer.
+        col = texture2D(tDiffuse, vUv).rgb;
+      #else
       float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
       float wsum = 0.0;
       for (int i = 0; i < 6; i++) {
@@ -81,6 +89,7 @@ const JuiceShader = {
         wsum += w;
       }
       col /= wsum;
+      #endif
       // Vignette: darken the corners (monotonic — never lightens), then lean
       // the darkened corner slightly toward the world's sky-zenith colour so the
       // frame edge melts into the backdrop without inverting on bright worlds.
@@ -373,10 +382,19 @@ export class PostFX {
     this.setSize(size.x, size.y);
   }
 
-  // Bypass the 12-tap JuicePass. The grade goes with it, so LOW looks flatter —
-  // that is the honest trade, and it is a whole full-screen pass saved.
-  setPostEnabled(on) {
-    if (this.juicePass) this.juicePass.enabled = !!on;
+  // Full effects vs cheap. The pass itself ALWAYS runs: at LOW's 1.2Mpx budget
+  // one texture read plus the grade maths is a rounding error, and it is what
+  // keeps every tier looking like the same game. Only the 18-read smear is
+  // compiled out — which needs a program rebuild, so this is a tier-change
+  // operation, never a per-frame one.
+  setPostFull(full) {
+    const m = this.juicePass && this.juicePass.material;
+    if (!m) return;
+    this.juicePass.enabled = true;
+    const want = full ? undefined : '';
+    if (m.defines.CHEAP === want) return;
+    if (full) delete m.defines.CHEAP; else m.defines.CHEAP = '';
+    m.needsUpdate = true;
   }
 
   setBloomEnabled(on) {

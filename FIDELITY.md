@@ -1,5 +1,10 @@
 # FIDELITY.md — where the picture can still get better
 
+**Four of the items below have since been built** (frost sun direction, the LOW
+grade, the ULTRA rung, contact shading). They are marked DONE in place; the
+reasoning is kept because it is the record of why, and the numbers are still the
+baseline anything new gets measured against.
+
 A measured survey, not a wishlist. Every number here came from the running game
 on 2026-07-28; the method is at the bottom so it can be repeated and argued
 with. Ordered by *visible gain per unit of work*, which is not the same order as
@@ -84,7 +89,7 @@ a feature. It wants measuring on Martin's M4 with a 4K panel before shipping,
 because the calculation above prices only the colour buffer — depth, the
 composer's ping-pong targets and the bloom chain ride on top.
 
-### 2b. LOW throws away the colour grade, not just the effects
+### 2b. LOW throws away the colour grade, not just the effects — DONE
 
 LOW sets `post: false`, which disables the whole JuicePass. That pass carries
 the speed effects — but it also carries:
@@ -106,7 +111,7 @@ identity back for roughly the cost of one extra full-screen read at 1.2 Mpx.
 
 ---
 
-## 3. A real defect: the frost world is lit from the wrong direction
+## 3. A real defect: the frost world is lit from the wrong direction — DONE
 
 `bakeFlatColors` shades every solid in the world against one global constant,
 `TUNING.SUN_DIR = [-0.4, 0.25, -1]` — an azimuth of **-158°**. The sky draws its
@@ -129,9 +134,12 @@ reading a module constant. Cost: zero at runtime, it is all bake-time.
 
 Ranked by visible gain per unit of work.
 
-1. **Raise FULL's pixel budget** (§2a). Measure on the 4K M4 first. Consider an
-   explicit ULTRA rather than moving FULL, so ADAPTIVE keeps a rung it trusts.
-2. **Contact shading where things meet the ground.** Nothing in the world is
+1. **Raise FULL's pixel budget** (§2a). PARTLY DONE: an explicit ULTRA rung at
+   8.3Mpx now exists — exactly 4K native — and ADAPTIVE cannot climb into it.
+   FULL is deliberately unchanged, because it is the measured-good default on
+   an M4 and moving it would risk that on the strongest evidence we have.
+   Whether ULTRA holds 60fps on a 4K M4 is the open question.
+2. **Contact shading where things meet the ground.** DONE — Nothing in the world is
    grounded: ships have a blob shadow, scenery has none. Now that the ground has
    relief this is the most conspicuous absence in the frame. The cheap version
    costs *zero draws*: darken the ground disc's own vertex colours in a radius
@@ -149,7 +157,8 @@ Ranked by visible gain per unit of work.
 
 ## 5. Low-end: what would actually raise the picture
 
-1. **Give LOW the grade back** (§2b). Biggest single change to how LOW *looks*.
+1. **Give LOW the grade back** (§2b). DONE — the JuicePass now always runs and
+   only compiles out the 18-read smear.
 2. **Tier the ground disc.** 27.5k tris, fixed cost, on every world, at every
    tier. LOW could take a 48x64 disc for ~6k. It is built once, so this can only
    apply at load, not on a live tier switch — which is fine, LOW is usually a

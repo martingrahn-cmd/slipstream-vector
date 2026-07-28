@@ -21,16 +21,31 @@ export function mulberry32(seed) {
   };
 }
 
+// The direction every solid in the world is shaded from. It has to agree with
+// where the SKY draws its sun, and for one world it did not: three themes leave
+// `sky.sunAz` unset and inherit a default that happens to sit within a degree
+// of TUNING.SUN_DIR, but the frost world sets its own — and was 60 degrees off.
+// Every rock, spruce, mesa and grandstand on Aurora Pass, Avalanche Run and
+// Moonlit Mile was lit from one side while the sky's light source sat well
+// round to the other. Flat shading hides a lot, which is why it went unnoticed.
+//
+// The ELEVATION stays at the tuned value; only the azimuth follows the theme.
 const SUN_DIR = new THREE.Vector3(...TUNING.SUN_DIR).normalize();
+const SUN_ELEV = TUNING.SUN_DIR[1];
+const SUN_XZ = Math.hypot(TUNING.SUN_DIR[0], TUNING.SUN_DIR[2]);
+const SKY_AZ_DEFAULT = [-0.35, -0.94];   // what buildSky uses when a theme omits sunAz
 
 // The bake tints are theme-dependent; buildScenery sets them before building.
 let BAKE_RIM = TUNING.COL.MESA_RIM;
 let BAKE_SHADOW_TINT = TUNING.COL.GROUND;
 let BAKE_WARM = 0xffd9a0;
-export function setBakeTheme(rimHex, shadowTintHex, warmHex) {
+export function setBakeTheme(rimHex, shadowTintHex, warmHex, sunAz) {
   BAKE_RIM = rimHex;
   BAKE_SHADOW_TINT = shadowTintHex;
   BAKE_WARM = warmHex ?? 0xffd9a0;
+  const az = sunAz || SKY_AZ_DEFAULT;
+  const l = Math.hypot(az[0], az[1]) || 1;
+  SUN_DIR.set((az[0] / l) * SUN_XZ, SUN_ELEV, (az[1] / l) * SUN_XZ).normalize();
 }
 
 // Deterministic hash from a world position — the same vertex always gets the
@@ -138,6 +153,23 @@ function groundAt(groundY, x, z) {
   return TERRAIN ? groundY + TERRAIN.h(x, z) : groundY;
 }
 
+// Contact shading. Nothing in the world was GROUNDED: ships have a blob shadow
+// and scenery had nothing, so every large form sat on the sand like a decal.
+// Now that the ground has relief it was the most conspicuous absence left.
+//
+// Big forms register a footprint here; after every builder has run, the ground
+// disc's own vertices are darkened around them. That is why this costs ZERO
+// draws and zero triangles — it is a colour attribute on a mesh that was
+// already being drawn, baked once, exactly like the terrain displacement.
+//
+// LARGE forms only, and deliberately so: the disc's vertex spacing out where
+// the track runs is 15-20m, which can carry a 40m soft pool under a mesa and
+// cannot carry a 2m one under a rock. Small scatterers read fine without it.
+let OCCLUDERS = [];
+function addOccluder(x, z, radius, strength = 1) {
+  if (radius >= 12) OCCLUDERS.push({ x, z, r: radius, s: strength });
+}
+
 function windify(material, geom, amp) {
   geom.computeBoundingBox();
   const bb = geom.boundingBox;
@@ -212,7 +244,7 @@ export function buildScenery(spline, scene, theme) {
   const rng = mulberry32(1337);
   const group = new THREE.Group();
   group.matrixAutoUpdate = false;
-  setBakeTheme(theme.mesaRim, theme.ground, theme.warm);
+  setBakeTheme(theme.mesaRim, theme.ground, theme.warm, theme.sky && theme.sky.sunAz);
   // One world at a time: a rebuild replaces the wind list rather than growing it.
   WIND.length = 0;
 
@@ -236,6 +268,7 @@ export function buildScenery(spline, scene, theme) {
   // without a `terrain` block stay exactly as flat as they were.
   const terrain = buildTerrain(spline, groundY, theme);
   TERRAIN = terrain;
+  OCCLUDERS = [];   // one world at a time, same as WIND
 
   const sky = buildSky(theme.sky);
   scene.add(sky.mesh);
@@ -290,6 +323,12 @@ export function buildScenery(spline, scene, theme) {
   const stands = buildStands(rng, spline, groundY, theme);
   if (stands) group.add(stands.group);
   if (theme.huts) group.add(buildHuts(rng, spline, groundY, theme));
+
+  // Every builder has registered its footprint by now, so the ground can be
+  // darkened where the big forms meet it. Has to run LAST — the ground mesh is
+  // built first (everything else needs groundY), but nothing knows what stands
+  // on it until the scatterers have run.
+  shadeGround(ground.mesh.geometry, cx, cz);
 
   // Base counts captured AFTER the builders ran — that is the FULL density.
   const lifeMeshes = [birds, drones, skiers, traffic, skyCars, sails]
@@ -623,8 +662,33 @@ function groundDisc(R, rings, segs, terrain) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  // 1 = open ground. Filled in by shadeGround() once the world is built.
+  const occ = new Float32Array((rings + 1) * (segs + 1));
+  occ.fill(1);
+  g.setAttribute('aOcc', new THREE.BufferAttribute(occ, 1));
   g.setIndex(idx);
   return g;
+}
+
+// Darken the ground disc around everything that registered a footprint. Called
+// after all the builders, because they are what fill OCCLUDERS.
+function shadeGround(geom, cx, cz) {
+  if (!OCCLUDERS.length) return;
+  const pos = geom.getAttribute('position');
+  const occ = geom.getAttribute('aOcc');
+  for (let i = 0; i < occ.count; i++) {
+    const wx = pos.getX(i) + cx, wz = pos.getZ(i) + cz;
+    let dark = 0;
+    for (const o of OCCLUDERS) {
+      const d = Math.hypot(wx - o.x, wz - o.z);
+      if (d > o.r) continue;
+      // Soft pool: full under the form, feathering to nothing at its radius.
+      const t = 1 - d / o.r;
+      dark = Math.max(dark, t * t * o.s);
+    }
+    occ.setX(i, 1 - dark * 0.42);
+  }
+  occ.needsUpdate = true;
 }
 
 function buildGround(groundY, cx, cz, theme, terrain) {
@@ -651,11 +715,14 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         },
       ]),
       vertexShader: /* glsl */ `
+        attribute float aOcc;
         varying vec2 vXZ;
+        varying float vOcc;
         #include <fog_pars_vertex>
         void main() {
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vXZ = wp.xz;
+          vOcc = aOcc;
           vec4 mvPosition = viewMatrix * wp;
           gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
@@ -665,6 +732,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         uniform vec3 colA, colB, uWarm;
         uniform vec2 uSunDir, uCenter;
         varying vec2 vXZ;
+        varying float vOcc;
         #include <fog_pars_fragment>
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -691,6 +759,9 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           float crest = smoothstep(0.72, 0.98, band);
           float sunSide = clamp(0.5 + 0.5 * dot(normalize(vXZ - uCenter), uSunDir), 0.0, 1.0);
           col = mix(col, uWarm, crest * sunSide * sunSide * 0.30);
+          // Contact shading: baked into the disc's own vertices, so a mesa or a
+          // grandstand sits IN the ground instead of on top of it.
+          col *= vOcc;
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -713,11 +784,14 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         },
       ]),
       vertexShader: /* glsl */ `
+        attribute float aOcc;
         varying vec2 vXZ;
+        varying float vOcc;
         #include <fog_pars_vertex>
         void main() {
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vXZ = wp.xz;
+          vOcc = aOcc;
           vec4 mvPosition = viewMatrix * wp;
           gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
@@ -729,6 +803,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         uniform vec3 uCam;
         uniform vec2 uSunAz;
         varying vec2 vXZ;
+        varying float vOcc;
         #include <fog_pars_fragment>
         void main() {
           // Two drifting wave systems make banded low-poly water.
@@ -748,6 +823,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // Faint scattered glitter elsewhere.
           float g = sin(vXZ.x * 0.9 + time * 1.9) * sin(vXZ.y * 1.1 - time * 1.4);
           col += vec3(1.0, 0.96, 0.8) * smoothstep(0.985, 1.0, g) * 0.18;
+          col *= vOcc;   // baked contact shading, see shadeGround()
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -755,6 +831,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         uniform float time;
         uniform vec3 colA, colB;
         varying vec2 vXZ;
+        varying float vOcc;
         #include <fog_pars_fragment>
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -774,6 +851,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           vec2 a4 = fract(vXZ / 256.0 + 0.5) - 0.5;
           float ave = max(smoothstep(0.011, 0.0, abs(a4.x)), smoothstep(0.011, 0.0, abs(a4.y)));
           col += colB * ave * 0.34 * pulse;
+          col *= vOcc;   // baked contact shading, see shadeGround()
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -1322,6 +1400,7 @@ function buildMesas(rng, spline, groundY, theme) {
         g.scale(scale, scale * (0.55 + rng() * 0.2), scale);
         g.rotateY(rng() * Math.PI * 2);
         const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
+        addOccluder(px, pz, scale * 1.45, 1);
         g.translate(px, groundAt(groundY, px, pz) - bb.min.y - 0.5, pz);
         const baked = bakeFlatColors(g, theme.mesaLit, { shadow: theme.mesaShadow });
         bakeStrata(baked, rng, groundY, Math.max(4, scale * 0.14), theme.mesaRim, theme.ground);
@@ -1373,6 +1452,7 @@ function buildMesas(rng, spline, groundY, theme) {
     const box = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
     // Islands sit half-sunk in the lagoon; everything else stands on the ground.
     const gy = groundAt(groundY, px, pz);
+    addOccluder(px, pz, scale * 1.5, islands ? 0.5 : 0.9);
     const ty = islands
       ? gy - box.min.y - scale * ys * 0.3
       : gy - box.min.y - 0.5;
@@ -2852,6 +2932,7 @@ function buildStands(rng, spline, groundY, theme) {
     if (!footprintFree(px, py, pz, spot.s)) continue;
     placed++;
     spotPos.push({ s: spot.s, side: spot.side, x: px, y: py, z: pz, rx: f.pos.x, ry: f.pos.y, rz: f.pos.z });
+    addOccluder(px, pz, 32, 0.85);
     Z.set(-nx, 0, -nz);                 // facing the track
     X.crossVectors(Y, Z).normalize();
     m.makeBasis(X, Y, Z);

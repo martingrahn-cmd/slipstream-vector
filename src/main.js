@@ -17,7 +17,7 @@ import { Juice } from './fx/juice.js';
 import { Sparks, ExhaustTrails } from './fx/particles.js';
 import { GhostShip } from './fx/ghost.js';
 import { PostFX } from './fx/postfx.js';
-import { TIERS as GFX, MODES as GFX_MODES, ADAPTIVE, Adaptive, effectiveRatio } from './fx/quality.js';
+import { TIERS as GFX, MODES as GFX_MODES, ADAPTIVE, ADAPTIVE_MAX, Adaptive, effectiveRatio } from './fx/quality.js';
 import { Hud, fmt } from './ui/hud.js';
 import { BanterFeed } from './ui/banter.js';
 import { Minimap } from './ui/minimap.js';
@@ -91,7 +91,7 @@ const postfx = new PostFX(renderer, scene, camera);
 // tierIdx and the menu shows both ("ADAPTIVE · MEDIUM").
 let qualityMode = localStorage.getItem('sv-quality') || ADAPTIVE;
 if (!GFX_MODES.includes(qualityMode)) qualityMode = ADAPTIVE;
-let tierIdx = GFX.length - 1;
+let tierIdx = ADAPTIVE_MAX;   // start at FULL, not at the manual-only ULTRA
 const adaptive = new Adaptive();
 
 function applyTier(i) {
@@ -100,7 +100,7 @@ function applyTier(i) {
   renderer.setPixelRatio(effectiveRatio(q, innerWidth, innerHeight));
   renderer.setSize(innerWidth, innerHeight);
   postfx.setSamples(q.samples);
-  postfx.setPostEnabled(q.post);
+  postfx.setPostFull(q.post);
   postfx.setBloomEnabled(q.bloom);
   postfx.setSize(innerWidth, innerHeight);
   sparks.setDensity(q.sparks);
@@ -147,9 +147,9 @@ function setQualityMode(mode) {
   if (mode === ADAPTIVE) {
     // Re-enter optimistically: hardware the player may have just plugged in
     // (or a browser that has warmed up) deserves another look at FULL.
-    adaptive.ceiling = GFX.length - 1;
-    adaptive.reset(GFX.length - 1);
-    applyTier(GFX.length - 1);
+    adaptive.ceiling = ADAPTIVE_MAX;
+    adaptive.reset(ADAPTIVE_MAX);
+    applyTier(ADAPTIVE_MAX);
   } else {
     applyTier(GFX_MODES.indexOf(mode));
   }

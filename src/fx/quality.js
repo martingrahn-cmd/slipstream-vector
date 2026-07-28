@@ -32,7 +32,12 @@ export const TIERS = [
     pixelRatio: 0.75,
     maxPixels: 1.2e6,
     samples: 0,
-    post: false,        // skip the JuicePass entirely — one full-screen pass saved
+    // The JuicePass still RUNS at LOW — it just compiles out the 18-read radial
+    // smear. The grade, the vignette and the banding dither live in that pass and
+    // are the world's colour identity, not an effect; switching the whole thing
+    // off made LOW flatter and open-cornered, which is a different look rather
+    // than a softer one. One texture read at 1.2Mpx is not what costs LOW money.
+    post: false,
     bloom: false,
     shafts: 0,
     reflect: false,
@@ -91,10 +96,44 @@ export const TIERS = [
     motes: 1,
     sparks: 1,
   },
+  {
+    id: 'ultra',
+    name: 'ULTRA',
+    blurb: 'Native resolution on a 4K panel. Manual only — ADAPTIVE never picks it.',
+    // The one number that separates this from FULL. FULL's 4.2Mpx cap means a
+    // 4K panel renders at 0.71x native and upscales: the game is SOFTEST on the
+    // most expensive screens, which is backwards. 8.3Mpx is exactly 4K native.
+    //
+    // Why this is a separate rung rather than a bigger FULL: FULL is measured
+    // at a steady 60fps on an M4 with a 4K panel, and that is the default
+    // everyone lands on. Raising it risks the proven default on the strongest
+    // evidence we have. This costs 8.0 GB/s of colour-buffer fill against
+    // FULL's 4.0 — comfortable against ~120 GB/s of system bandwidth on paper,
+    // but the composer's ping-pong and the depth buffer ride on top and are not
+    // in that figure, so it wants measuring on real hardware before it becomes
+    // anyone's default.
+    //
+    // ADAPTIVE deliberately cannot climb here (see ADAPTIVE_MAX): a tier this
+    // heavy should be a choice someone makes and can immediately undo, not
+    // something the controller wanders into mid-race.
+    pixelRatio: 2.0,
+    maxPixels: 8.3e6,
+    samples: 2,
+    post: true,
+    bloom: true,
+    shafts: 1,
+    reflect: true,
+    gloss: 1.7,
+    life: 1,
+    motes: 1,
+    sparks: 1,
+  },
 ];
 
 export const ADAPTIVE = 'adaptive';
-export const MODES = ['low', 'medium', 'full', ADAPTIVE];
+export const MODES = ['low', 'medium', 'full', 'ultra', ADAPTIVE];
+// The highest rung ADAPTIVE is allowed to select on its own.
+export const ADAPTIVE_MAX = TIERS.findIndex((t) => t.id === 'full');
 
 // The pixelRatio a tier may actually use on a given canvas: never above the
 // tier's ceiling, and never enough to blow the tier's pixel budget. This is
@@ -107,7 +146,7 @@ export function effectiveRatio(tier, cssW, cssH) {
 }
 
 export function tierById(id) {
-  return TIERS.find((t) => t.id === id) || TIERS[2];
+  return TIERS.find((t) => t.id === id) || TIERS[ADAPTIVE_MAX];
 }
 
 // Adaptive controller. Holds a target frame rate by stepping between the three
@@ -117,7 +156,7 @@ export function tierById(id) {
 // already failed is never retried at the same confidence — the ceiling drops
 // with it, so the loop converges instead of hunting.
 export class Adaptive {
-  constructor(target = 58, maxIdx = TIERS.length - 1) {
+  constructor(target = 58, maxIdx = ADAPTIVE_MAX) {
     this.target = target;
     this.maxIdx = maxIdx;
     this.ema = 1000 / 60;   // ms per frame, exponential moving average
