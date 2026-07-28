@@ -519,13 +519,27 @@ function buildEdgeStrips(spline) {
   // MSAA helps this least of anything on screen, because the contrast either
   // side of the edge is enormous.
   //
-  // So: project the strip's centre and one edge, measure the half-width in
-  // PIXELS, and if it is under the floor, push the vertex out along the same
-  // screen direction until it reaches it. Near strips are untouched (the
-  // measured width already exceeds the floor); far ones hold a steady thin
-  // line instead of dissolving. One extra matrix multiply per vertex on a mesh
-  // that is a few thousand vertices — nothing, and it fixes the worst aliasing
-  // in the frame.
+  // So: project the strip's centre and this vertex's own edge, measure the
+  // half-width in PIXELS, and if it is under the floor, push the vertex out
+  // along the same screen direction until it reaches it. Near strips are
+  // untouched; far ones hold a steady thin line instead of dissolving. One
+  // extra matrix multiply per vertex on a mesh that is a few thousand vertices
+  // — nothing, and it fixes the worst aliasing in the frame.
+  //
+  // THE BASELINE IS THE TRUE EDGE VERTEX, and the widened position is only
+  // substituted for it when that substitution is provably safe. The first
+  // version of this shader rewrote gl_Position from screen space for EVERY
+  // vertex, reconstructing clip xy through the CENTRE's w. That reconstruction
+  // is only valid well in front of the camera: the strips run right past the
+  // camera every single frame, and down there cC.w goes to zero, the projected
+  // coordinates lose all meaning, and the quad gets flung across the frame as a
+  // solid slab of neon. It shipped, and it painted a magenta band over half the
+  // screen on every track and every tier. Two guards keep it honest:
+  //
+  //   1. cC.w / cV.w below NEAR_W — take the true edge. Nothing that close is
+  //      anywhere near a pixel wide, so there is nothing to fix there anyway.
+  //   2. already at or over the floor — take the true edge. The widening path
+  //      only ever runs on strips that genuinely fall under it.
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uRes: { value: new THREE.Vector2(1, 1) },
@@ -538,21 +552,20 @@ function buildEdgeStrips(spline) {
       uniform vec2 uRes;
       uniform float uMinPx;
       varying vec3 vColor;
+      const float NEAR_W = 1.0;   // metres of view depth; below this, hands off
       void main() {
         vColor = aCol;
         vec4 cC = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        vec4 cE = projectionMatrix * modelViewMatrix * vec4(position + aHalf, 1.0);
-        // Behind the camera: leave it alone, the clip stage will discard it.
-        if (cC.w <= 0.0001) { gl_Position = cC; return; }
+        vec4 cV = projectionMatrix * modelViewMatrix * vec4(position + aHalf * aSide, 1.0);
+        if (cC.w < NEAR_W || cV.w < NEAR_W) { gl_Position = cV; return; }
         vec2 hs = uRes * 0.5;
         vec2 sC = (cC.xy / cC.w) * hs;
-        vec2 sE = (cE.w > 0.0001) ? (cE.xy / cE.w) * hs : sC;
-        vec2 d = sE - sC;
+        vec2 sV = (cV.xy / cV.w) * hs;
+        vec2 d = sV - sC;
         float px = length(d);
-        vec2 dir = px > 1e-5 ? d / px : vec2(1.0, 0.0);
-        float wpx = max(px, uMinPx);
-        vec2 sV = sC + dir * wpx * aSide;
-        gl_Position = vec4((sV / hs) * cC.w, cC.z, cC.w);
+        if (px >= uMinPx) { gl_Position = cV; return; }
+        vec2 dir = px > 1e-4 ? d / px : vec2(aSide, 0.0);
+        gl_Position = vec4(((sC + dir * uMinPx) / hs) * cC.w, cC.z, cC.w);
       }
     `,
     fragmentShader: /* glsl */ `
