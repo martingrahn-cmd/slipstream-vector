@@ -40,8 +40,9 @@ beta"). Martin writes in Swedish — **reply in Swedish**.
 
 ## Graphics budget
 
-**Bandwidth-bound first, fill-bound second.** ~60–110 draws / ~230–390k tris
-worst case — huge draw/tri headroom. Post = quarter-res bloom + light shafts +
+**Bandwidth-bound first, fill-bound second.** ~80–145 draws / ~330–670k tris
+worst case (measured 2026-07-28; the old "230–390k" line predated the terrain
+disc and the crowds) — still huge draw/tri headroom. Post = quarter-res bloom + light shafts +
 one 12-tap JuicePass, on a 2×MSAA HalfFloat target. Govern new effects
 (explosions, shields, beams) by *screen coverage*, pool everything, zero
 per-frame allocations in hot paths.
@@ -66,6 +67,13 @@ no beauty at all. Effects like bloom and shafts are 4-8 passes at 1/16 the
 pixels — an order of magnitude cheaper than the resolution they were being
 blamed for. The tiers were wrong about this for weeks and it kept the game
 uglier than it needed to be for everyone.
+
+`FIDELITY.md` is the measured survey of what still limits the picture, and
+carries three findings worth knowing before touching graphics: FULL renders
+BELOW native on a 4K panel (the pixel cap was set for 4x MSAA and never moved
+when MSAA became 2x), LOW disables the JuicePass and so loses the per-world
+colour grade rather than just the effects, and the frost world's solids are
+baked against a light 60° away from its own sky sun.
 
 ## Dev workflow
 
