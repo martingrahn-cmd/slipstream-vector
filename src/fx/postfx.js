@@ -165,12 +165,31 @@ const ShaftShader = {
     uniform sampler2D tDiffuse; uniform vec2 uSun;
     uniform float uAmount; uniform float uDensity; uniform float uDecay;
     varying vec2 vUv;
-    const int SAMPLES = 16;
+    const int SAMPLES = 24;
     void main() {
       if (uAmount <= 0.001) { gl_FragColor = vec4(0.0); return; }
+      vec2 toSun = vUv - uSun;
+      float d = length(toSun);
+      // CAP THE MARCH. The textbook version smears each pixel a fixed FRACTION
+      // of its distance to the sun, so tap spacing grows without limit as you
+      // move away from it. At the bottom of the frame — where the player's own
+      // engine bells sit, the brightest thing on screen and four metres from
+      // the camera — sixteen taps landed far enough apart to read as sixteen
+      // separate copies: a ribbed chain dragging off the back of the ship.
+      // Capping the total length keeps rays pointing at the sun while bounding
+      // the gap between samples, which is what was actually visible.
+      float len = min(d * uDensity, 0.30);
+      // God rays belong to the LIGHT. Fade the contribution with angular
+      // distance so a bright object on the far side of the frame stops seeding
+      // a smear of its own — real shafts are brightest at the source.
+      float fall = 1.0 - smoothstep(0.30, 0.85, d);
+      if (fall <= 0.002 || d < 1e-5) { gl_FragColor = vec4(0.0); return; }
       // Named march, not step: step is a GLSL builtin.
-      vec2 march = (vUv - uSun) * (uDensity / float(SAMPLES));
-      vec2 uv = vUv;
+      vec2 march = (toSun / d) * (len / float(SAMPLES));
+      // Jitter the start so the remaining sample structure reads as grain
+      // rather than as banding.
+      float jit = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+      vec2 uv = vUv - march * jit;
       vec3 acc = vec3(0.0);
       float w = 1.0, total = 0.0;
       for (int i = 0; i < SAMPLES; i++) {
@@ -179,7 +198,7 @@ const ShaftShader = {
         uv -= march;
         w *= uDecay;
       }
-      gl_FragColor = vec4(acc / max(total, 1e-4) * uAmount, 1.0);
+      gl_FragColor = vec4(acc / max(total, 1e-4) * uAmount * fall, 1.0);
     }
   `,
 };

@@ -2405,6 +2405,7 @@ window.__game = {
   get spline() { return spline; },
   get scenery() { return scenery; },
   get camera() { return camera; },
+  get postfx() { return postfx; },
   get trackDef() { return trackDef; },
   get theme() { return theme; },
   get race() { return race; },
