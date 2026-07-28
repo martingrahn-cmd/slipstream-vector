@@ -76,6 +76,11 @@ uglier than it needed to be for everyone.
   Labs must include the three.js import map in `<head>` or they die silently.
 - Debug: `window.__game` exposes ship/rig/spline/race/weapons/juice/menu plus
   `warp(seconds, {throttle,...})` for deterministic no-rAF simulation.
+- **QA gate:** `node tools/audit-terrain.mjs` guards the ground: it reports
+  terrain INTRUSION near the road (how high the ground gets beside the racing
+  line), not absolute clearance — the flat plane already sits exactly 1.15m
+  under a circuit's lowest banked edge by construction, so an absolute bar fails
+  every track before terrain does anything. Must read 0.000m.
 - **QA gate:** every unmanned full-throttle lap
   (`__game.warp(120,{throttle:1})`) must complete on every track, **and**
   `node tools/audit-tracks.mjs` must pass (needs a one-off `npm i three`). The
@@ -111,10 +116,13 @@ uglier than it needed to be for everyone.
     position so gusts sweep. Zero draws, zero triangles, one uniform a frame
     for the whole world. Amplitude is per archetype (palm ≫ spruce ≫ cactus)
     times `theme.wind`. Uniforms are exposed on `material.userData.wind`.
-  - `buildGround` is a **flat** `CircleGeometry(1600, 48)` — every dune, ripple
-    and grain is painted in the fragment shader, so the world has no relief,
-    no parallax and nothing that occludes anything. `TERRAIN.md` is the design
-    note for fixing that; it is a proposal, not built.
+  - `buildGround` is a radially graded disc **displaced at build time** by
+    `terrain.js`'s height function — one CPU implementation, sampled by the
+    mesh AND by `groundAt()`, which every scatterer plants against. Deliberately
+    not a vertex shader: a second GPU implementation of the noise would drift
+    from the CPU one in float32 and float every rock in the world. Per-world
+    `theme.terrain {amp, freq, octaves, ridge}`; a world without the block gets
+    the old flat disc. `TERRAIN.md` is the design record.
 - `src/track/tracks/` — one data file per track + `index.js` roster (the
   "add a track" seam). Stunts via `features: [{type:'loop'|'corkscrew'|'jump'}]`.
 - `src/weapons/weaponSystem.js` — pads, five weapons, projectiles, hit/disable

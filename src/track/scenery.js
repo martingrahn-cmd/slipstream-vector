@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TUNING } from '../config.js';
 import { makeFrame } from './spline.js';
+import { buildTerrain } from './terrain.js';
 import { buildBillboardAtlas } from '../ui/logos.js';
 
 let _adAtlas = null; // built once, shared across tracks
@@ -127,6 +128,16 @@ export function bakeFlatColors(geometry, baseColorHex, opts = {}) {
 // work beyond one uniform write a frame for the whole world.
 const WIND = [];  // live uniform sets — reset per world build, see below
 
+// The world's height function, set per build. Module-level for the same reason
+// WIND is: every builder in this file already takes `groundY` as a scalar, and
+// threading a function through a dozen signatures to say "the ground moved"
+// would be a bigger change than the feature. Null on worlds with no relief, in
+// which case groundAt() is exactly the old constant.
+let TERRAIN = null;
+function groundAt(groundY, x, z) {
+  return TERRAIN ? groundY + TERRAIN.h(x, z) : groundY;
+}
+
 function windify(material, geom, amp) {
   geom.computeBoundingBox();
   const bb = geom.boundingBox;
@@ -220,9 +231,15 @@ export function buildScenery(spline, scene, theme) {
 
   const CITY_ANG = theme.city ? 0.12 : null; // mountains keep clear of the skyline
 
+  // Ground relief. One height function, evaluated on the CPU, sampled by the
+  // ground mesh AND by everything that stands on it — see terrain.js. Worlds
+  // without a `terrain` block stay exactly as flat as they were.
+  const terrain = buildTerrain(spline, groundY, theme);
+  TERRAIN = terrain;
+
   const sky = buildSky(theme.sky);
   scene.add(sky.mesh);
-  const ground = buildGround(groundY, cx, cz, theme);
+  const ground = buildGround(groundY, cx, cz, theme, terrain);
   group.add(ground.mesh);
   group.add(buildFarMountains(rng, groundY, cx, cz, spline, CITY_ANG, theme));
   const landmarks = buildLandmarks(rng, spline, groundY, cx, cz, theme);
@@ -531,9 +548,51 @@ function buildSky(S) {
 // 'dunes' = banded desert sand with grain; 'water' = animated lagoon with
 // wave bands and sun glints; 'grid' = night asphalt with a glowing street
 // grid; 'flat' = plain color.
-function buildGround(groundY, cx, cz, theme) {
-  const geom = new THREE.CircleGeometry(1600, 48);
-  geom.rotateX(-Math.PI / 2);
+// A radially graded disc, displaced by the terrain height function at BUILD
+// time. Rings crowd toward the centre (r = R * t^2.1) because that is where the
+// track is and where relief is legible; out by the horizon a ring every 60m is
+// more than the fog will ever show. ~28k triangles in ONE draw — the geometry
+// axis, which is the one with headroom.
+//
+// The old mesh was CircleGeometry(1600, 48): a single ring, dead flat, with
+// every dune painted in the fragment shader. That shader is untouched and still
+// does the fine work; it just has real ground under it now.
+function groundDisc(R, rings, segs, terrain) {
+  const pos = new Float32Array((rings + 1) * (segs + 1) * 3);
+  const idx = [];
+  for (let i = 0; i <= rings; i++) {
+    const r = R * Math.pow(i / rings, 2.1);
+    for (let j = 0; j <= segs; j++) {
+      const a = (j / segs) * Math.PI * 2;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const k = (i * (segs + 1) + j) * 3;
+      pos[k] = x; pos[k + 2] = z;
+      // The rim is pinned to the base plane so the disc always meets the fog
+      // flat, whatever the noise happens to be doing out there.
+      const edge = Math.min(1, (1 - i / rings) * 16);
+      pos[k + 1] = terrain ? terrain.h(x, z) * edge : 0;
+    }
+  }
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = i * (segs + 1) + j, b = a + segs + 1;
+      if (i === 0) { idx.push(a, b + 1, b); continue; }   // centre fan
+      idx.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+function buildGround(groundY, cx, cz, theme, terrain) {
+  // The disc is centred on the circuit, so the terrain function has to be
+  // queried in WORLD space — the mesh is translated to (cx, groundY, cz) below.
+  const local = terrain
+    ? { h: (x, z) => terrain.h(x + cx, z + cz) }
+    : null;
+  const geom = groundDisc(1600, terrain ? 108 : 24, terrain ? 128 : 64, local);
   let mat = null;
   let mesh;
   if (theme.groundStyle === 'dunes') {
@@ -991,7 +1050,7 @@ function buildRockCut(rng, spline, groundY, theme) {
       if (!clearOfRest(px, pz, 16)) continue; // another lap segment sweeps through here
       const yaw = Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.16;
       const roadH = Math.max(0, f.pos.y - groundY);
-      let y = groundY;
+      let y = groundAt(groundY, px, pz);
       const total = roadH + 20 + rng() * 16;
       const layers = 2 + Math.floor(rng() * 2);
       let w = 17 + rng() * 8, dep = 9 + rng() * 6;
@@ -1025,7 +1084,7 @@ function buildRockCut(rng, spline, groundY, theme) {
       const h = (roadY - groundY) + 15 + rng() * 3;
       const g = weather(new THREE.CylinderGeometry(2.6 + rng(), 4.2 + rng() * 1.4, h, 8, 4), 0.12);
       g.rotateY(rng() * Math.PI);
-      g.translate(px, groundY + h / 2, pz);
+      g.translate(px, groundAt(groundY, px, pz) + h / 2, pz);
       geoms.push(bakeFlatColors(g, theme.mesaShadow, { rim: false }));
     }
     // two stacked lintel slabs, slightly offset — reads as weathered rock
@@ -1222,7 +1281,7 @@ function buildMesas(rng, spline, groundY, theme) {
         g.scale(scale, scale * (0.55 + rng() * 0.2), scale);
         g.rotateY(rng() * Math.PI * 2);
         const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
-        g.translate(px, groundY - bb.min.y - 0.5, pz);
+        g.translate(px, groundAt(groundY, px, pz) - bb.min.y - 0.5, pz);
         const baked = bakeFlatColors(g, theme.mesaLit, { shadow: theme.mesaShadow });
         bakeStrata(baked, rng, groundY, Math.max(4, scale * 0.14), theme.mesaRim, theme.ground);
         geoms.push(baked);
@@ -1272,9 +1331,10 @@ function buildMesas(rng, spline, groundY, theme) {
     g.rotateY(ry);
     const box = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
     // Islands sit half-sunk in the lagoon; everything else stands on the ground.
+    const gy = groundAt(groundY, px, pz);
     const ty = islands
-      ? groundY - box.min.y - scale * ys * 0.3
-      : groundY - box.min.y - 0.5;
+      ? gy - box.min.y - scale * ys * 0.3
+      : gy - box.min.y - 0.5;
     g.translate(px, ty, pz);
     const colorPick = rng();
     const base = colorPick < 0.6 ? theme.mesaLit : theme.mesaShadow;
@@ -1623,7 +1683,8 @@ function buildRocks(rng, spline, groundY, theme) {
     const rx = f.R.x, rz = f.R.z;
     const rl = Math.hypot(rx, rz) || 1;
     const size = 0.5 + rng() * 1.9;
-    p.set(f.pos.x + (rx / rl) * side * dist, groundY + size * 0.22, f.pos.z + (rz / rl) * side * dist);
+    const rpx = f.pos.x + (rx / rl) * side * dist, rpz = f.pos.z + (rz / rl) * side * dist;
+    p.set(rpx, groundAt(groundY, rpx, rpz) + size * 0.22, rpz);
     e.set(rng() * 0.4, rng() * Math.PI * 2, rng() * 0.4);
     q.setFromEuler(e);
     sc.set(size, size * (0.5 + rng() * 0.4), size);
@@ -1668,7 +1729,8 @@ function buildScrub(rng, spline, groundY, theme) {
     const rx = f.R.x, rz = f.R.z;
     const rl = Math.hypot(rx, rz) || 1;
     const size = 1 + rng() * 1.5;
-    p.set(f.pos.x + (rx / rl) * side * dist, groundY + 0.1, f.pos.z + (rz / rl) * side * dist);
+    const spx = f.pos.x + (rx / rl) * side * dist, spz = f.pos.z + (rz / rl) * side * dist;
+    p.set(spx, groundAt(groundY, spx, spz) + 0.1, spz);
     q.setFromAxisAngle(Y, rng() * Math.PI * 2);
     sc.setScalar(size);
     m.compose(p, q, sc);
@@ -1765,7 +1827,7 @@ function buildRoadside(rng, spline, groundY, theme) {
       const x = f.pos.x + (rx / rl) * side * dist;
       const z = f.pos.z + (rz / rl) * side * dist;
       if (!clearOfTrack(spline, x, z, 2.5)) continue;   // never on another pass of the road
-      p.set(x, groundY + 0.02, z);
+      p.set(x, groundAt(groundY, x, z) + 0.02, z);
       // Street kit runs parallel with the road it guards; nature just grows.
       const yaw = style === 'street'
         ? Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.22
@@ -1882,7 +1944,7 @@ function buildFlora(rng, spline, groundY, theme) {
       if (attempt === 7 || clearOfTrack(spline, x, z, 3)) break;
     }
     const size = 1.6 + rng() * 2.2;
-    p.set(x, groundY, z);
+    p.set(x, groundAt(groundY, x, z), z);
     q.setFromAxisAngle(Y, rng() * Math.PI * 2);
     sc.setScalar(size);
     m.compose(p, q, sc);
@@ -2761,7 +2823,7 @@ function buildStands(rng, spline, groundY, theme) {
     // The deck sits at road height, and beside an ELEVATED road that leaves it
     // hanging in the air. Same answer as the start gantry: drop legs to the
     // ground plane, capped so a crest does not grow absurd stilts.
-    const legBottom = Math.min(0, Math.max(groundY - py, -11));
+    const legBottom = Math.min(0, Math.max(groundAt(groundY, px, pz) - py, -11));
     if (legBottom < -0.5) {
       const h = -legBottom + 0.6;
       for (const sx of [-1, -0.34, 0.34, 1]) {
@@ -3106,7 +3168,7 @@ function buildIceSculptures(rng, spline, groundY, theme) {
       const x = f.pos.x + (f.R.x / rl) * side * dist;
       const z = f.pos.z + (f.R.z / rl) * side * dist;
       if (!clearOfTrack(spline, x, z, 3)) continue;
-      p.set(x, groundY + 0.02, z);
+      p.set(x, groundAt(groundY, x, z) + 0.02, z);
       q.setFromAxisAngle(Y, rng() * Math.PI * 2);
       sc.setScalar(1.1 + rng() * 0.5);
       m.compose(p, q, sc);
@@ -3181,7 +3243,7 @@ function buildSkiers(rng, spline, groundY, theme) {
         const weave = Math.sin(d * 0.22) * r.carve;
         const px = r.ox + r.dx * d - r.dz * weave;
         const pz = r.oz + r.dz * d + r.dx * weave;
-        p.set(px, groundY + 0.02, pz);
+        p.set(px, groundAt(groundY, px, pz) + 0.02, pz);
         const heading = Math.atan2(r.dx - r.dz * Math.cos(d * 0.22) * 0.22 * r.carve,
           r.dz + r.dx * Math.cos(d * 0.22) * 0.22 * r.carve);
         e.set(0, heading, Math.cos(d * 0.22) * 0.3); // lean into the carve
@@ -3235,7 +3297,7 @@ function buildHuts(rng, spline, groundY, theme) {
       const x = f.pos.x + (f.R.x / rl) * side * dist;
       const z = f.pos.z + (f.R.z / rl) * side * dist;
       if (!clearOfTrack(spline, x, z, 5)) continue;
-      p.set(x, groundY + 0.02, z);
+      p.set(x, groundAt(groundY, x, z) + 0.02, z);
       q.setFromAxisAngle(Y, rng() * Math.PI * 2);
       sc.setScalar(0.9 + rng() * 0.35);
       m.compose(p, q, sc);

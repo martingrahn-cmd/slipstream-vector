@@ -68,6 +68,9 @@ export const THEMES = {
     mountainStyle: 'ridges',   // jagged connected ridge strips — a third silhouette language
     farCount: 44,
     groundStyle: 'dunes',
+    // Ground relief. Long lazy dunes, the tallest in the game — the desert is
+    // the one world whose whole identity is the shape of the sand.
+    terrain: { amp: 26, freq: 0.0034, octaves: 3 },
     wind: 1.15,           // open desert — the strongest breeze in the game
     scrubCount: 210,      // low desert bushes near the track
     roadside: 'tufts',    // stage-2 near-band kit: dry grass + pebbles
@@ -138,6 +141,8 @@ export const THEMES = {
     mountainStyle: 'peaks',
     farCount: 26,         // distant isles dotting the horizon
     groundStyle: 'water',
+    // Low sandbars and islets; the lagoon itself is water and stays flat.
+    terrain: { amp: 9, freq: 0.0055, octaves: 3 },
     wind: 1.35,           // sea breeze off the lagoon — the palms carry it
     flora: 'palms',
     floraCount: 180,
@@ -205,6 +210,9 @@ export const THEMES = {
     flora: null,
     floraCount: 0,
     rockCount: 0,
+    // A city floor is graded flat. Just enough to stop the plane reading as a
+    // plane where it meets the towers.
+    terrain: { amp: 4, freq: 0.0070, octaves: 2 },
     wind: 0.8,            // sheltered by the towers
     roadside: 'street',   // stage-2 near-band kit: barrier blocks + lit vents
     roadsideCount: 420,
@@ -273,6 +281,8 @@ export const THEMES = {
     mountainStyle: 'ridges',
     farCount: 42,
     groundStyle: 'dunes', // the dune shader IS the snow shader: drift bands + sastrugi ripples
+    // Snow drifts: sharper crests than sand, hence the ridge term.
+    terrain: { amp: 17, freq: 0.0048, octaves: 3, ridge: 0.55 },
     wind: 0.7,            // cold, heavy air — the spruce barely shrugs
     scrubCount: 0,
     flora: 'pines',

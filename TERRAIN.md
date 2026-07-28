@@ -1,17 +1,18 @@
 # TERRAIN.md — real ground relief
 
-**Status: NOT BUILT.** This is a design note, not a description of the game.
-Everything under "Current state" is measured and true today; everything under
-"The design" is a proposal. Keep that line intact when editing.
+**Status: BUILT.** `src/track/terrain.js` is the height function,
+`tools/audit-terrain.mjs` is its guard. This file is now the design record
+rather than a proposal; the section headed "What it collides with" is still the
+live list of things that break if the height function changes.
 
-## Current state — the ground is flat
+## Why it existed — the ground used to be flat
 
-`buildGround()` in `src/track/scenery.js` builds a `CircleGeometry(1600, 48)`,
+`buildGround()` in `src/track/scenery.js` built a `CircleGeometry(1600, 48)`,
 rotated flat, at a single Y. Every dune band, wind ripple, sand grain, scrub
-blotch and sun-kissed crest is painted in the **fragment** shader. There is
+blotch and sun-kissed crest was painted in the **fragment** shader. There was
 zero relief anywhere in any world.
 
-That has three consequences, and they are the ones a player feels without being
+That had three consequences, and they are the ones a player feels without being
 able to name:
 
 - **No parallax.** Painted dunes are locked to the plane, so they slide past at
@@ -42,7 +43,23 @@ code should not be pasted in:
   notes), and the rest of that file is town-clearing and cactus placement that
   would be deleted on arrival.
 
-## The design
+## What was built
+
+One height function, sampled by everything — evaluated on the **CPU only**.
+
+The design below said "both CPU and GPU evaluate the SAME formula". That was
+the wrong call and it did not survive contact: `sin()` in float32 on the GPU and
+float64 in JS do not agree, and the failure mode is every rock, cactus and
+grandstand leg in the world floating a metre off the sand. Instead the ground
+mesh is **displaced at build time** — it is static, so this costs nothing per
+frame — and there is exactly one implementation of the noise, in JS, which the
+scatterers call too. No agreement problem to have.
+
+Measured after landing (`node tools/audit-terrain.mjs`): 0.000m of terrain
+intrusion near the road on all twelve circuits, with 21m of relief on the
+desert, 13m on frost, 8m on the coast and 3.5m in the city.
+
+## The design (as written before building)
 
 One height function, sampled by everything.
 
@@ -87,14 +104,21 @@ Not a drop-in. These are the real ones:
    road-against-ground. A separate check may be wanted: no terrain vertex within
    N metres above the road surface.
 
-## Order of work
+## Order of work (all four done)
 
-1. Height function + carve field, CPU only. Prove it with a debug read-out: the
-   maximum terrain height under the road must be below the road everywhere, on
-   all twelve tracks.
-2. Ground mesh with vertex displacement. Screenshot the horizon on each world.
-3. Move every scatterer onto `h()`. QA gate.
-4. Per-world tuning (`theme.terrain { amp, freq, octaves }`).
+1. Height function + carve field, CPU only, proven by `tools/audit-terrain.mjs`.
+   Note the audit's own first version was wrong: it measured absolute clearance
+   to the road, which every track fails by construction, because the flat plane
+   already sits exactly 1.15m under the circuit's lowest banked edge. The metric
+   that means something is INTRUSION — how high the ground gets near the road.
+2. Ground mesh displaced at build time. A radially graded disc, rings crowding
+   toward the centre, ~28k triangles in one draw.
+3. Every scatterer onto `groundAt()`. Steps 1 and 2 are worthless without this —
+   a world with relief and floating rocks looks worse than a flat one.
+4. Per-world tuning in `theme.terrain { amp, freq, octaves, ridge }`.
 
-Steps 1 and 2 are worthless without step 3 — a world with relief and floating
-rocks looks worse than a flat one.
+## Still flat on purpose
+
+The lagoon surface, the city street grid and anything the fragment shaders draw
+as a plane. `theme.terrain` is opt-in: a world without the block gets exactly
+the old flat disc, and nothing else in the file changes behaviour.
