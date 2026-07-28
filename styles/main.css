@@ -1047,6 +1047,32 @@ body.reduced-motion .vp-tag::before { animation: none; }
 .lg-row span { color: rgba(255, 255, 255, 0.5); letter-spacing: 0.14em; }
 .lg-row b { color: var(--cyan); font-weight: 700; }
 
+/* ---- credits roll ----
+   A masked window with an absolutely-positioned roll inside it. main.js owns
+   the transform (one write a frame off the render clock), so the roll obeys
+   the same pause/reduced-motion rules as everything else and can be scrubbed
+   by hand — a CSS keyframe animation could do neither. */
+.cred-view {
+  position: relative; overflow: hidden;
+  height: min(62vh, 540px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 13%, #000 87%, transparent 100%);
+}
+.cred-roll { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+.cred-grp { font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 0.3em; font-size: 11px; color: var(--magenta); opacity: 0.9; margin: 26px 0 7px; }
+.cred-roll > .cred-grp:first-child { margin-top: 0; }
+.cred-name { font-family: 'Orbitron', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.03em; color: #fff; line-height: 1.45; }
+.cred-sub { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 12.5px; letter-spacing: 0.08em; color: rgba(223, 230, 255, 0.55); line-height: 1.5; margin-bottom: 3px; }
+.cred-sub i { color: var(--cyan); font-style: normal; }
+/* Roster lines: the team/world label sits inline with its names. */
+.cred-pair { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.06em; color: rgba(223, 230, 255, 0.8); line-height: 1.6; }
+.cred-pair b { color: var(--cyan); font-weight: 700; letter-spacing: 0.12em; font-size: 11px; margin-right: 8px; }
+.cred-rule { height: 1px; background: linear-gradient(90deg, rgba(0, 240, 255, 0.4), transparent); margin: 30px 0 26px; }
+.cred-mark { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.16em; color: #fff; text-shadow: 0 0 18px rgba(0, 240, 255, 0.55); margin-top: 12px; }
+.cred-mark + .cred-sub { letter-spacing: 0.22em; margin-top: 6px; }
+#cred-hint { text-align: left; opacity: 0.7; }
+#cred-hint b { color: #fff; }
+
 /* ---- garage stage (the showpiece) ---- */
 .section.garage .stage { position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(0, 240, 255, 0.22); background: radial-gradient(120% 90% at 50% 25%, rgba(40, 20, 80, 0.5), rgba(6, 3, 16, 0.85) 70%); }
 .stage-slot { width: 100%; height: 100%; }

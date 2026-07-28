@@ -67,6 +67,7 @@
           <button class="navitem" data-sec="controls"><span class="ix">06</span><span class="nl">CONTROLS</span><span class="ns" id="ns-controls">REBIND</span></button>
           <button class="navitem" data-sec="records"><span class="ix">07</span><span class="nl">RECORDS</span><span class="ns" id="ns-records">—</span></button>
           <button class="navitem" data-sec="trophies"><span class="ix">08</span><span class="nl">TROPHIES</span><span class="ns" id="ns-trophies">—</span></button>
+          <button class="navitem" data-sec="credits"><span class="ix">09</span><span class="nl">CREDITS</span><span class="ns" id="ns-credits">STAFF ROLL</span></button>
         </nav>
         <div class="rail-caret" id="rail-caret"></div>
       </aside>
@@ -198,6 +199,23 @@
         <section class="section" data-sec="trophies">
           <div class="col mid"><div class="boot" data-boot="&gt;&gt; TROPHIES"></div><div class="ctl-row" data-row="tier"><label>TIER</label><span class="arrow l">&#9664;</span><span class="value" id="tro-tier">ALL</span><span class="arrow r">&#9654;</span></div><div class="tro-count" id="tro-count"></div></div>
           <div class="col right wide"><div class="tro-gallery" id="tro-gallery"></div></div>
+        </section>
+
+        <!-- CREDITS: a slow staff roll in the mid column (main.js drives it off
+             the render clock), with the tech + licence notices held still on
+             the right so they can actually be read. -->
+        <section class="section" data-sec="credits">
+          <div class="col mid">
+            <div class="boot" data-boot="&gt;&gt; CREDITS"></div>
+            <div class="cred-view"><div class="cred-roll" id="cred-roll"></div></div>
+          </div>
+          <div class="col right">
+            <div class="opt-grp">BUILT WITH</div>
+            <div class="vp-frame"><div class="legend" id="cred-tech"></div></div>
+            <div class="opt-grp">NOTICES</div>
+            <div class="vp-frame"><div class="legend" id="cred-legal"></div></div>
+            <div class="vp-note" id="cred-hint"></div>
+          </div>
         </section>
       </div>
     </div>

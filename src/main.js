@@ -564,6 +564,98 @@ function renderControlsList() {
   menu._applyCtlSel();
 }
 
+// ---- credits ---------------------------------------------------------------
+// The roster blocks are generated from TEAMS / TRACKS / THEMES rather than
+// typed out, so adding a ship or a circuit can never leave the credits lying.
+// Everything else is hand-written and lives here, in one place, to be edited.
+const CREDITS = [
+  { grp: 'A GAME BY', name: 'MARTIN GRAHN', sub: 'design · code · art direction · music' },
+  { grp: 'ENGINEERING', name: 'CLAUDE', sub: 'Anthropic — pair-programmed end to end' },
+  { grp: 'ORIGINAL SOUNDTRACK', name: 'MARTIN GRAHN', sub: 'composed with <i>Suno</i> — five tracks' },
+  { grp: 'PILOT PORTRAITS & INTROS', name: 'MARTIN GRAHN', sub: 'generated with <i>Grok</i> (xAI)' },
+  { grp: 'RIVAL VOICES', name: 'ELEVENLABS', sub: 'text-to-speech, run through the comms chain' },
+  { grp: 'SOUND DESIGN', name: 'WEB AUDIO SYNTHESIS', sub: 'procedural beds · <i>ElevenLabs</i> one-shots' },
+  { grp: 'THE GRID', roster: 'teams' },
+  { grp: 'THE CALENDAR', roster: 'worlds' },
+  { grp: 'ENGINE', name: 'THREE.JS r172', sub: 'WebGL2 · ES modules · no build step' },
+  { grp: 'TYPE', name: 'ORBITRON & RAJDHANI', sub: 'Google Fonts' },
+  { grp: 'PLAYTESTING', name: 'OUR TEST PILOTS', sub: 'who drove it before it was ready' },
+  { grp: 'THANKS', name: 'EVERYONE WHO RACED IT', sub: 'and told me what was wrong with it' },
+];
+
+function creditsRollHTML() {
+  const out = [];
+  for (const e of CREDITS) {
+    out.push(`<div class="cred-grp">${e.grp}</div>`);
+    if (e.roster === 'teams') {
+      for (const t of TEAMS) out.push(`<div class="cred-pair"><b>${t.fullName.toUpperCase()}</b>${t.pilots.join(' · ')}</div>`);
+    } else if (e.roster === 'worlds') {
+      for (const [id, th] of Object.entries(THEMES)) {
+        const names = TRACKS.filter((t) => t.world === id).map((t) => t.name.toUpperCase()).join(' · ');
+        if (names) out.push(`<div class="cred-pair"><b>${th.name}</b>${names}</div>`);
+      }
+    } else {
+      out.push(`<div class="cred-name">${e.name}</div>`);
+      if (e.sub) out.push(`<div class="cred-sub">${e.sub}</div>`);
+    }
+  }
+  out.push('<div class="cred-rule"></div>');
+  out.push('<div class="cred-mark">SLIPSTREAM VECTOR</div>');
+  out.push('<div class="cred-sub">GRATIS BETA</div>');
+  return out.join('');
+}
+
+function renderCredits() {
+  setHTML('cred-tech', [
+    ['ENGINE', 'three.js r172'],
+    ['RENDER', 'WebGL2'],
+    ['AUDIO', 'Web Audio API'],
+    ['CIRCUITS', `${TRACKS.length}`],
+    ['SHIPS', `${TEAMS.length}`],
+    ['PILOTS', `${TEAMS.length * 2}`],
+  ].map(([k, v]) => `<div class="lg-row"><span>${k}</span><b>${v}</b></div>`).join(''));
+  setHTML('cred-legal',
+    '<div class="lg-row sub">three.js &mdash; MIT License. Copyright &copy; 2010-2024 three.js authors.</div>'
+    + '<div class="lg-row sub">Orbitron and Rajdhani are served by Google Fonts under the SIL Open Font License.</div>'
+    + '<div class="lg-row sub">Music, pilot portraits, voices and sound effects were produced by the author with <i>Suno</i>, <i>Grok</i> and <i>ElevenLabs</i>, and are used under those services&rsquo; own terms.</div>');
+}
+
+function renderCreditsHint() {
+  setHTML('cred-hint', `${glyph('navigate')} SCROLL &nbsp; ${glyph('confirm')} ${credRoll.held ? 'ROLL' : 'HOLD'}`);
+}
+
+// The roll runs off the render clock: `y` is how far it has travelled up from
+// below the frame, wrapped over (content + frame) so it loops with no seam and
+// no duplicated markup.
+const credRoll = { y: 0, held: false, nudge: 0 };
+const CRED_SPEED = 24; // px/s
+
+function resetCreditsRoll(vh) {
+  credRoll.nudge = 0;
+  // Start with the head of the roll just clear of the frame's top fade. A
+  // section that opens on an empty column reads as broken, not as a roll — and
+  // starting flush with the top would hide the first heading inside the mask.
+  credRoll.y = vh * 0.85;
+  credRoll.held = document.body.classList.contains('reduced-motion'); // then it's a scrub list
+}
+
+function updateCreditsRoll(dt) {
+  const el = document.getElementById('cred-roll');
+  const view = el && el.parentElement;
+  if (!el || !view) return;
+  const vh = view.clientHeight;
+  // Built on first sight, so landing on CREDITS from the rail (no section
+  // ENTER) rolls too. Re-entering the section deliberately does NOT restart it.
+  if (!el.childElementCount) { el.innerHTML = creditsRollHTML(); renderCredits(); resetCreditsRoll(vh); renderCreditsHint(); }
+  const h = el.offsetHeight;
+  if (!h || !vh) return;
+  const span = h + vh;
+  if (!credRoll.held) credRoll.y += CRED_SPEED * dt;
+  credRoll.y += credRoll.nudge; credRoll.nudge = 0;
+  credRoll.y = ((credRoll.y % span) + span) % span;
+  el.style.transform = `translateY(${(vh - credRoll.y).toFixed(1)}px)`;
+}
+
 function updateMenu() {
   const unlocked = unlockedClasses();
   const cls = CLASSES[selection.classIdx];
@@ -1574,6 +1666,7 @@ function tick(now) {
     else if (state === 'podium') { const sub = podiumTitleEl.querySelector('.pt-sub'); if (sub) sub.innerHTML = `${glyph('confirm')} — STANDINGS`; }
     // CONTROLS list bakes pad-family glyphs into the PAD column — repaint it too.
     if (menu.sec === 'controls' && menu.view === 'section' && !input.capturing()) renderControlsList();
+    if (menu.sec === 'credits') renderCreditsHint(); // the hint bakes device glyphs in too
   }
   if (paused) return;
   if (state === 'podium') { podiumScene.update(realDt); return; }
@@ -1783,6 +1876,7 @@ function tick(now) {
     ship.s, spline.length, state === 'race');
   if (state === 'attract' || state === 'intro') {
     if (state === 'attract' && menu.sec === 'garage' && podium.W < 120) podium.resize();
+    if (state === 'attract' && menu.sec === 'credits') updateCreditsRoll(realDt);
     podium.update(realDt);
     if (audio.ctx && audio._wantKey !== 'menu') audio.playMusic('menu');
     if (!debugCam) attractCamera(now / 1000);
@@ -1986,6 +2080,8 @@ function onSectionEnter(sec) {
     selection.mode = 2; buildField();
   } else if (sec === 'garage') {
     podium.resize();
+  } else if (sec === 'credits') {
+    renderCredits(); renderCreditsHint();
   }
   if (sec === 'championship' || sec === 'single' || sec === 'time') {
     localStorage.setItem('sv-mode', String(selection.mode));
@@ -2023,6 +2119,8 @@ function applyMenuKey(code) {
     case 'navmove': case 'rowmove': audio.uiMove(); break;
     case 'recmove': audio.uiMove(); renderRecordsList(); break;
     case 'ctlmove': audio.uiMove(); renderControlsList(); break;
+    case 'credscroll': credRoll.nudge += act.dir * 42; audio.uiMove(); break;
+    case 'credhold': credRoll.held = !credRoll.held; renderCreditsHint(); audio.uiSelect(); break;
     case 'enter': audio.uiSelect(); onSectionEnter(act.sec); break;
     case 'edit': editRow(act.row, act.dir); audio.uiMove(); break;
     case 'activate': activateRow(act.row); break;

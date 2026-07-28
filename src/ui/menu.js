@@ -3,7 +3,7 @@
 // (DEPTH 1); ←→ edit, ENTER activates, Backspace/Esc returns to the rail. Pure
 // structure/navigation/focus — main.js owns the data fill and the actions.
 
-const NAV = ['championship', 'single', 'time', 'garage', 'options', 'controls', 'records', 'trophies'];
+const NAV = ['championship', 'single', 'time', 'garage', 'options', 'controls', 'records', 'trophies', 'credits'];
 // Ordered focusable rows per section (data-row values). 'go' = the action button.
 const STAGE = {
   championship: ['cup', 'class', 'difficulty', 'tweak', 'go'],
@@ -14,6 +14,7 @@ const STAGE = {
   controls: ['ctllist'],
   records: ['reclist'],
   trophies: ['tier'],
+  credits: ['credroll'],
 };
 
 export class Menu {
@@ -83,6 +84,12 @@ export class Menu {
       return null;
     }
 
+    if (this.sec === 'credits') { // a rolling list, not a focus ring: ↑↓ scrub, ENTER holds
+      if (up || down) return { type: 'credscroll', dir: up ? -1 : 1 };
+      if (code === 'Enter') return { type: 'credhold' };
+      return null;
+    }
+
     const rows = this.stageRows();
     if (up || down) { this.rowFocus = (this.rowFocus + rows.length + (up ? -1 : 1)) % rows.length; this._applyRows(); return { type: 'rowmove' }; }
     if (left || right) return { type: 'edit', row: this.currentRow(), dir: right ? 1 : -1 };
@@ -146,7 +153,7 @@ export class Menu {
       s.querySelectorAll('[data-row]').forEach((r) => r.classList.remove('focus'));
     }
     const s = this.sectionEls[this.sec];
-    if (inSec && s && this.sec !== 'records' && this.sec !== 'controls') {
+    if (inSec && s && this.sec !== 'records' && this.sec !== 'controls' && this.sec !== 'credits') {
       const row = this.currentRow();
       const el = s.querySelector(`[data-row="${row}"]`);
       if (el) el.classList.add('focus');

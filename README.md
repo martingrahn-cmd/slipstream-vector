@@ -164,9 +164,18 @@ round and circuit; the last lap gets a FINAL LAP call.
 
 The Garage spins a live 3D model of your hull; the race sections show a real
 in-world environment snapshot, the top-down outline and the elevation profile
-(loops read as spikes). **RECORDS** and **TROPHIES** are their own nav-rail
-sections — move to them and press Enter to open; Backspace returns to the rail.
-No keyboard-letter shortcuts, so the whole menu maps cleanly to a gamepad.
+(loops read as spikes). **RECORDS**, **TROPHIES** and **CREDITS** are their own
+nav-rail sections — move to them and press Enter to open; Backspace returns to
+the rail. No keyboard-letter shortcuts, so the whole menu maps cleanly to a
+gamepad.
+
+**Credits** (nav 09) is a slow staff roll: who made what, the full team and
+circuit roster, and the tech. The roster blocks are generated from `TEAMS`,
+`TRACKS` and `THEMES`, so adding a ship or a track can't leave the credits
+lying — only the hand-written entries at the top of the `CREDITS` array in
+`main.js` need editing. The roll runs off the render clock (↑↓ scrub it, Enter
+holds it; reduced-motion parks it and leaves the scrub), and the right column
+holds the licence notices still so they can actually be read.
 
 **Records & trophies:** beating a track's best lap or best full race is
 celebrated with a slide-in banner and written to localStorage (the records
