@@ -175,6 +175,28 @@ function windify(material, geom, amp) {
   return material;
 }
 
+// Push every vertex of a rock form along its own direction by a deterministic
+// hash, so the faces stop being planes and the rim stops being a straight line.
+// Y moves least — strata are horizontal and the flat-shade bake reads height.
+//
+// This is the whole answer to "that is supposed to be a rock?": a prism with
+// six faces is a crate at any distance, and the fix costs nothing but vertices,
+// which is the axis with headroom. Apply BEFORE the geometry is rotated or
+// translated, so the displacement is around the form's own centre.
+function weather(geom, amt) {
+  const pos = geom.getAttribute('position');
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const n = vhash(v.x * 3.1, v.y * 2.7, v.z * 3.3) - 0.5;
+    const m = vhash(v.z * 4.7, v.x * 5.3, v.y * 4.1) - 0.5;
+    const k = 1 + n * amt * 2;
+    pos.setXYZ(i, v.x * k, v.y * (1 + m * amt * 0.5), v.z * k);
+  }
+  pos.needsUpdate = true;
+  return geom;
+}
+
 export function buildScenery(spline, scene, theme) {
   const rng = mulberry32(1337);
   const group = new THREE.Group();
@@ -975,7 +997,7 @@ function buildRockCut(rng, spline, groundY, theme) {
       let w = 17 + rng() * 8, dep = 9 + rng() * 6;
       for (let k = 0; k < layers; k++) {
         const h = total * (k === layers - 1 ? 0.3 : 0.7 / (layers - 1)) * (0.85 + rng() * 0.3);
-        const g = new THREE.BoxGeometry(dep, h, w);
+        const g = weather(new THREE.BoxGeometry(dep, h, w, 2, 3, 3), 0.13);
         g.rotateY(yaw);
         g.translate(px + (rng() - 0.5) * 2.5, y + h / 2, pz + (rng() - 0.5) * 2.5);
         geoms.push(bakeFlatColors(g, strataCol[k % strataCol.length], { rim: k === layers - 1 }));
@@ -1001,7 +1023,7 @@ function buildRockCut(rng, spline, groundY, theme) {
       const px = f.pos.x + f.R.x * side * half;
       const pz = f.pos.z + f.R.z * side * half;
       const h = (roadY - groundY) + 15 + rng() * 3;
-      const g = new THREE.CylinderGeometry(2.6 + rng(), 4.2 + rng() * 1.4, h, 5);
+      const g = weather(new THREE.CylinderGeometry(2.6 + rng(), 4.2 + rng() * 1.4, h, 8, 4), 0.12);
       g.rotateY(rng() * Math.PI);
       g.translate(px, groundY + h / 2, pz);
       geoms.push(bakeFlatColors(g, theme.mesaShadow, { rim: false }));
@@ -1109,14 +1131,26 @@ function buildMesas(rng, spline, groundY, theme) {
   ] : [
     // Height segments matter: strata bands are vertex colours, so the side
     // walls need vertex rows to band across (1 segment = one giant flat quad).
-    [() => new THREE.ConeGeometry(1, 2.2, 4, 6), 2.2, 0],          // pyramid spire
-    [() => new THREE.CylinderGeometry(0.55, 1, 1.4, 6, 5), 1.4, 0],// frustum mesa
-    [() => new THREE.CylinderGeometry(0.18, 0.42, 3.2, 5, 7), 3.2, 0], // needle
-    [() => new THREE.BoxGeometry(1.4, 1.1, 1, 1, 4, 1), 1.1, 0],   // block
-    [() => new THREE.CylinderGeometry(0.9, 1.05, 0.7, 7, 3), 0.7, 0],  // flat-top
+    //
+    // Radial segment counts are up across the board, and every one of these
+    // gets `weather()` on it. The reason: placement puts a scale-48 form as
+    // close as ~70m to the road, and at that range a 4-to-6-sided prism is not
+    // a rock, it is a crate — three enormous perfectly flat faces meeting at
+    // perfectly straight edges. This is the cheap axis (see the graphics budget
+    // in CLAUDE.md): more sections and displaced vertices buy silhouette and
+    // surface at ZERO extra draws and zero extra screen coverage.
+    [() => weather(new THREE.ConeGeometry(1, 2.2, 7, 7), 0.10), 2.2, 0],          // pyramid spire
+    [() => weather(new THREE.CylinderGeometry(0.55, 1, 1.4, 9, 6), 0.11), 1.4, 0],// frustum mesa
+    [() => weather(new THREE.CylinderGeometry(0.18, 0.42, 3.2, 7, 8), 0.07), 3.2, 0], // needle
+    // Was a naked BoxGeometry — six faces, no silhouette, and the single worst
+    // offender when one lands near the road. A squashed subdivided icosahedron
+    // reads as a weathered boulder from any angle for 80 triangles.
+    [() => weather(new THREE.IcosahedronGeometry(1, 1).scale(1.25, 0.85, 1.0), 0.16), 1.7, 0], // boulder
+    [() => weather(new THREE.CylinderGeometry(0.9, 1.05, 0.7, 10, 4), 0.09), 0.7, 0],  // flat-top
   ];
   const geoms = [];
   const glows = [];
+  const census = [];   // QA seam: which archetype landed where
   const winA = new THREE.Color(TUNING.COL.EDGE_L);   // cyan
   const winB = new THREE.Color(TUNING.COL.EDGE_R);   // magenta
   const winC = new THREE.Color(0xffd9a0);            // warm
@@ -1205,7 +1239,11 @@ function buildMesas(rng, spline, groundY, theme) {
     // Big forms keep their distance: min distance grows with footprint so a
     // scale-50 monolith never looms right over the verge.
     const scale = towers ? 8 + rng() * 26 : 10 + rng() * 42;
-    const dist = 28 + scale * 0.9 + rng() * 200;
+    // Distance scales with the FOOTPRINT, and 0.9 was not enough: a scale-48
+    // form could land 71m from the road, where it fills the frame and every
+    // flaw in its silhouette is on show. 1.7 puts the biggest ones back where
+    // they read as landscape instead of as props.
+    const dist = 28 + scale * 1.7 + rng() * 200;
     const px = f.pos.x + f.R.x * side * dist + (rng() - 0.5) * 30;
     const pz = f.pos.z + f.R.z * side * dist + (rng() - 0.5) * 30;
     const clearance = scale + 24;
@@ -1223,7 +1261,9 @@ function buildMesas(rng, spline, groundY, theme) {
     }
     if (!ok) continue;
     placed.push([px, pz, scale]);
-    const [make, unitH, faceZ] = archetypes[Math.floor(rng() * archetypes.length)];
+    const archIdx = Math.floor(rng() * archetypes.length);
+    const [make, unitH, faceZ] = archetypes[archIdx];
+    census.push({ s: Math.round(s), x: px, z: pz, scale: Math.round(scale), arch: archIdx, dist: Math.round(dist) });
     const ys = towers ? 0.9 + rng() * 1.3 : islands ? 0.7 + rng() * 0.45 : 0.7 + rng() * 0.6;
     const ry = rng() * Math.PI * 2;
     const g = make();
@@ -1265,6 +1305,8 @@ function buildMesas(rng, spline, groundY, theme) {
     }
   }
   const out = new THREE.Group();
+  out.name = 'mesas';
+  out.userData.census = census;
   out.add(new THREE.Mesh(mergeGeoms(geoms), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide })));
   if (glows.length) {
     const glowMesh = new THREE.Mesh(mergeGeoms(glows), new THREE.MeshBasicMaterial({
