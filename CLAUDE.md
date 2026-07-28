@@ -90,8 +90,21 @@ uglier than it needed to be for everyone.
   ~4m the outer edge gains on a banked corner and everything a corkscrew does.
   Track-shape changes must clear **3.5m** surface-to-surface; the circuits that
   have always looked right sit at 3.7–4.5m.
+- **Press kit:** `node tools/press-shots.mjs --jpeg` (needs `npm i playwright`
+  and the dev server up). Three in-engine shots per circuit at 1920x1080 —
+  chase camera, FULL quality, debug readout hidden, caption burned in. The
+  shots are *scored off the spline*, not hand-picked: `vista` (heading most at
+  the world's sun, less a curvature penalty), `stunt` (most inverted/banked
+  frame, else the hardest corner), `stand` (a grandstand ≥350m from the other
+  two). Writes PNGs plus optional JPEGs and a README. Output goes to `press/`,
+  which is gitignored — regenerate it, never commit it, and re-shoot after any
+  art change.
 - Headless/browser-pane testing: rAF is throttled — screenshots force frames;
-  to teleport the player set **both** `ship.s` and `ship.sTotal`.
+  to teleport the player set **both** `ship.s` and `ship.sTotal`. Note `start()`
+  re-grids the field on the next step, so it *undoes* an assignment to `ship.s`
+  — the press tool drives to its marks with `warp(dt, {throttle: 1})` instead,
+  and an earlier version that teleported photographed the start line every
+  time without appearing to fail.
 - Verify per stage by panning the horizon on each track; regressions-check all
   three worlds after scenery/theme changes.
 
