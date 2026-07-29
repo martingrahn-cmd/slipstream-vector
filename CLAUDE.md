@@ -47,6 +47,16 @@ one 12-tap JuicePass, on a 2×MSAA HalfFloat target. Govern new effects
 (explosions, shields, beams) by *screen coverage*, pool everything, zero
 per-frame allocations in hot paths.
 
+**The additive layer is measured and it is not the problem.** Every transparent
+effect in the game together — sparks, camera flashes, exhaust ribbons, motes,
+glow ribbons, projectile glow, ship reflections — runs at **~0.05 of one screen
+fill**, worst frame 0.175, touching 4–7% of the screen (measured 2026-07-29,
+`tools/audit-overdraw.mjs`, four worlds × three tiers). The tier density knobs
+do not order: FULL reads *below* LOW on Sunset Circuit. `motes`, which LOW cuts
+to 0.3×, governs 0.001–0.013 of a fill. Do not cut particles for performance
+without measuring first — the guess has already been wrong once in each
+direction. `FIDELITY.md` §5a.
+
 Because the ceiling is fill and not geometry, **form is the cheap axis**: road
 slicing (`TUNING.SLICE_STEP`), hull cross-section density (`section12`) and
 lengthwise loft smoothing (`loft(..., { smooth: true })`) all buy roundness at
@@ -68,12 +78,11 @@ pixels — an order of magnitude cheaper than the resolution they were being
 blamed for. The tiers were wrong about this for weeks and it kept the game
 uglier than it needed to be for everyone.
 
-`FIDELITY.md` is the measured survey of what still limits the picture, and
-carries three findings worth knowing before touching graphics: FULL renders
-BELOW native on a 4K panel (the pixel cap was set for 4x MSAA and never moved
-when MSAA became 2x), LOW disables the JuicePass and so loses the per-world
-colour grade rather than just the effects, and the frost world's solids are
-baked against a light 60° away from its own sky sun.
+`FIDELITY.md` is the measured survey of what still limits the picture. The one
+finding still open there: FULL renders BELOW native on a 4K panel, because the
+pixel cap was set for 4x MSAA and never moved when MSAA became 2x. (The LOW
+colour grade and the frost world's bake direction were the other two; both are
+fixed.)
 
 ## Dev workflow
 
@@ -84,6 +93,19 @@ baked against a light 60° away from its own sky sun.
   Labs must include the three.js import map in `<head>` or they die silently.
 - Debug: `window.__game` exposes ship/rig/spline/race/weapons/juice/menu plus
   `warp(seconds, {throttle,...})` for deterministic no-rAF simulation.
+  **`warp` steps physics, AI and contact — NOT the weapon system** (that is only
+  stepped in the render loop, `main.js:1765`), and **NOT any visual effect**:
+  sparks, trails, shipVisual and the shock/fireball pools all update in the
+  frame, so warping leaves them frozen. A weapon or effect test written against
+  `warp` measures nothing and looks like it passed. Both audit tools below
+  rebuild the fixed step by hand for exactly this reason.
+- **Audit:** `node tools/audit-overdraw.mjs [tracks] [tiers] [samples]` — exact
+  fragment count of the additive layer, per track and tier, with an optional
+  heatmap dump (`OD_DUMP=<dir>`). Not a gate; a measuring stick to reach for
+  before believing an effect is expensive.
+- **Audit:** `node tools/audit-pads.mjs [tracks]` — weapon-pad pickup
+  distribution and what a whole pack gets off one pad. The standing answer to
+  "does the field share a weapon?" (it does not; see `STATUS.md` §2.5).
 - **QA gate:** `node tools/audit-terrain.mjs` guards the ground: it reports
   terrain INTRUSION near the road (how high the ground gets beside the racing
   line), not absolute clearance — the flat plane already sits exactly 1.15m

@@ -63,6 +63,12 @@ build step.
   bar). **Currently 0 tracks failing.**
 - `tools/audit-terrain.mjs` — measures terrain *intrusion* beside the racing
   line. **Currently 0.000 m on all 12.**
+- `tools/audit-overdraw.mjs` — exact fragment count of the additive layer, per
+  track and per tier. **Measured 2026-07-29: ~0.05 of one screen fill, worst
+  frame 0.175** — the transparent effects are not a cost. `FIDELITY.md` §5a.
+- `tools/audit-pads.mjs` — weapon-pad pickup distribution. **Measured
+  2026-07-29 over 238 pickups: the roll is per driver and matches the WEIGHTS
+  table.** A pack crossing one pad does *not* share a weapon; see §2.5.
 - `tools/press-shots.mjs` — 3 in-engine shots per circuit, scored off the
   spline, captions burned in.
 - `tools/generate-voices.mjs` / `generate-sfx.mjs` — idempotent ElevenLabs
@@ -74,7 +80,10 @@ build step.
 
 ## 2. Open — known, real, and unfinished
 
-### 2.1 BUG (fixed, awaiting confirmation in real play)
+### 2.1 BUG — fixed and CONFIRMED (2026-07-29)
+Martin drove it on hardware: the band is gone. This section is kept as the
+record of the diagnosis, not as an open item.
+
 The minimum-pixel-width shader added in `be8ac30` rewrote `gl_Position` from
 screen space for **every** vertex, reconstructing clip-space xy through the
 strip *centre's* `w`. That reconstruction is only valid well in front of the
@@ -89,9 +98,9 @@ position when the vertex is safely in front of the camera *and* genuinely under
 the floor — clears the band at the same warp point on the worst case, with the
 far strips still holding as continuous lines.
 
-Not yet confirmed on real hardware by a human. If streaks remain after this,
-they are a *different* artefact and want a fresh screenshot rather than more
-theorising about this one.
+Confirmed clean on an M5 MacBook Air, two laps of Moonlit Mile at ULTRA. If
+streaks ever reappear they are a *different* artefact and want a fresh
+screenshot rather than more theorising about this one.
 
 ### 2.2 Verification the author owes himself
 - **Trademark search on the name "Slipstream Vector"** before any commercial
@@ -107,10 +116,14 @@ theorising about this one.
   (exactly 4K native) and ADAPTIVE deliberately cannot climb into it. If it
   holds, FULL's pixel budget is provably too conservative — the cap was set for
   4× MSAA and never moved when MSAA became 2×. See `FIDELITY.md` §2a.
-- **Additive overdraw has never been measured.** Sparks, camera flashes, exhaust
-  ribbons, motes, glow ribbons and ship reflections all stack, and the tiers
-  currently guess at their cost with density knobs. This is the largest
-  un-priced thing in the frame on weak GPUs. `FIDELITY.md` §5.3.
+
+  **Partial evidence, 2026-07-29:** ULTRA held 60fps for two laps of Moonlit
+  Mile on an **M5 MacBook Air** — fanless, so that includes thermal drift. It
+  does *not* settle the question. `effectiveRatio` takes `min(pixelRatio,
+  sqrt(maxPixels / cssArea))`, and FULL and ULTRA share `pixelRatio: 2.0`; on a
+  laptop-sized window the RATIO binds first, so ULTRA never gets near its
+  8.3 Mpx budget. How near it got depends on that window's CSS size, which
+  nobody recorded. The 4K case is still open, and it still needs the M4.
 
 ### 2.4 Small and unglamorous
 - **Press kit is stale.** The 36 shots predate the ground relief, the aurora
@@ -120,6 +133,42 @@ theorising about this one.
   and corkscrews are where faceting shows and where the camera lingers.
   Costs geometry, which is the axis with headroom. `FIDELITY.md` §4.4.
 - **Credits: "AMANDUS" has no surname** because nobody supplied one.
+
+### 2.5 Weapon pickups are unreadable, and it reads as a bug
+Martin, in play: *"if you go over a pad in a pack, does the whole field get that
+power-up? It looks like everyone gets a shield."*
+
+Measured (`tools/audit-pads.mjs`, 238 pickups over 3 tracks): **no.** Every
+racer that crosses gets an INDEPENDENT roll — `_roll()` is called per ship in
+`stepFixed`'s pickup loop — and the outcome distribution sits on the WEIGHTS
+table within noise. Of 60 multi-ship crossings, 6 came out all-same, all of them
+pairs or triples; two ships matching by chance is a 21% event on this table.
+Every large crossing was mixed (one real seven-ship pad gave *boost, missiles,
+homing, boost, boost, homing, boost*).
+
+But the observation was accurate, and the run caught the exact frame that
+provokes it — Moonlit Mile, one pad, six ships: *shield, boost, missiles,
+**shield, shield, shield***. Four bubbles inside a second. The cause is
+readability, not fairness:
+
+- **Shield is the only pickup you can see.** Missiles, homing, mine and boost
+  are invisible until used, so a random cluster of shields is the only clustering
+  that is ever *observable*.
+- **The AI armours up instantly** (`want = true` the moment it holds one), which
+  is rational rather than careless: `WEAPON_HOLD_TIME` is 6s, so a saved shield
+  is usually a lost shield. Changing that means reopening the fizzle rule.
+
+The cheap fix is neither the roll nor the AI: put the held weapon on rival ships
+(a small glyph, or an engine-tone tell) so the other four outcomes become
+visible too. Nobody has built it.
+
+### 2.6 `__game.warp()` does not step the weapon system
+`weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
+`warp()` advances physics, AI and contact but **no pads, no pickups, no
+projectiles**. Any future weapon test written against `warp` will measure
+nothing and look like it passed. Both audit tools work around it by rebuilding
+the fixed step by hand. Worth either fixing in `warp` or leaving here on
+purpose — but not worth rediscovering.
 
 ---
 

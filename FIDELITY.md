@@ -1,10 +1,12 @@
 # FIDELITY.md — where the picture can still get better
 
 **Six of the items below have since been built** (frost sun direction, the LOW
-grade, the ULTRA rung, contact shading, neon edge width, crowd update culling)
-and one was **dropped after the reasoning turned out to be wrong** — see §5.2. They are marked DONE in place; the
-reasoning is kept because it is the record of why, and the numbers are still the
-baseline anything new gets measured against.
+grade, the ULTRA rung, contact shading, neon edge width, crowd update culling),
+one was **dropped after the reasoning turned out to be wrong** (§5.2) and one
+was **measured and turned out not to be a cost at all** (§5a, the additive
+overdraw). They are marked in place; the reasoning is kept because it is the
+record of why, and the numbers are still the baseline anything new gets measured
+against.
 
 A measured survey, not a wishlist. Every number here came from the running game
 on 2026-07-28; the method is at the bottom so it can be repeated and argued
@@ -169,11 +171,13 @@ Ranked by visible gain per unit of work.
    of the vertex count, 0% of the fill, and cost the dunes their shape. This is
    the same mistake the tiers made the first time round, made by me, in a
    document written to warn against it.
-3. **Price the additive overdraw properly.** Sparks, camera flashes, exhaust
-   ribbons, motes, glow ribbons and ship reflections are all transparent and all
-   stack. This is the real fill cost on weak GPUs and the tiers currently guess
-   at it with density knobs rather than measuring coverage. Worth an actual
-   measurement pass before tuning further.
+3. ~~**Price the additive overdraw properly.**~~ **MEASURED 2026-07-29, and it
+   is not a cost at all.** See §5a below. The suspicion was that sparks, camera
+   flashes, exhaust ribbons, motes, glow ribbons and ship reflections stack into
+   the real fill cost on weak GPUs. They do not: the whole additive layer runs
+   at **~0.05 of one screen fill**, worst frame measured 0.175. The density
+   knobs the tiers use to govern it are steering roughly one percent of the
+   frame.
 4. **Cap the crowd by distance, not by density.** DONE, though not as written.
    The instances still draw — it is one instanced call either way, and culling
    them would need the seat array recompacted. What was removed is the per-frame
@@ -181,6 +185,55 @@ Ranked by visible gain per unit of work.
    recomputed, and the instance buffer is only re-uploaded when something
    actually moved. That is most of the system's cost on a weak machine and it is
    invisible, because `near` was already 0 out there.
+
+## 5a. The additive layer, measured (2026-07-29)
+
+`node tools/audit-overdraw.mjs 0,5,8,11 low,medium,full 3`, one track per world,
+three regimes each (clean racing / scraping a wall for sparks / a firefight),
+counted at 1280x720. **1.000 would mean one extra full-screen layer of blended
+fill per frame.**
+
+| Circuit | LOW | MEDIUM | FULL | worst frame | coverage | max stack |
+|---|---|---|---|---|---|---|
+| Sunset Circuit | 0.079 | 0.096 | 0.052 | 0.163 | 4–7% | 6 |
+| Breaker Bay | 0.045 | 0.046 | 0.089 | 0.175 | 4–7% | 6 |
+| Grid Lock | 0.056 | 0.052 | 0.060 | 0.080 | 4–5% | 5 |
+| Moonlit Mile | 0.051 | 0.050 | 0.050 | 0.062 | 4% | 6 |
+
+Where it goes, averaged over all twelve runs:
+
+```
+  ships    0.018 - 0.063   engine flames, exhaust ribbons, cores   <- the big one
+  other    0.019 - 0.033   neon edge strips, pads, arches, rounds  <- remarkably flat
+  scenery  0.001 - 0.013   motes and glow ribbons                  <- nothing
+```
+
+Three findings, in order of how much they should change what we do:
+
+**The whole additive layer is ~5% of one screen fill.** Against a post chain
+whose JuicePass alone is a full-screen 12-tap read, and an opaque pass that is
+1.0 fills before anything else, every transparent effect in the game together is
+low single-digit percent of the frame's fill work. It is not what holds a weak
+machine back, and it never was.
+
+**The tiers do not order.** Sunset Circuit reads FULL (0.052) *below* LOW
+(0.079); Breaker Bay reads FULL at double LOW; Moonlit Mile reads 0.051 / 0.050 /
+0.050. What moves the number is where the camera is standing and whether
+something is scraping a wall — not the tier. At three samples per combination
+the tier effect, if there is one, is smaller than the positional variance. That
+is the honest statement: not "the knobs do nothing", but "the knobs move less
+than the noise".
+
+**`motes` is the clearest waste.** It is the knob LOW cuts hardest (0.3x), and
+the entire scenery-additive budget it governs is 0.001–0.013 of a screen fill.
+LOW is trading the world's atmosphere for one part in a thousand of the frame.
+This is §2b's mistake again in the other direction: a tier taking something
+visible away to buy something unmeasurable.
+
+What this does NOT cover: the post chain's own additive composite (priced
+separately, §1), grandstand camera flashes at close range (they fire inside
+~70m and no run forced a pass tight against a stand), and any statistical
+separation between the three regimes — only the peaks are clear.
 
 ## 6. Things that would NOT help
 
@@ -191,9 +244,12 @@ Worth stating so the effort does not go here:
 - **Textures / PBR.** Breaks the no-textures art direction, adds real bandwidth,
   and would look foreign next to the neon. See TERRAIN.md on the asset-pack
   question.
-- **More particles.** Additive overdraw is already the least-measured cost in
-  the engine (§5.3). Adding to it before measuring it is how the tiers got their
-  cost model wrong the first time.
+- ~~**More particles.**~~ This entry said additive overdraw was the least-measured
+  cost in the engine and that adding to it before measuring it was how the tiers
+  got their cost model wrong. The first half is now false (§5a) and the second
+  half was the right instinct pointed at the wrong target: the measurement says
+  there is headroom here, not danger. Particles are still governed by screen
+  coverage, but "we have not priced this" is no longer the reason to say no.
 - **Motion blur.** Considered and declined; the radial smear already sells speed
   and a per-object blur would fight the flat-shaded look.
 
@@ -211,3 +267,19 @@ Worth stating so the effort does not go here:
   prices ONE fill of the colour buffer and is a floor, not a total.
 - Lighting mismatch: azimuth of `TUNING.SUN_DIR` in XZ versus each theme's
   `sky.sunAz`.
+- Additive overdraw (§5a): `tools/audit-overdraw.mjs`. Two passes into a float
+  target — solids first for depth, then the additive objects alone with a flat
+  material that adds exactly 1.0 per fragment — summed over the buffer.
+
+  Two things that make this measurement easy to get wrong and both of which
+  produced entirely plausible wrong numbers on the way here:
+
+  - **`visible = false` prunes the whole subtree** in three.js, so hiding a
+    solid hull also hides the additive engine glow parented under it. Isolate
+    with LAYERS, which are per-object.
+  - **The effects update in the RENDER path**, not the fixed step:
+    `sparks.update`, `shipVisual.update`, `trails.update` and the shock/fireball
+    pools all live in `main.js`'s frame, so `__game.warp()` — and any
+    hand-rolled sim loop — leaves every one of them frozen. Measuring that
+    reports three identical regime columns and a zero for the ships. The frames
+    that count have to come from the game's own loop.

@@ -456,7 +456,9 @@ independent of rAF.
 
 ## Roadmap
 
-Done: 3 worlds × 2 tracks with loops/corkscrews/jumps, 8-ship AI field (no
+Done (the counts below are where the game *started*; it now ships **4 worlds ×
+3 tracks** — see the CONTENT BLOCK further down): 3 worlds × 2 tracks with
+loops/corkscrews/jumps, 8-ship AI field (no
 rubber-banding, ever), full **weapons combat** with AI that fights back,
 rival **banter feed** + pilot intro videos + expression faces, Championship /
 Single Race / Time Trial, three speed classes with an unlock ladder +
@@ -483,7 +485,13 @@ Drift / Breaker Bay / Grid Lock), and the championship split into **two
 resume. World uplift stages 2–4 landed first (roadside kits, ground detail,
 ambient life — all theme knobs), so the new world inherited everything.
 
+Also done since: **graphics quality tiers** — LOW / MEDIUM / FULL / ULTRA plus
+an ADAPTIVE controller, budgeted by *pixels* rather than a bare pixel ratio, so
+a 4K panel stops quietly asking for four times the work a 1080p one does.
+
 Next (rough priority):
-- **Online leaderboards**, graphics quality tiers for weaker laptops, an
-  Eliminator mode built on the weapon kit, packaging/trailer for a possible
-  Steam release.
+- **Online leaderboards** (needs a backend, which this project has deliberately
+  never had — that is the real cost, not the code), an **Eliminator mode** built
+  on the weapon kit, **held-weapon tells on rival ships** so a pickup is
+  readable from outside the cockpit, packaging/trailer for a possible Steam
+  release.
