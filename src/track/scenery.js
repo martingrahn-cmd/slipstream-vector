@@ -153,6 +153,45 @@ function groundAt(groundY, x, z) {
   return TERRAIN ? groundY + TERRAIN.h(x, z) : groundY;
 }
 
+// On a water world the ONLY dry land is the islands. Every scatterer in this
+// file plants against groundAt(), which there is the lagoon surface — so
+// palms, rocks and scrub all stood in open water until this existed. The
+// terrain block does displace the disc, but on a water world that just makes
+// the WATER undulate; a raised bump is not a sandbar.
+//
+// Returns a picker: (bandLo, bandHi) -> [x, z] somewhere on the ring between
+// bandLo*r and bandHi*r of a randomly chosen island, weighted by island area,
+// re-rolled if it lands inside a neighbouring island's body (islands overlap).
+// Every archetype's horizontal radius is exactly r and the beach cylinder runs
+// 1.12-1.22 r, so band 1.0-1.2 is sand and 1.2-1.5 is shallows.
+function makeIslandPicker(rng, islands, fraction = 1) {
+  const planted = [...islands].sort((a, b) => b.r - a.r)
+    .slice(0, Math.max(1, Math.round(islands.length * fraction)));
+  const cdf = [];
+  let acc = 0;
+  for (const is of planted) { acc += is.r * is.r; cdf.push(acc); }
+  return (bandLo, bandHi) => {
+    let x = 0, z = 0;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const t = rng() * cdf[cdf.length - 1];
+      let lo = 0, hi = cdf.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < t) lo = mid + 1; else hi = mid; }
+      const is = planted[lo];
+      const a = rng() * Math.PI * 2;
+      const rad = is.r * (bandLo + rng() * (bandHi - bandLo));
+      x = is.x + Math.cos(a) * rad;
+      z = is.z + Math.sin(a) * rad;
+      let buried = false;
+      for (const other of islands) {
+        if (other === is) continue;
+        if (Math.hypot(x - other.x, z - other.z) < other.r * 1.06) { buried = true; break; }
+      }
+      if (!buried) break;
+    }
+    return [x, z];
+  };
+}
+
 // Contact shading. Nothing in the world was GROUNDED: ships have a blob shadow
 // and scenery had nothing, so every large form sat on the sand like a decal.
 // Now that the ground has relief it was the most conspicuous absence left.
@@ -286,8 +325,8 @@ export function buildScenery(spline, scene, theme) {
   const arches = buildArches(spline, theme);
   if (arches) group.add(arches.group);
   group.add(buildGantry(spline, groundY));
-  if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
-  if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
+  if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme, mesas.userData.islands));
+  if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme, mesas.userData.islands));
   if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme, mesas.userData.islands));
   group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
@@ -1304,9 +1343,22 @@ function buildMesas(rng, spline, groundY, theme) {
     [() => new THREE.BoxGeometry(1.1, 1.0, 1.1), 1.0, 0.55],
     [() => new THREE.CylinderGeometry(0.5, 0.5, 2.8, 6), 2.8, 0.5],
   ] : islands ? [
-    [() => { const g = new THREE.IcosahedronGeometry(1, 1); g.scale(1, 0.42, 1); return g; }, 0.84, 0], // jungle dome
-    [() => new THREE.ConeGeometry(1, 0.55, 6), 0.55, 0],        // low hill
-    [() => new THREE.CylinderGeometry(0.55, 1, 0.4, 7), 0.4, 0],// flat atoll
+    // Islands are the one form here the camera looks straight AT for seconds at
+    // a time, across a flat lagoon with nothing to hide behind. At detail 1 and
+    // 6-7 radial segments they were faceted lumps. Subdivision and `weather()`
+    // are the cheap axis (CLAUDE.md graphics budget): a rounder, irregular
+    // silhouette at zero extra draws and zero extra screen coverage.
+    //
+    // NOTE for anything that plants on these: `weather(g, amt)` scales vertices
+    // radially by up to 1 + amt, so the horizontal radius is no longer exactly
+    // 1 — it can reach ~1.05. The scatterer bands below start at 1.08 for that
+    // reason. The beach cylinder (1.12-1.22 r) is unchanged and still covers it.
+    // detail 2, not 3: 320 tris against 1280, and across 50 islands that is
+    // +16k on the frame instead of +64k for a silhouette difference you cannot
+    // see at lagoon distance.
+    [() => { const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.05); g.scale(1, 0.42, 1); return g; }, 0.84, 0], // jungle dome
+    [() => weather(new THREE.ConeGeometry(1, 0.55, 18, 5), 0.045), 0.55, 0],          // low hill
+    [() => weather(new THREE.CylinderGeometry(0.55, 1, 0.4, 20, 4), 0.04), 0.4, 0],   // flat atoll
   ] : [
     // Height segments matter: strata bands are vertex colours, so the side
     // walls need vertex rows to band across (1 segment = one giant flat quad).
@@ -1792,8 +1844,12 @@ function buildGantry(spline, groundY) {
 // ------------------------------------------------------------------ rocks
 // Small instanced boulders close to the track — the near-field parallax that
 // pylons alone can't provide.
-function buildRocks(rng, spline, groundY, theme) {
+function buildRocks(rng, spline, groundY, theme, islands = null) {
   const count = theme.rockCount ?? 260;
+  // Water world: rocks belong in the shallows AROUND an island, not floating
+  // out on the open lagoon where the roadside scatter used to leave them.
+  const onIslands = islands && islands.length && theme.groundStyle === 'water';
+  const pickSpot = onIslands ? makeIslandPicker(rng, islands, 1) : null;
   const geom = bakeFlatColors(new THREE.IcosahedronGeometry(1, 0), theme.rock, { rim: false });
   const mesh = new THREE.InstancedMesh(geom,
     new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }), count);
@@ -1811,7 +1867,20 @@ function buildRocks(rng, spline, groundY, theme) {
     const rx = f.R.x, rz = f.R.z;
     const rl = Math.hypot(rx, rz) || 1;
     const size = 0.5 + rng() * 1.9;
-    const rpx = f.pos.x + (rx / rl) * side * dist, rpz = f.pos.z + (rz / rl) * side * dist;
+    let rpx = f.pos.x + (rx / rl) * side * dist, rpz = f.pos.z + (rz / rl) * side * dist;
+    if (onIslands) {
+      // Straddle the waterline: some sitting on the sand, most half-sunk in the
+      // shallows just off the beach. A rock breaking the surface reads as reef;
+      // a rock sitting ON the water reads as a bug, which is what it was.
+      [rpx, rpz] = pickSpot(1.16, 1.55);
+      p.set(rpx, groundY - size * 0.25 + rng() * size * 0.45, rpz);
+      e.set(rng() * 0.4, rng() * Math.PI * 2, rng() * 0.4);
+      q.setFromEuler(e);
+      sc.set(size, size * (0.5 + rng() * 0.4), size);
+      m.compose(p, q, sc);
+      mesh.setMatrixAt(i, m);
+      continue;
+    }
     p.set(rpx, groundAt(groundY, rpx, rpz) + size * 0.22, rpz);
     e.set(rng() * 0.4, rng() * Math.PI * 2, rng() * 0.4);
     q.setFromEuler(e);
@@ -1828,7 +1897,11 @@ function buildRocks(rng, spline, groundY, theme) {
 // ------------------------------------------------------------------ scrub
 // Low desert bushes: clumped, irregular, scattered near the racing line —
 // the mid-ground texture between the rocks and the mesas.
-function buildScrub(rng, spline, groundY, theme) {
+function buildScrub(rng, spline, groundY, theme, islands = null) {
+  // Water world: the theme calls this "low coastal scrub on the sandbars", but
+  // a water world has no sandbars — only islands. Put it on them.
+  const onIslands = islands && islands.length && theme.groundStyle === 'water';
+  const pickSpot = onIslands ? makeIslandPicker(rng, islands, 0.7) : null;
   const parts = [];
   for (const [ox, oz, s] of [[0, 0, 1], [0.7, 0.3, 0.62], [-0.5, 0.45, 0.72]]) {
     const g = new THREE.IcosahedronGeometry(0.5 * s, 0);
@@ -1857,8 +1930,13 @@ function buildScrub(rng, spline, groundY, theme) {
     const rx = f.R.x, rz = f.R.z;
     const rl = Math.hypot(rx, rz) || 1;
     const size = 1 + rng() * 1.5;
-    const spx = f.pos.x + (rx / rl) * side * dist, spz = f.pos.z + (rz / rl) * side * dist;
-    p.set(spx, groundAt(groundY, spx, spz) + 0.1, spz);
+    let spx = f.pos.x + (rx / rl) * side * dist, spz = f.pos.z + (rz / rl) * side * dist;
+    if (onIslands) {
+      [spx, spz] = pickSpot(1.08, 1.19);      // on the sand, just inside the palms
+      p.set(spx, groundY + 0.45, spz);
+    } else {
+      p.set(spx, groundAt(groundY, spx, spz) + 0.1, spz);
+    }
     q.setFromAxisAngle(Y, rng() * Math.PI * 2);
     sc.setScalar(size);
     m.compose(p, q, sc);
@@ -2052,59 +2130,19 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
   // Monument worlds: cacti gather into OASES on the same lap zones as the
   // buttes (same seed), leaving the empty flats truly empty.
   const zones = theme.monumentZones ? lapZones(ZONE_SEED, spline.length) : null;
-  // ISLAND PLANTING. On a water world the "ground" the scatterer plants against
-  // IS the lagoon surface, so the roadside scatter below put palm trunks in open
-  // water. Given the island list, palms instead grow on the sand ring of a real
-  // island — which also clusters them, the way a stand of palms actually looks.
-  // Big islands get proportionally more (weighted by area).
+  // ISLAND PLANTING — see makeIslandPicker. Concentrated on the bigger 45% of
+  // islands: 340 palms over 50 atolls reads as litter, over 22 it reads as
+  // stands of palms, and the bare atolls are the better silhouette anyway.
   const onIslands = islands && islands.length && theme.groundStyle === 'water';
-  // Plant on the BIGGER half only. Spreading 180 palms over 50 atolls gives
-  // three per island, which reads as litter; concentrating them gives real
-  // stands and leaves the bare atolls bare, which is the more interesting
-  // silhouette anyway.
-  const planted = onIslands
-    ? [...islands].sort((a, b) => b.r - a.r).slice(0, Math.max(1, Math.round(islands.length * 0.45)))
-    : [];
-  const islandCdf = [];
-  if (onIslands) {
-    let acc = 0;
-    for (const is of planted) { acc += is.r * is.r; islandCdf.push(acc); }
-  }
-  const pickIsland = () => {
-    const t = rng() * islandCdf[islandCdf.length - 1];
-    let lo = 0, hi = islandCdf.length - 1;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (islandCdf[mid] < t) lo = mid + 1; else hi = mid; }
-    return planted[lo];
-  };
+  const pickSpot = onIslands ? makeIslandPicker(rng, islands, 0.45) : null;
   for (let i = 0; i < count; i++) {
     // Pick a spot, but reject any that lands over the track — palms are tall
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
     if (onIslands) {
-      // The SAND RING, and only the sand ring. Every island archetype has a
-      // horizontal radius of exactly `r` (dome, hill cone and atoll cylinder
-      // alike), and the beach cylinder runs 1.12-1.22 x r — so anything planted
-      // inside r is planted inside the island, buried to its fronds. Band it
-      // between the island wall and the foam line.
-      //
-      // Islands can overlap, so a spot on one island's ring can still land
-      // inside a NEIGHBOUR's body. Re-roll when it does.
-      for (let attempt = 0; attempt < 6; attempt++) {
-        const is = pickIsland();
-        const a = rng() * Math.PI * 2;
-        const rad = is.r * (1.02 + rng() * 0.16);
-        x = is.x + Math.cos(a) * rad;
-        z = is.z + Math.sin(a) * rad;
-        let buried = false;
-        for (const other of islands) {
-          if (other === is) continue;
-          if (Math.hypot(x - other.x, z - other.z) < other.r * 1.02) { buried = true; break; }
-        }
-        if (!buried) break;
-      }
+      [x, z] = pickSpot(1.10, 1.21);          // the sand ring, clear of the weathered island edge
       const size = 1.6 + rng() * 2.2;
-      // The beach cylinder spans groundY..groundY+0.55; plant on its top face.
-      p.set(x, groundY + 0.5, z);
+      p.set(x, groundY + 0.5, z);             // the beach cylinder's top face
       q.setFromAxisAngle(Y, rng() * Math.PI * 2);
       sc.setScalar(size);
       m.compose(p, q, sc);
