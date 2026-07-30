@@ -166,15 +166,20 @@ export class ShipPhysics {
       if (impact > T.WALL_HARD_VD) {
         this.v *= T.WALL_HIT_KEEP;
         this.vd = -T.WALL_BOUNCE * this.vd;
-        this.events.emit('wallHit', { side, severity: Math.min(impact / 20, 1) });
+        this.events.emit('wallHit', { side, d: this.d, severity: Math.min(impact / 20, 1) });
       } else if (impact >= 0) {
         this.v = Math.max(0, this.v - T.WALL_SCRAPE_DECEL * dt);
         this.vd = 0;
         this.scraping = true;
-        this.events.emit('scrape', { side });
+        this.events.emit('scrape', { side, d: this.d });
       }
     }
 
+    // Contact events carry `d`, the lateral offset where the contact actually
+    // happened — the wall for a wall hit, the ISLAND EDGE for the split. The
+    // feel layer used to derive the position from the track's half-width, which
+    // is only correct for the outer wall: clipping the central divider spawned
+    // sparks out at a wall metres away, on the wrong side of the ship.
     // ---- split island: a central forbidden d-band you must commit around ----
     // Latch the lane on entry, then clamp to that side exactly like a wall —
     // pure d-domain, so no colliders and no tunneling, same as everything else.
@@ -191,12 +196,12 @@ export class ShipPhysics {
         if (impact > T.WALL_HARD_VD) {
           this.v *= T.WALL_HIT_KEEP;
           this.vd = -T.WALL_BOUNCE * this.vd;
-          this.events.emit('wallHit', { side: -lane, severity: Math.min(impact / 20, 1) });
+          this.events.emit('wallHit', { side: -lane, d: edge, severity: Math.min(impact / 20, 1) });
         } else {
           this.v = Math.max(0, this.v - T.WALL_SCRAPE_DECEL * dt);
           if (lane * this.vd < 0) this.vd = 0;
           this.scraping = true;
-          this.events.emit('scrape', { side: -lane });
+          this.events.emit('scrape', { side: -lane, d: edge });
         }
       }
     } else {

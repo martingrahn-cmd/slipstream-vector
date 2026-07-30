@@ -1240,9 +1240,14 @@ const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
 const _dustB = new THREE.Color(0x33271a);
 const _engPool = new THREE.Color();          // engine light-pool colour — the ship's glow hue, hint-hotter on boost
 const _WHITE_C = new THREE.Color(0xffffff);
-juice.on('wallHit', ({ side, severity }) => {
+juice.on('wallHit', ({ side, d, severity }) => {
   spline.frameAt(ship.s, _f);
-  _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
+  // Spawn at the CONTACT, from the physics, not at the track's outer wall.
+  // Deriving it from the half-width is only right when the thing you hit IS the
+  // outer wall — clip the central divider and it threw the sparks out to a wall
+  // metres away on the far side of the ship.
+  const cd = (d !== undefined ? d : side * (_f.width - T.WALL_MARGIN)) - side * 0.15;
+  _v.copy(_f.pos).addScaledVector(_f.R, cd).addScaledVector(_f.U, 0.5);
   // Sparks are struck OFF the wall and left there; they do not accelerate down
   // the track with you. At 0.5x the ship's speed they nearly kept pace, which
   // gave them half a second of straight-line flight while the track curved
@@ -1254,7 +1259,14 @@ juice.on('wallHit', ({ side, severity }) => {
   if (state === 'race') { tally.wallHits++; input.rumble(Math.min(1, 0.45 + severity * 0.5), 220); }
 });
 let scrapeAcc = 0;
-juice.on('scrape', () => { scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT; });
+// Remember WHERE the scrape is happening; the emitter below runs once a frame
+// on the accumulated count and cannot ask the physics again.
+let scrapeSide = 1, scrapeD = null;
+juice.on('scrape', ({ side, d }) => {
+  scrapeAcc += T.SPARK_SCRAPE_RATE * FIXED_DT;
+  scrapeSide = side || 1;
+  scrapeD = d;
+});
 // Weapon armed (from the WeaponSystem pickup roll): HUD badge + chirp for the
 // player; AI pickups are silent — you learn they are armed when they fire.
 const _muzzleA = new THREE.Color(0xffc86a);
@@ -1818,8 +1830,9 @@ function tick(now) {
     const n = Math.floor(scrapeAcc);
     scrapeAcc -= n;
     spline.frameAt(ship.s, _f);
-    const side = Math.sign(ship.d) || 1;
-    _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.55)).addScaledVector(_f.U, 0.35);
+    const side = scrapeSide;
+    const cd = (scrapeD !== null ? scrapeD : side * (_f.width - T.WALL_MARGIN)) - side * 0.15;
+    _v.copy(_f.pos).addScaledVector(_f.R, cd).addScaledVector(_f.U, 0.35);
     _vel.copy(_f.T).multiplyScalar(ship.v * 0.24);   // see wallHit: drift, not speed
     // Fan them AWAY from the wall so the stream hugs the side it came from
     // instead of wandering toward the centreline.

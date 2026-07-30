@@ -1014,7 +1014,25 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     if (ridges) { pushRidge(px, pz, ang, w, h, theme.mountainFar); continue; }
     const g = towers
       ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
-      : weather(new THREE.ConeGeometry(w, h, 10 + Math.floor(rng() * 5), 6), 0.17);
+      : (() => {
+        // A single cone is a single peak, and a horizon of single peaks reads
+        // as a row of tents. Modulate the height by angle so each mountain
+        // carries a main summit plus a lower shoulder or two, the way a massif
+        // actually sits.
+        const mg = weather(new THREE.ConeGeometry(w, h, 12 + Math.floor(rng() * 6), 7), 0.15);
+        const pa = mg.getAttribute('position');
+        const v = new THREE.Vector3();
+        const ph = rng() * Math.PI * 2, ph2 = rng() * Math.PI * 2;
+        for (let i = 0; i < pa.count; i++) {
+          v.fromBufferAttribute(pa, i);
+          const up = Math.max(0, Math.min(1, v.y / h + 0.5));
+          const a = Math.atan2(v.z, v.x);
+          const lobe = 0.22 * Math.cos(a * 2.0 + ph) + 0.13 * Math.cos(a * 3.0 + ph2);
+          pa.setXYZ(i, v.x, v.y + lobe * up * h * 0.5, v.z * (1 - 0.08 * up));
+        }
+        pa.needsUpdate = true;
+        return mg;
+      })();
     g.rotateY(rng() * Math.PI); // rotate around its own axis BEFORE placing
     g.translate(px, groundY + h / 2 - 2, pz);
     geoms.push(bakeFlatColors(g, theme.mountainFar, { rim: false }));
@@ -1405,20 +1423,30 @@ function buildMesas(rng, spline, groundY, theme) {
     // it is supposed to be. Islands get real vertical relief now: the dome is
     // half again as tall, the hill cone is a proper cone rather than a bump,
     // and only the atoll stays deliberately flat so the chain has variety.
-    // A smooth squashed sphere is a BUN, not a hill. What makes a hill read is
-    // an off-centre summit and a ridge running off it — so: weather hard for an
-    // irregular skin, then shear the upper half sideways so the peak leans, and
-    // squash one axis so the plan is an oval rather than a circle.
+    // A dome is a BUN however you shear it — the giveaway is that its profile
+    // is the same in every direction. A hill has RIDGES and saddles: high along
+    // one axis, cut away between. So modulate the height by angle with two
+    // lobes at different frequencies, lean the summit off-centre, and pull the
+    // waist in as it rises. detail 3 rather than 2 because a lobed surface
+    // needs vertices to bend with; ~1280 tris x 50 islands is 48k, on the axis
+    // with headroom, for the thing that has been complained about twice.
     [() => {
-      const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.16);
-      g.scale(1, 0.66, 0.82);
+      const g = weather(new THREE.IcosahedronGeometry(1, 3), 0.09);
+      g.scale(1, 0.72, 0.86);
       const pa = g.getAttribute('position');
       const v = new THREE.Vector3();
       for (let i = 0; i < pa.count; i++) {
         v.fromBufferAttribute(pa, i);
-        const up = Math.max(0, v.y / 0.66);          // 0 at the waterline, 1 at the summit
-        // lean the peak, and pinch the flanks so a spur runs down one side
-        pa.setXYZ(i, v.x + up * up * 0.34, v.y, v.z * (1 - up * 0.18) - up * up * 0.12);
+        const up = Math.max(0, v.y / 0.72);          // 0 at the waterline, 1 at the top
+        const a = Math.atan2(v.z, v.x);
+        const ridge = 0.34 * Math.cos(a * 2.0) + 0.18 * Math.cos(a * 3.0 + 1.1);
+        const waist = 1 - 0.13 * up;                 // taper as it climbs
+        pa.setXYZ(
+          i,
+          v.x * waist + up * up * 0.30,              // summit leans
+          v.y * (1 + ridge * up),                    // ridges and saddles
+          v.z * waist - up * up * 0.10,
+        );
       }
       pa.needsUpdate = true;
       return g;
@@ -1543,7 +1571,10 @@ function buildMesas(rng, spline, groundY, theme) {
     // form could land 71m from the road, where it fills the frame and every
     // flaw in its silhouette is on show. 1.7 puts the biggest ones back where
     // they read as landscape instead of as props.
-    const dist = 28 + scale * 1.7 + rng() * 200;
+    // Islands stay in the lagoon's near and middle ground. At up to 200m of
+    // spread they drifted out to where the distant peaks live and read as a
+    // palm island parked among the mountains.
+    const dist = 28 + scale * 1.7 + rng() * (islands ? 105 : 200);
     const px = f.pos.x + f.R.x * side * dist + (rng() - 0.5) * 30;
     const pz = f.pos.z + f.R.z * side * dist + (rng() - 0.5) * 30;
     const clearance = scale + 24;
@@ -3345,7 +3376,11 @@ function buildStands(rng, spline, groundY, theme) {
     const nx = (f.R.x / rl) * spot.side, nz = (f.R.z / rl) * spot.side;
     const dist = f.width + 7;   // close enough to the barrier to loom at speed
     const px = f.pos.x + nx * dist, pz = f.pos.z + nz * dist;
-    const py = Math.max(groundY, f.pos.y - 1.2);
+    // groundAt, not the flat groundY — the fourth thing in this file to have
+    // made that mistake. On a displaced world the surface beside the road is
+    // metres off the constant, so a grandstand stood in a dip or half-sunk in a
+    // rise, which is what "that looks risky to sit on" means.
+    const py = Math.max(groundAt(groundY, px, pz), f.pos.y - 1.2);
     if (!footprintFree(px, py, pz, spot.s)) continue;
     placed++;
     spotPos.push({ s: spot.s, side: spot.side, x: px, y: py, z: pz, rx: f.pos.x, ry: f.pos.y, rz: f.pos.z });
