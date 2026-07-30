@@ -1099,7 +1099,7 @@ const _impactTex = (() => {
 })();
 const _fireball = (() => {
   const pool = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 8; i++) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
       map: _impactTex, color: 0xffffff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide,
@@ -1107,21 +1107,38 @@ const _fireball = (() => {
     m.visible = false; m.frustumCulled = false; scene.add(m);
     pool.push({ m, t: -1, scale: 1 });
   }
-  const LIFE = 0.42;
+  const LIFE = 0.58;
   const hot = new THREE.Color(0xffffff), mid = new THREE.Color(0xffa63d), late = new THREE.Color(0xff4426);
   return {
+    // A hit now throws THREE overlapping puffs on slightly staggered clocks and
+    // different sizes, instead of one clean disc. The one-disc version read as a
+    // decal appearing and vanishing; offset copies read as something combusting.
     burst(pos, scale) {
-      const f = pool.find((x) => x.t < 0) || pool[0];
-      f.t = 0; f.scale = scale; f.m.visible = true; f.m.position.copy(pos);
+      for (let k = 0; k < 3; k++) {
+        const f = pool.find((x) => x.t < 0);
+        if (!f) return;
+        f.t = k * -0.045;                       // staggered ignition
+        f.scale = scale * (1 - k * 0.22);
+        f.spin = (Math.random() - 0.5) * 2.2;   // render path: Math.random is allowed here
+        f.ox = (Math.random() - 0.5) * scale * 1.5;
+        f.oy = (Math.random() - 0.5) * scale * 0.9;
+        f.m.visible = true;
+        f.m.position.copy(pos);
+        f.m.position.x += f.ox; f.m.position.y += f.oy;
+      }
     },
     update(dt, camera) {
       for (const f of pool) {
-        if (f.t < 0) continue;
+        if (f.t === -1) continue;
         f.t += dt;
+        if (f.t < 0) continue;
         const u = f.t / LIFE;
         if (u >= 1) { f.t = -1; f.m.visible = false; continue; }
         f.m.quaternion.copy(camera.quaternion);
-        const s = (1.8 + u * 7.5) * f.scale;
+        f.m.rotateZ((f.spin || 0) * f.t);       // roll so the puffs are not clones
+        // Snap out hard, then keep expanding slowly — a fast leading edge is
+        // most of what sells an explosion.
+        const s = (2.4 + (1 - (1 - u) * (1 - u) * (1 - u)) * 13.0) * f.scale;
         f.m.scale.set(s, s, s);
         // White flash only for the first instant, then FIRE orange fast — the
         // orange phase is what reads as an explosion, so it owns most of the life.
@@ -1174,8 +1191,10 @@ const _smoke = (() => {
 // fade on weapon hits. Cheap: 5 additive rings, only active during an impact.
 const _shock = (() => {
   const rings = [];
-  const geo = new THREE.RingGeometry(0.72, 1.0, 40);
-  for (let i = 0; i < 5; i++) {
+  // Thinner ring, more segments: a wide soft donut reads as a smoke puff, a thin
+  // hard circle reads as a pressure wave. That is the whole trick.
+  const geo = new THREE.RingGeometry(0.88, 1.0, 56);
+  for (let i = 0; i < 10; i++) {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
       color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
       depthWrite: false, fog: false, side: THREE.DoubleSide,
@@ -1183,23 +1202,34 @@ const _shock = (() => {
     m.visible = false; m.frustumCulled = false; scene.add(m);
     rings.push({ m, t: -1, scale: 1 });
   }
-  const LIFE = 0.34;
+  const LIFE = 0.42;
   return {
+    // Two rings, not one: a fast bright leading wave and a slower wider echo
+    // half a beat behind. A single ring is an event; two is a detonation.
     burst(pos, colHex, scale) {
-      const r = rings.find((x) => x.t < 0) || rings[0];
-      r.t = 0; r.scale = scale; r.m.visible = true;
-      r.m.position.copy(pos); r.m.material.color.setHex(colHex);
+      for (let k = 0; k < 2; k++) {
+        const r = rings.find((x) => x.t < 0);
+        if (!r) return;
+        r.t = k * -0.07;
+        r.scale = scale * (1 + k * 0.55);
+        r.gain = k === 0 ? 1 : 0.55;
+        r.m.visible = true;
+        r.m.position.copy(pos); r.m.material.color.setHex(colHex);
+      }
     },
     update(dt, camera) {
       for (const r of rings) {
-        if (r.t < 0) continue;
+        if (r.t === -1) continue;
         r.t += dt;
+        if (r.t < 0) continue;
         const u = r.t / LIFE;
         if (u >= 1) { r.t = -1; r.m.visible = false; continue; }
         r.m.quaternion.copy(camera.quaternion);
-        const s = (0.5 + u * 6.0) * r.scale;
+        // Ease OUT hard: the wave is fastest at birth and coasts, which is what
+        // a pressure front does and what a linear ramp never sells.
+        const s = (0.5 + (1 - (1 - u) * (1 - u) * (1 - u)) * 11.0) * r.scale;
         r.m.scale.set(s, s, s);
-        r.m.material.opacity = (1 - u) * (1 - u) * 0.9;
+        r.m.material.opacity = (1 - u) * (1 - u) * 0.95 * (r.gain ?? 1);
       }
     },
   };
@@ -1234,11 +1264,20 @@ juice.on('weaponHit', ({ victim, victimIsPlayer }) => {
   const k = Math.max(0.25, Math.min(1, 70 / Math.max(camera.position.distanceTo(_v), 1)));
   _vel.copy(_f.T).multiplyScalar(victim.v * 0.35);
   // Real impact weight: fireball core + smoke + hot debris + shockwave ring.
-  _fireball.burst(_v, 0.8 + k * 0.9);
-  _smoke.burst(_v, 0.8 + k * 0.6);
-  sparks.spawn(_v, _vel, 30, Math.round(60 * k), _explCore, _explHot, undefined, _f.pos.y);
-  sparks.spawn(_v, _vel, 14, Math.round(36 * k), _explHot, _explTail, undefined, _f.pos.y);
-  _shock.burst(_v, victimIsPlayer ? 0xffffff : 0xffdca0, 1.4 + k * 0.8);
+  // Sizes raised across the board now the additive layer is priced and turned
+  // out to be ~0.05 of a screen fill (FIDELITY.md §5a) — this is the moment the
+  // whole weapon system exists for and it was being rationed for no measured
+  // reason. Three spark bands instead of two: a fast white core, a gold body,
+  // and a slow rose tail that outlives the fireball.
+  _fireball.burst(_v, 1.15 + k * 1.35);
+  _smoke.burst(_v, 1.0 + k * 0.8);
+  // COUNT is the meat; SPREAD is not. A spark's box is stretched along its own
+  // velocity, so raising spread turns a shower into flying confetti — the count
+  // is what reads as an explosion. More of them, travelling no faster.
+  sparks.spawn(_v, _vel, 32, Math.round(110 * k), _explCore, _explHot, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 15, Math.round(70 * k), _explHot, _explTail, undefined, _f.pos.y);
+  sparks.spawn(_v, _vel, 8, Math.round(34 * k), _explTail, _explTail, undefined, _f.pos.y);
+  _shock.burst(_v, victimIsPlayer ? 0xffffff : 0xffdca0, 1.9 + k * 1.1);
   if (victimIsPlayer && state === 'race') {
     audio.playerHitBang();                                   // fat close BANG + paralysis hum
     juice.fovSpike = Math.max(juice.fovSpike, 0.55);         // a lens punch on top of the trauma spike
@@ -1251,8 +1290,8 @@ juice.on('shieldSave', ({ victim, victimIsPlayer }) => {
   spline.frameAt(victim.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, victim.d).addScaledVector(_f.U, 1.2);
   _vel.copy(_f.T).multiplyScalar(victim.v * 0.3);
-  sparks.spawn(_v, _vel, 14, 18, _muzzleB, _explHot, undefined, _f.pos.y);
-  _shock.burst(_v, 0x9ff0ff, 0.8);                           // a cyan shield ripple ring
+  sparks.spawn(_v, _vel, 18, 34, _muzzleB, _explHot, undefined, _f.pos.y);
+  _shock.burst(_v, 0x9ff0ff, 1.15);                          // a cyan shield ripple ring
   const vis = victimIsPlayer ? shipVisual : (race.racers.find((r) => r.phys === victim) || {}).vis;
   if (vis) vis.flashShieldHit();
   audio.shieldBounce();

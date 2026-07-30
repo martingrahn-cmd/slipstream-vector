@@ -117,9 +117,12 @@ export class ExhaustTrails {
       points: [], // {pos: Vector3, t: age}
     }));
     // Short-lived: at vmax this is a ~12m ribbon. Longer and it reaches the
-    // chase camera and reads as two giant light beams.
+    // chase camera and reads as two giant light beams — I tried 0.22s on the
+    // strength of the measured additive budget and it did exactly that, washing
+    // the ship out at boost speed. The budget says this is CHEAP, not that it
+    // should be BIG; length is a composition problem, not a cost one.
     this.maxAge = 0.15;
-    this.maxPoints = 26;
+    this.maxPoints = 28;
 
     const segs = this.maxPoints - 1;
     this.geom = new THREE.BufferGeometry();
@@ -173,9 +176,12 @@ export class ExhaustTrails {
   }
 
   update(dt, camera, boostFactor, speedNorm) {
-    const width = 0.12 + 0.22 * boostFactor;
-    const alphaBase = (0.08 + speedNorm * 0.24 + boostFactor * 0.35)
-      * Math.min(speedNorm * 4, 1); // lower speed-alpha so the ship-hue holds (doesn't blow to white); no ghost ribbon while parked
+    // The extra weight goes on BOOST, not on cruise. Cruise stays close to
+    // where it was (the ribbon is background at that point); hitting a pad is
+    // what should visibly light up behind you.
+    const width = 0.14 + 0.34 * boostFactor;
+    const alphaBase = (0.09 + speedNorm * 0.24 + boostFactor * 0.5)
+      * Math.min(speedNorm * 4, 1); // no ghost ribbon while parked
     for (let trIdx = 0; trIdx < 2; trIdx++) {
       const tr = this.trails[trIdx];
       const base = trIdx * this.maxPoints * 2;

@@ -201,9 +201,13 @@ export const TUNING = {
   //  sickness. Speed now reads via FOV, ground-rush, camera lunge and edge blur.)
 
   // ---- Sparks ----
-  SPARK_POOL: 256,
-  SPARK_HIT_COUNT: 40,
-  SPARK_SCRAPE_RATE: 60,  // per second
+  // Sizes here were set when nobody had priced the additive layer. It has been
+  // priced (FIDELITY.md §5a): the whole transparent layer is ~0.05 of one screen
+  // fill, and sparks are a slice of that. A wall hit should throw a proper
+  // shower — that is the single most-seen impact in the game.
+  SPARK_POOL: 640,
+  SPARK_HIT_COUNT: 78,
+  SPARK_SCRAPE_RATE: 110, // per second
   SPARK_GRAVITY: -20,
 
   // ---- Palette ----

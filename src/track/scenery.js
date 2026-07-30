@@ -277,7 +277,8 @@ export function buildScenery(spline, scene, theme) {
   group.add(buildFarMountains(rng, groundY, cx, cz, spline, CITY_ANG, theme));
   const landmarks = buildLandmarks(rng, spline, groundY, cx, cz, theme);
   if (landmarks) group.add(landmarks.group);
-  group.add(buildMesas(rng, spline, groundY, theme));
+  const mesas = buildMesas(rng, spline, groundY, theme);
+  group.add(mesas);
   if (theme.rockCut) { const rc = buildRockCut(rng, spline, groundY, theme); if (rc) group.add(rc); }
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
@@ -288,7 +289,7 @@ export function buildScenery(spline, scene, theme) {
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme));
   if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme));
-  if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme));
+  if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme, mesas.userData.islands));
   group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
   if (canyon) group.add(canyon.group);
@@ -1329,6 +1330,7 @@ function buildMesas(rng, spline, groundY, theme) {
   const geoms = [];
   const glows = [];
   const census = [];   // QA seam: which archetype landed where
+  const islandSpots = [];  // {x,z,r} per island — the only dry land on a water world
   const winA = new THREE.Color(TUNING.COL.EDGE_L);   // cyan
   const winB = new THREE.Color(TUNING.COL.EDGE_R);   // magenta
   const winC = new THREE.Color(0xffd9a0);            // warm
@@ -1463,6 +1465,10 @@ function buildMesas(rng, spline, groundY, theme) {
     if (!towers) bakeStrata(bakedMesa, rng, groundY, Math.max(3, scale * ys * 0.16), theme.mesaRim, theme.ground);
     geoms.push(bakedMesa);
     if (islands) {
+      // Remember the island so the flora scatterer can plant ON it. Palms used
+      // to be scattered off the racing line like desert cacti, which on a world
+      // whose ground IS the lagoon meant trunks standing in open water.
+      islandSpots.push({ x: px, z: pz, r: scale });
       // A beach ring at the waterline.
       const beach = new THREE.CylinderGeometry(scale * 1.12, scale * 1.22, 0.6, 8);
       beach.rotateY(rng() * Math.PI);
@@ -1488,6 +1494,7 @@ function buildMesas(rng, spline, groundY, theme) {
   const out = new THREE.Group();
   out.name = 'mesas';
   out.userData.census = census;
+  out.userData.islands = islandSpots;
   out.add(new THREE.Mesh(mergeGeoms(geoms), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide })));
   if (glows.length) {
     const glowMesh = new THREE.Mesh(mergeGeoms(glows), new THREE.MeshBasicMaterial({
@@ -1980,7 +1987,7 @@ function clearOfTrack(spline, x, z, margin) {
   return true;
 }
 
-function buildFlora(rng, spline, groundY, theme) {
+function buildFlora(rng, spline, groundY, theme, islands = null) {
   const style = theme.flora;
   const parts = [];
   if (style === 'palms') {
@@ -2045,10 +2052,65 @@ function buildFlora(rng, spline, groundY, theme) {
   // Monument worlds: cacti gather into OASES on the same lap zones as the
   // buttes (same seed), leaving the empty flats truly empty.
   const zones = theme.monumentZones ? lapZones(ZONE_SEED, spline.length) : null;
+  // ISLAND PLANTING. On a water world the "ground" the scatterer plants against
+  // IS the lagoon surface, so the roadside scatter below put palm trunks in open
+  // water. Given the island list, palms instead grow on the sand ring of a real
+  // island — which also clusters them, the way a stand of palms actually looks.
+  // Big islands get proportionally more (weighted by area).
+  const onIslands = islands && islands.length && theme.groundStyle === 'water';
+  // Plant on the BIGGER half only. Spreading 180 palms over 50 atolls gives
+  // three per island, which reads as litter; concentrating them gives real
+  // stands and leaves the bare atolls bare, which is the more interesting
+  // silhouette anyway.
+  const planted = onIslands
+    ? [...islands].sort((a, b) => b.r - a.r).slice(0, Math.max(1, Math.round(islands.length * 0.45)))
+    : [];
+  const islandCdf = [];
+  if (onIslands) {
+    let acc = 0;
+    for (const is of planted) { acc += is.r * is.r; islandCdf.push(acc); }
+  }
+  const pickIsland = () => {
+    const t = rng() * islandCdf[islandCdf.length - 1];
+    let lo = 0, hi = islandCdf.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (islandCdf[mid] < t) lo = mid + 1; else hi = mid; }
+    return planted[lo];
+  };
   for (let i = 0; i < count; i++) {
     // Pick a spot, but reject any that lands over the track — palms are tall
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
+    if (onIslands) {
+      // The SAND RING, and only the sand ring. Every island archetype has a
+      // horizontal radius of exactly `r` (dome, hill cone and atoll cylinder
+      // alike), and the beach cylinder runs 1.12-1.22 x r — so anything planted
+      // inside r is planted inside the island, buried to its fronds. Band it
+      // between the island wall and the foam line.
+      //
+      // Islands can overlap, so a spot on one island's ring can still land
+      // inside a NEIGHBOUR's body. Re-roll when it does.
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const is = pickIsland();
+        const a = rng() * Math.PI * 2;
+        const rad = is.r * (1.02 + rng() * 0.16);
+        x = is.x + Math.cos(a) * rad;
+        z = is.z + Math.sin(a) * rad;
+        let buried = false;
+        for (const other of islands) {
+          if (other === is) continue;
+          if (Math.hypot(x - other.x, z - other.z) < other.r * 1.02) { buried = true; break; }
+        }
+        if (!buried) break;
+      }
+      const size = 1.6 + rng() * 2.2;
+      // The beach cylinder spans groundY..groundY+0.55; plant on its top face.
+      p.set(x, groundY + 0.5, z);
+      q.setFromAxisAngle(Y, rng() * Math.PI * 2);
+      sc.setScalar(size);
+      m.compose(p, q, sc);
+      mesh.setMatrixAt(i, m);
+      continue;
+    }
     for (let attempt = 0; attempt < 8; attempt++) {
       let s = rng() * spline.length;
       if (zones) {

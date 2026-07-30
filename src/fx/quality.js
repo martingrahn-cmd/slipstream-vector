@@ -42,9 +42,17 @@ export const TIERS = [
     shafts: 0,
     reflect: false,
     gloss: 0.8,
-    life: 0.45,         // thinner sky and roadside, never empty
-    motes: 0.3,
-    sparks: 0.5,
+    // MEASURED 2026-07-29 (FIDELITY.md §5a): the entire additive layer runs at
+    // ~0.05 of one screen fill. `motes` — the knob this tier used to cut hardest,
+    // to 0.3x — governs 0.001-0.013 of a fill. LOW was trading the world's
+    // atmosphere for one part in a thousand of the frame. `life` is instance
+    // COUNT on meshes that draw once either way, i.e. vertices, and §1 shows the
+    // frame is nowhere near a triangle wall. All three go back to full: LOW is
+    // the same game rendered softer, and it now actually is. The real savings
+    // stay where they were measured to be — pixels, MSAA, bloom, shafts.
+    life: 1,
+    motes: 1,
+    sparks: 1,
   },
   {
     id: 'medium',
@@ -65,9 +73,9 @@ export const TIERS = [
     shafts: 1,
     reflect: false,     // 8 ships x 2 draws + additive coverage stays FULL-only
     gloss: 1.7,         // free: shader maths on fragments already being shaded
-    life: 0.62,         // lands where the game shipped before FULL got richer
-    motes: 0.7,
-    sparks: 0.8,
+    life: 1,            // see LOW: measured, and it was never the cost
+    motes: 1,
+    sparks: 1,
   },
   {
     id: 'full',
