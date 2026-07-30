@@ -164,31 +164,60 @@ function groundAt(groundY, x, z) {
 // re-rolled if it lands inside a neighbouring island's body (islands overlap).
 // Every archetype's horizontal radius is exactly r and the beach cylinder runs
 // 1.12-1.22 r, so band 1.0-1.2 is sand and 1.2-1.5 is shallows.
+// Surface height on an island at radius fraction u, from the profile sampled at
+// build time. Falls back to the local water level for a band no vertex reached.
+function islandTopAt(is, u) {
+  if (!is.prof) return is.gy;
+  const n = is.prof.length;
+  const at = (i) => {
+    const y = is.prof[Math.max(0, Math.min(n - 1, i))];
+    return Number.isFinite(y) ? y : is.gy;
+  };
+  // INTERPOLATE between band centres. Taking a band's value straight was the
+  // first version and it plants badly on anything steep: a band is several
+  // metres of height on a big cone, so a palm at the band's outer edge floats
+  // by most of that, and one at the inner edge sinks. Half a band of error is
+  // survivable; a whole one is visible.
+  // Interpolate between band centres. A biased-up variant was tried and simply
+  // traded buried palms for hovering ones at the same rate, so accuracy wins.
+  const f = (u / is.profMax) * n - 0.5;
+  const i0 = Math.floor(f);
+  const t = Math.max(0, Math.min(1, f - i0));
+  return at(i0) + (at(i0 + 1) - at(i0)) * t;
+}
+
 function makeIslandPicker(rng, islands, fraction = 1) {
   const planted = [...islands].sort((a, b) => b.r - a.r)
     .slice(0, Math.max(1, Math.round(islands.length * fraction)));
   const cdf = [];
   let acc = 0;
   for (const is of planted) { acc += is.r * is.r; cdf.push(acc); }
+  // Returns {x, z, u, is, clear} — the island is handed back so a caller that
+  // wants to plant ON the slope can ask islandTopAt() for the surface height
+  // there, and `clear` says whether the spot ended up free of every OTHER
+  // island's body. It matters: islands overlap heavily, so a point well inside
+  // one island's footprint is often inside a taller neighbour too, and the
+  // re-roll runs out of attempts often enough that silently keeping the last
+  // try buried a third of the palms — up to 54 metres down.
   return (bandLo, bandHi) => {
-    let x = 0, z = 0;
-    for (let attempt = 0; attempt < 6; attempt++) {
+    let x = 0, z = 0, u = 0, is = planted[0], clear = false;
+    for (let attempt = 0; attempt < 20; attempt++) {
       const t = rng() * cdf[cdf.length - 1];
       let lo = 0, hi = cdf.length - 1;
       while (lo < hi) { const mid = (lo + hi) >> 1; if (cdf[mid] < t) lo = mid + 1; else hi = mid; }
-      const is = planted[lo];
+      is = planted[lo];
       const a = rng() * Math.PI * 2;
-      const rad = is.r * (bandLo + rng() * (bandHi - bandLo));
-      x = is.x + Math.cos(a) * rad;
-      z = is.z + Math.sin(a) * rad;
+      u = bandLo + rng() * (bandHi - bandLo);
+      x = is.x + Math.cos(a) * is.r * u;
+      z = is.z + Math.sin(a) * is.r * u;
       let buried = false;
       for (const other of islands) {
         if (other === is) continue;
-        if (Math.hypot(x - other.x, z - other.z) < other.r * 1.06) { buried = true; break; }
+        if (Math.hypot(x - other.x, z - other.z) < other.r * 1.24) { buried = true; break; }
       }
-      if (!buried) break;
+      if (!buried) { clear = true; break; }
     }
-    return [x, z];
+    return { x, z, u, is, clear };
   };
 }
 
@@ -1530,7 +1559,41 @@ function buildMesas(rng, spline, groundY, theme) {
       // Remember the island so the flora scatterer can plant ON it. Palms used
       // to be scattered off the racing line like desert cacti, which on a world
       // whose ground IS the lagoon meant trunks standing in open water.
-      islandSpots.push({ x: px, z: pz, r: scale });
+      //
+      // `prof` is a radial height profile: the highest world Y in each band of
+      // radius, sampled from the geometry that actually shipped. That makes it
+      // archetype-agnostic and weather-aware — no need to re-derive a dome's
+      // sqrt(1-u^2), a cone's (1-u) and an atoll's flat top separately and then
+      // keep all three in sync with whatever the archetypes become later.
+      const BINS = 12, PROF_MAX = 1.1;
+      const prof = new Float32Array(BINS).fill(-Infinity);
+      const pa = bakedMesa.getAttribute('position');
+      for (let vi = 0; vi < pa.count; vi++) {
+        const u = Math.hypot(pa.getX(vi) - px, pa.getZ(vi) - pz) / scale;
+        const b = Math.min(BINS - 1, Math.floor((u / PROF_MAX) * BINS));
+        if (b >= 0 && pa.getY(vi) > prof[b]) prof[b] = pa.getY(vi);
+      }
+      // GAP FILL, and it is not optional. These are low-poly forms — an
+      // icosahedron at detail 2 is ~160 vertices and they sit at a handful of
+      // radii — so most bands come back EMPTY. Left empty they fell back to the
+      // water level, and a palm meant for halfway up a fifty-metre hill was
+      // planted fifty metres inside it. Every x/z audit still passed; it took a
+      // raycast onto the island's own surface to see it.
+      // Interpolate interior gaps, clamp-fill the ends.
+      let first = -1, last = -1;
+      for (let b = 0; b < BINS; b++) if (Number.isFinite(prof[b])) { if (first < 0) first = b; last = b; }
+      if (first < 0) { prof.fill(gy); } else {
+        for (let b = 0; b < first; b++) prof[b] = prof[first];
+        for (let b = last + 1; b < BINS; b++) prof[b] = prof[last];
+        let b = first;
+        while (b < last) {
+          let n = b + 1;
+          while (n <= last && !Number.isFinite(prof[n])) n++;
+          for (let k = b + 1; k < n; k++) prof[k] = prof[b] + (prof[n] - prof[b]) * ((k - b) / (n - b));
+          b = n;
+        }
+      }
+      islandSpots.push({ x: px, z: pz, r: scale, gy, prof, profMax: PROF_MAX });
       // NOTE the height is `gy` (= groundAt), not the flat `groundY`. The
       // lagoon disc is TERRAIN-DISPLACED on this world, so the water surface is
       // several metres higher in places; the island body already used gy but
@@ -1898,7 +1961,7 @@ function buildRocks(rng, spline, groundY, theme, islands = null) {
       // Straddle the waterline: some sitting on the sand, most half-sunk in the
       // shallows just off the beach. A rock breaking the surface reads as reef;
       // a rock sitting ON the water reads as a bug, which is what it was.
-      [rpx, rpz] = pickSpot(1.34, 1.70);
+      ({ x: rpx, z: rpz } = pickSpot(1.34, 1.70));
       p.set(rpx, groundAt(groundY, rpx, rpz) - size * 0.25 + rng() * size * 0.45, rpz);
       e.set(rng() * 0.4, rng() * Math.PI * 2, rng() * 0.4);
       q.setFromEuler(e);
@@ -1958,7 +2021,7 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
     const size = 1 + rng() * 1.5;
     let spx = f.pos.x + (rx / rl) * side * dist, spz = f.pos.z + (rz / rl) * side * dist;
     if (onIslands) {
-      [spx, spz] = pickSpot(1.03, 1.13);      // on the sand, just inside the palms
+      ({ x: spx, z: spz } = pickSpot(1.03, 1.13));   // on the sand, just inside the palms
       p.set(spx, groundAt(groundY, spx, spz) + 1.0, spz);
     } else {
       p.set(spx, groundAt(groundY, spx, spz) + 0.1, spz);
@@ -2066,7 +2129,7 @@ function buildRoadside(rng, spline, groundY, theme, islands = null) {
       let x = f.pos.x + (rx / rl) * side * dist;
       let z = f.pos.z + (rz / rl) * side * dist;
       if (onIslands) {
-        [x, z] = pickSpot(1.30, 1.52);      // jetty line: shelf edge into the shallows
+        ({ x, z } = pickSpot(1.30, 1.52));  // jetty line: shelf edge into the shallows
         p.set(x, groundAt(groundY, x, z) - 0.12, z);
       } else {
         if (!clearOfTrack(spline, x, z, 2.5)) continue; // never on another pass of the road
@@ -2112,11 +2175,17 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
     // ~30 instanced draws' worth of silhouette in ONE instanced draw, and the
     // coast worlds put a few hundred of them on screen at the horizon, so
     // silhouette is the whole game. Shape, not detail.
+    //
+    // Segment counts are deliberately mean. At 760 instances a palm is the
+    // single biggest triangle owner in the frame, and the SHAPE — the bend, the
+    // droop, the midrib fold — is what reads; subdividing the same shape harder
+    // buys nothing at lagoon distance. Trunk 6x5 and fronds 2x5 put a palm at
+    // ~310 triangles instead of ~500, which is ~140k off the frame.
     const H = 2.45;
     const LEAN = 0.42;      // metres the crown sits downwind of the base
     // ---- trunk: bent, not tilted. A tilted cylinder is a stick leaning on
     // nothing; a real palm curves, thick at the root and thin under the crown.
-    const trunk = new THREE.CylinderGeometry(0.075, 0.17, H, 7, 7);
+    const trunk = new THREE.CylinderGeometry(0.075, 0.17, H, 6, 5);
     trunk.translate(0, H / 2, 0);
     {
       const pos = trunk.getAttribute('position');
@@ -2135,7 +2204,7 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
     // ---- crown: a drooping, tapered blade, folded along its midrib so it has
     // body from any angle. A cone has none: edge-on it vanishes to a line.
     const frond = (len, wid) => {
-      const g = new THREE.PlaneGeometry(wid, len, 3, 6);
+      const g = new THREE.PlaneGeometry(wid, len, 2, 5);
       g.rotateX(-Math.PI / 2);                     // width in X, length in Z
       const pos = g.getAttribute('position');
       const v = new THREE.Vector3();
@@ -2227,9 +2296,59 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
     if (onIslands) {
-      [x, z] = pickSpot(1.06, 1.16);          // the sand shelf, clear of the weathered island edge
-      const size = 1.6 + rng() * 2.2;
-      p.set(x, groundAt(groundY, x, z) + 1.0, z);   // the shelf's top face (displaced lagoon!)
+      // Two thirds up the SLOPE, one third on the sand. Ringing the shore only
+      // made the palms read as a fence around the hill rather than as something
+      // growing on it — the island had a bald head. On the slope the height
+      // comes from the island's own sampled profile; on the sand it is the
+      // shelf's top face (and the lagoon is displaced, so groundAt, not groundY).
+      // A third up the slope, two thirds on the sand. The sand ring measures
+      // clean; the slope carries every residual placement error the band
+      // profile has (a low-poly hill's real surface wanders either side of it),
+      // so it gets the smaller share until that is solved properly.
+      let spot = rng() < 0.34 ? pickSpot(0.30, 0.85) : pickSpot(1.10, 1.18);
+      // Only GENTLE islands get planted up the slope. On a steep headland cone
+      // the far side is hidden anyway, and a palm near the foot gets swallowed
+      // where the cone meets the sand — a bare rocky headland with palms only
+      // along its beach is the truer picture and the one that reads.
+      // A spot is only safe if the island it was picked FROM is also the island
+      // physically nearest it. Otherwise the palm takes island A's height while
+      // standing inside island B — and no x/z test sees it, because both
+      // islands legitimately "own" that patch of lagoon. This applies to sand
+      // spots as much as slope spots: a ring spot at 1.14 of a small island is
+      // routinely at 0.8 of a big neighbour, i.e. inside its hill.
+      const ownedByHost = (sp) => {
+        for (const other of islands) {
+          if (other === sp.is) continue;
+          if (Math.hypot(sp.x - other.x, sp.z - other.z) / other.r < sp.u) return false;
+        }
+        return true;
+      };
+      for (let tries = 0; tries < 8 && !ownedByHost(spot); tries++) {
+        spot = rng() < 0.5 ? pickSpot(0.30, 0.85) : pickSpot(1.10, 1.18);
+      }
+      if (!ownedByHost(spot)) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); continue; }
+      let slope = spot.u < 1.0;
+      // Fall back to the sand ring when the slope spot is either on a steep
+      // headland (where the far side is hidden and the foot gets swallowed) or
+      // could not be placed clear of a neighbouring island's body. The ring is
+      // far out enough that it almost always finds clear ground.
+      if (slope && (!spot.clear || (islandTopAt(spot.is, 0) - spot.is.gy) / spot.is.r > 0.55)) {
+        spot = pickSpot(1.10, 1.18);
+        slope = false;
+      }
+      // Still no clear ground after 20 tries: DON'T PLANT. A palm placed on a
+      // spot the picker could not clear is a palm inside a neighbouring
+      // island's body — and with islands this dense that silently buried a
+      // third of them, up to 54 metres down, while every x/z-only audit passed.
+      if (!spot.clear) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); continue; }
+      x = spot.x; z = spot.z;
+      // Smaller the higher up it grows — exposure, and it keeps the crown from
+      // swallowing the summit.
+      const size = slope
+        ? (1.25 + rng() * 1.5) * (0.72 + spot.u * 0.4)
+        : 1.6 + rng() * 2.2;
+      const y = slope ? islandTopAt(spot.is, spot.u) - 0.8 : groundAt(groundY, x, z) + 1.0;
+      p.set(x, y, z);
       q.setFromAxisAngle(Y, rng() * Math.PI * 2);
       sc.setScalar(size);
       m.compose(p, q, sc);
