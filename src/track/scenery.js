@@ -327,7 +327,7 @@ export function buildScenery(spline, scene, theme) {
   group.add(buildGantry(spline, groundY));
   if (theme.rockCount) group.add(buildRocks(rng, spline, groundY, theme, mesas.userData.islands));
   if (theme.scrubCount) group.add(buildScrub(rng, spline, groundY, theme, mesas.userData.islands));
-  if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme));
+  if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme, mesas.userData.islands));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme, mesas.userData.islands));
   group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
@@ -1521,19 +1521,30 @@ function buildMesas(rng, spline, groundY, theme) {
       // to be scattered off the racing line like desert cacti, which on a world
       // whose ground IS the lagoon meant trunks standing in open water.
       islandSpots.push({ x: px, z: pz, r: scale });
-      // A beach ring at the waterline.
-      const beach = new THREE.CylinderGeometry(scale * 1.12, scale * 1.22, 0.6, 8);
+      // NOTE the height is `gy` (= groundAt), not the flat `groundY`. The
+      // lagoon disc is TERRAIN-DISPLACED on this world, so the water surface is
+      // several metres higher in places; the island body already used gy but
+      // the beach used the constant, which submerged the sand — and then
+      // everything planted on the sand grew straight out of open water.
+      //
+      // A beach SHELF at the waterline, not a lip. At 0.6m tall and starting at
+      // 1.12 r it left a gap between the island body and the sand, and stood
+      // barely half a metre proud of the lagoon — so a palm planted on it read
+      // as growing straight out of open water. Taller, wider, and it now starts
+      // inside the island's own (weathered, up to ~1.05 r) footprint so there is
+      // no seam. Its top face at groundY + 1.0 is what everything plants on.
+      const beach = new THREE.CylinderGeometry(scale * 1.20, scale * 1.34, 1.3, 14);
       beach.rotateY(rng() * Math.PI);
-      beach.translate(px, groundY + 0.25, pz);
+      beach.translate(px, gy + 0.35, pz);   // gy, NOT groundY — see below
       geoms.push(bakeFlatColors(beach, theme.sand, { rim: false }));
       // Stage-3: a surf line where the beach meets the lagoon — a thin pale
       // ring floating just above the water so the land/water edge never reads
       // as a knife cut. Squashed + rotated per island so no two match.
-      const foam = new THREE.RingGeometry(scale * 1.2, scale * 1.36, 8, 1);
+      const foam = new THREE.RingGeometry(scale * 1.32, scale * 1.50, 14, 1);
       foam.rotateX(-Math.PI / 2);
       foam.scale(1, 1, 0.86 + rng() * 0.22);
       foam.rotateY(rng() * Math.PI);
-      foam.translate(px, groundY + 0.05, pz);
+      foam.translate(px, gy + 0.06, pz);
       geoms.push(bakeFlatColors(foam, 0xdcf7ee, { rim: false }));
     }
     if (towers) {
@@ -1872,8 +1883,8 @@ function buildRocks(rng, spline, groundY, theme, islands = null) {
       // Straddle the waterline: some sitting on the sand, most half-sunk in the
       // shallows just off the beach. A rock breaking the surface reads as reef;
       // a rock sitting ON the water reads as a bug, which is what it was.
-      [rpx, rpz] = pickSpot(1.16, 1.55);
-      p.set(rpx, groundY - size * 0.25 + rng() * size * 0.45, rpz);
+      [rpx, rpz] = pickSpot(1.34, 1.70);
+      p.set(rpx, groundAt(groundY, rpx, rpz) - size * 0.25 + rng() * size * 0.45, rpz);
       e.set(rng() * 0.4, rng() * Math.PI * 2, rng() * 0.4);
       q.setFromEuler(e);
       sc.set(size, size * (0.5 + rng() * 0.4), size);
@@ -1932,8 +1943,8 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
     const size = 1 + rng() * 1.5;
     let spx = f.pos.x + (rx / rl) * side * dist, spz = f.pos.z + (rz / rl) * side * dist;
     if (onIslands) {
-      [spx, spz] = pickSpot(1.08, 1.19);      // on the sand, just inside the palms
-      p.set(spx, groundY + 0.45, spz);
+      [spx, spz] = pickSpot(1.03, 1.13);      // on the sand, just inside the palms
+      p.set(spx, groundAt(groundY, spx, spz) + 1.0, spz);
     } else {
       p.set(spx, groundAt(groundY, spx, spz) + 0.1, spz);
     }
@@ -1954,8 +1965,15 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
 // opaque (zero overdraw cost). Styles: 'tufts' (dry grass + pebbles),
 // 'marina' (weathered mooring posts on the lagoon), 'street' (barrier blocks
 // + vent boxes, aligned with the road). Knobs: theme.roadside/roadsideCount.
-function buildRoadside(rng, spline, groundY, theme) {
+function buildRoadside(rng, spline, groundY, theme, islands = null) {
   const style = theme.roadside;
+  // Water world: the "near band beside the road" is open lagoon, so the kit that
+  // is meant to keep that strip from reading bare instead left mooring posts
+  // standing in the middle of nowhere. Move them to the islands, where a
+  // mooring post is a jetty and not debris; the road's own neon edges and
+  // pylons already carry the near band out here.
+  const onIslands = islands && islands.length && theme.groundStyle === 'water';
+  const pickSpot = onIslands ? makeIslandPicker(rng, islands, 0.8) : null;
   const parts = [];
   if (style === 'tufts') {
     for (let i = 0; i < 3; i++) { // a dry-grass tuft: three lean blades
@@ -2030,10 +2048,15 @@ function buildRoadside(rng, spline, groundY, theme) {
       const dist = f.width + 3 + rng() * 24;
       const rx = f.R.x, rz = f.R.z;
       const rl = Math.hypot(rx, rz) || 1;
-      const x = f.pos.x + (rx / rl) * side * dist;
-      const z = f.pos.z + (rz / rl) * side * dist;
-      if (!clearOfTrack(spline, x, z, 2.5)) continue;   // never on another pass of the road
-      p.set(x, groundAt(groundY, x, z) + 0.02, z);
+      let x = f.pos.x + (rx / rl) * side * dist;
+      let z = f.pos.z + (rz / rl) * side * dist;
+      if (onIslands) {
+        [x, z] = pickSpot(1.30, 1.52);      // jetty line: shelf edge into the shallows
+        p.set(x, groundAt(groundY, x, z) - 0.12, z);
+      } else {
+        if (!clearOfTrack(spline, x, z, 2.5)) continue; // never on another pass of the road
+        p.set(x, groundAt(groundY, x, z) + 0.02, z);
+      }
       // Street kit runs parallel with the road it guards; nature just grows.
       const yaw = style === 'street'
         ? Math.atan2(f.T.x, f.T.z) + (rng() - 0.5) * 0.22
@@ -2069,19 +2092,68 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
   const style = theme.flora;
   const parts = [];
   if (style === 'palms') {
-    // Leaning trunk + a crown of drooping fronds.
-    const trunk = new THREE.CylinderGeometry(0.08, 0.15, 2.3, 5);
-    trunk.translate(0, 1.15, 0);
-    trunk.rotateZ(0.13);
+    // A palm was a straight cylinder plus seven cones, and it read as a bottle
+    // brush. This is the cheap axis (CLAUDE.md graphics budget): a palm is
+    // ~30 instanced draws' worth of silhouette in ONE instanced draw, and the
+    // coast worlds put a few hundred of them on screen at the horizon, so
+    // silhouette is the whole game. Shape, not detail.
+    const H = 2.45;
+    const LEAN = 0.42;      // metres the crown sits downwind of the base
+    // ---- trunk: bent, not tilted. A tilted cylinder is a stick leaning on
+    // nothing; a real palm curves, thick at the root and thin under the crown.
+    const trunk = new THREE.CylinderGeometry(0.075, 0.17, H, 7, 7);
+    trunk.translate(0, H / 2, 0);
+    {
+      const pos = trunk.getAttribute('position');
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const t = Math.max(0, Math.min(1, v.y / H));
+        // quadratic sweep + a slight ring-to-ring waver so the trunk has the
+        // stepped scar texture a palm has instead of reading machined
+        const waver = Math.sin(t * 11.0) * 0.012;
+        pos.setXYZ(i, v.x + LEAN * t * t + waver, v.y, v.z);
+      }
+      pos.needsUpdate = true;
+    }
     parts.push(bakeFlatColors(trunk, 0x6e4a2f, { rim: false }));
-    for (let i = 0; i < 7; i++) {
-      const frond = new THREE.ConeGeometry(0.11, 1.5, 3);
-      frond.translate(0, 0.75, 0);
-      frond.rotateX(Math.PI / 2 + 0.5); // point outward, droop down
-      frond.scale(1, 0.4, 1);
-      frond.rotateY((i / 7) * Math.PI * 2 + 0.2);
-      frond.translate(0.29, 2.3, 0);
-      parts.push(bakeFlatColors(frond, 0x2fa05a, { rim: false }));
+    // ---- crown: a drooping, tapered blade, folded along its midrib so it has
+    // body from any angle. A cone has none: edge-on it vanishes to a line.
+    const frond = (len, wid) => {
+      const g = new THREE.PlaneGeometry(wid, len, 3, 6);
+      g.rotateX(-Math.PI / 2);                     // width in X, length in Z
+      const pos = g.getAttribute('position');
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const t = Math.max(0, Math.min(1, (v.z + len / 2) / len));   // 0 base .. 1 tip
+        const taper = Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.08)), 0.5);
+        const x = v.x * taper;
+        // gravity wins further out; the fold gives the blade a V cross-section
+        const droop = -Math.pow(t, 2.2) * len * 0.62;
+        pos.setXYZ(i, x, droop - Math.abs(x) * 0.42, t * len);
+      }
+      pos.needsUpdate = true;
+      return g;
+    };
+    const N = 9;
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2 + 0.35;
+      const len = 1.35 + ((i * 7) % 5) * 0.075;    // deterministic spread, no rng here
+      const g = frond(len, 0.34);
+      g.rotateX(-0.32 + ((i * 3) % 4) * 0.09);     // some blades lift, some fall
+      g.rotateY(a);
+      g.translate(LEAN, H - 0.06, 0);
+      // Alternate two greens so the crown is not one flat silhouette.
+      parts.push(bakeFlatColors(g, i % 2 ? 0x2fa05a : 0x27864b, { rim: false }));
+    }
+    // ---- coconuts: three small nuts tucked under the crown. Tiny, but they are
+    // what makes the crown read as a head rather than a splat of leaves.
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + 0.8;
+      const nut = new THREE.IcosahedronGeometry(0.085, 0);
+      nut.translate(LEAN + Math.cos(a) * 0.13, H - 0.17, Math.sin(a) * 0.13);
+      parts.push(bakeFlatColors(nut, 0x8a6a3a, { rim: false }));
     }
   } else if (style === 'pines') {
     // Frosted spruce: dark tiered cones with snow-dusted brims + a white cap.
@@ -2140,9 +2212,9 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
     if (onIslands) {
-      [x, z] = pickSpot(1.10, 1.21);          // the sand ring, clear of the weathered island edge
+      [x, z] = pickSpot(1.06, 1.16);          // the sand shelf, clear of the weathered island edge
       const size = 1.6 + rng() * 2.2;
-      p.set(x, groundY + 0.5, z);             // the beach cylinder's top face
+      p.set(x, groundAt(groundY, x, z) + 1.0, z);   // the shelf's top face (displaced lagoon!)
       q.setFromAxisAngle(Y, rng() * Math.PI * 2);
       sc.setScalar(size);
       m.compose(p, q, sc);
