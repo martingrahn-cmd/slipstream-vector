@@ -985,7 +985,12 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
       // A tooth is up to ~3x wider than the base cone the ring clearance was
       // sized for — every tooth must clear the track on its own footprint.
       if (!clearOfTrack(cx2, cz2, wk)) continue;
-      const g = new THREE.ConeGeometry(wk, hk, 4 + Math.floor(rng() * 2), 1);
+      // 4-5 radial segments and ONE height segment is a pyramid, and it read as
+      // one. A mountain needs an irregular ridgeline, which needs vertices to be
+      // irregular WITH — so segments up and weather() over the top. Silhouette
+      // is the cheap axis: these are one merged draw whatever they cost in
+      // triangles, and they sit on the horizon where the eye has time to judge.
+      const g = weather(new THREE.ConeGeometry(wk, hk, 9 + Math.floor(rng() * 4), 5), 0.16);
       g.scale(1, 1, 0.38); // thin slab-like ridge tooth
       g.rotateY(ang + (rng() - 0.5) * 0.2);
       g.translate(cx2, groundY + hk / 2 - 2, cz2);
@@ -1009,7 +1014,7 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     if (ridges) { pushRidge(px, pz, ang, w, h, theme.mountainFar); continue; }
     const g = towers
       ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
-      : new THREE.ConeGeometry(w, h, 4 + Math.floor(rng() * 3), 1);
+      : weather(new THREE.ConeGeometry(w, h, 10 + Math.floor(rng() * 5), 6), 0.17);
     g.rotateY(rng() * Math.PI); // rotate around its own axis BEFORE placing
     g.translate(px, groundY + h / 2 - 2, pz);
     geoms.push(bakeFlatColors(g, theme.mountainFar, { rim: false }));
@@ -1121,24 +1126,27 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
     // The lighthouse: red/white banded tower at the edge of the open sea, a
     // slow sweeping beam, and a strip of cream resort towers down the shore.
     const opa = [], glo = [];
-    const H = 96, R = 8.5;
-    const segs = 6;
+    // Taller and thicker: it is the world's icon and it was reading as a stripey
+    // post on the horizon. Height is free here — one merged draw, and it sits
+    // where the eye rests between corners.
+    const H = 148, R = 12.5;
+    const segs = 8;
     for (let i = 0; i < segs; i++) {
       const h = H / segs;
-      const r0 = R - (i / segs) * 2.6, r1 = R - ((i + 1) / segs) * 2.6;
+      const r0 = R - (i / segs) * 4.6, r1 = R - ((i + 1) / segs) * 4.6;
       const g = new THREE.CylinderGeometry(r1, r0, h, 10);
       g.translate(px, groundY + h / 2 + i * h, pz);
       opa.push(bakeFlatColors(g, i % 2 ? 0xd94848 : 0xf2ede2, { rim: false }));
     }
     // Gallery + lamp room + roof.
-    const gal = new THREE.CylinderGeometry(6.4, 6.4, 3.2, 10);
+    const gal = new THREE.CylinderGeometry(9.6, 9.6, 4.4, 12);
     gal.translate(px, groundY + H + 1.6, pz);
     opa.push(bakeFlatColors(gal, 0x2a3138, { rim: false }));
-    const roof = new THREE.ConeGeometry(5.2, 7, 10);
+    const roof = new THREE.ConeGeometry(7.8, 10, 12);
     roof.translate(px, groundY + H + 8.5, pz);
     opa.push(bakeFlatColors(roof, 0xd94848, { rim: false }));
     const lampY = groundY + H + 3.8;
-    const lamp = new THREE.BoxGeometry(4.6, 3.4, 4.6);
+    const lamp = new THREE.BoxGeometry(6.6, 4.8, 6.6);
     lamp.translate(px, lampY, pz);
     glo.push(colorTint(lamp, new THREE.Color(0xfff2c8)));
     // Resort strip: cream towers along the shore arc past the lighthouse.
@@ -1163,8 +1171,8 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
     group.add(glowMesh);
     // The beam: one long horizontal cone on a pivot at the lamp, sweeping the
     // sea — same recipe as the city searchlights (cheap, low opacity).
-    const beamGeo = new THREE.CylinderGeometry(8, 0.6, 240, 6, 1, true);
-    beamGeo.translate(0, 120, 0);
+    const beamGeo = new THREE.CylinderGeometry(13, 0.9, 380, 8, 1, true);
+    beamGeo.translate(0, 190, 0);
     beamGeo.rotateZ(Math.PI / 2 + 0.04); // near-horizontal
     const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
       color: 0xfff2c8, transparent: true, opacity: 0.05,
@@ -1397,7 +1405,24 @@ function buildMesas(rng, spline, groundY, theme) {
     // it is supposed to be. Islands get real vertical relief now: the dome is
     // half again as tall, the hill cone is a proper cone rather than a bump,
     // and only the atoll stays deliberately flat so the chain has variety.
-    [() => { const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.05); g.scale(1, 0.66, 1); return g; }, 1.32, 0], // jungle hill
+    // A smooth squashed sphere is a BUN, not a hill. What makes a hill read is
+    // an off-centre summit and a ridge running off it — so: weather hard for an
+    // irregular skin, then shear the upper half sideways so the peak leans, and
+    // squash one axis so the plan is an oval rather than a circle.
+    [() => {
+      const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.16);
+      g.scale(1, 0.66, 0.82);
+      const pa = g.getAttribute('position');
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i);
+        const up = Math.max(0, v.y / 0.66);          // 0 at the waterline, 1 at the summit
+        // lean the peak, and pinch the flanks so a spur runs down one side
+        pa.setXYZ(i, v.x + up * up * 0.34, v.y, v.z * (1 - up * 0.18) - up * up * 0.12);
+      }
+      pa.needsUpdate = true;
+      return g;
+    }, 1.32, 0],  // jungle hill
     [() => weather(new THREE.ConeGeometry(1, 0.86, 18, 5), 0.05), 0.86, 0],           // headland
     [() => weather(new THREE.CylinderGeometry(0.55, 1, 0.4, 20, 4), 0.04), 0.4, 0],   // flat atoll
   ] : [
@@ -1424,6 +1449,7 @@ function buildMesas(rng, spline, groundY, theme) {
   const glows = [];
   const census = [];   // QA seam: which archetype landed where
   const islandSpots = [];  // {x,z,r} per island — the only dry land on a water world
+  const foamGeoms = [];    // surf rings, merged into their own animated mesh
   const winA = new THREE.Color(TUNING.COL.EDGE_L);   // cyan
   const winB = new THREE.Color(TUNING.COL.EDGE_R);   // magenta
   const winC = new THREE.Color(0xffd9a0);            // warm
@@ -1641,12 +1667,37 @@ function buildMesas(rng, spline, groundY, theme) {
       // Stage-3: a surf line where the beach meets the lagoon — a thin pale
       // ring floating just above the water so the land/water edge never reads
       // as a knife cut. Squashed + rotated per island so no two match.
-      const foam = new THREE.RingGeometry(scale * 1.32, scale * 1.50, 14, 1);
-      foam.rotateX(-Math.PI / 2);
-      foam.scale(1, 1, 0.86 + rng() * 0.22);
-      foam.rotateY(rng() * Math.PI);
-      foam.translate(px, gy + 0.06, pz);
-      geoms.push(bakeFlatColors(foam, 0xdcf7ee, { rim: false }));
+      const ring = new THREE.RingGeometry(scale * 1.30, scale * 1.52, 20, 1);
+      ring.rotateX(-Math.PI / 2);
+      ring.scale(1, 1, 0.86 + rng() * 0.22);
+      ring.rotateY(rng() * Math.PI);
+      ring.translate(px, gy + 0.06, pz);
+      // Non-indexed: the surf merge below concatenates raw arrays, and the
+      // shared mergeGeoms() cannot be used here — it keeps position and colour
+      // only, so it would silently drop the wave attributes.
+      const foam = ring.toNonIndexed();
+      // Attributes the surf shader needs: which way is OUT from this island, how
+      // far out this vertex already sits (0 at the inner lip, 1 at the outer),
+      // and a per-island phase so no two shorelines breathe in step.
+      {
+        const fp = foam.getAttribute('position');
+        const dir = new Float32Array(fp.count * 2);
+        const edge = new Float32Array(fp.count);
+        const ph = new Float32Array(fp.count);
+        const phase = rng() * Math.PI * 2;
+        for (let vi = 0; vi < fp.count; vi++) {
+          const dx = fp.getX(vi) - px, dz = fp.getZ(vi) - pz;
+          const d = Math.hypot(dx, dz) || 1;
+          dir[vi * 2] = dx / d; dir[vi * 2 + 1] = dz / d;
+          edge[vi] = Math.min(1, Math.max(0, (d / scale - 1.30) / 0.22));
+          ph[vi] = phase;
+        }
+        foam.setAttribute('aDir', new THREE.BufferAttribute(dir, 2));
+        foam.setAttribute('aEdge', new THREE.BufferAttribute(edge, 1));
+        foam.setAttribute('aPhase', new THREE.BufferAttribute(ph, 1));
+        foam.userData.reach = scale * 0.10;   // how far the wash runs up the sand
+        foamGeoms.push(foam);
+      }
     }
     if (towers) {
       // Dense lit window GRID over the facades, transformed exactly like the
@@ -1667,6 +1718,68 @@ function buildMesas(rng, spline, groundY, theme) {
     }));
     glowMesh.renderOrder = 1;
     out.add(glowMesh);
+  }
+  if (foamGeoms.length) {
+    // SURF. One merged mesh, one draw, zero CPU a frame: the vertex shader runs
+    // each shoreline's wash in and out along its own outward normal, phased per
+    // island so the archipelago never pulses in unison. Two sine rates beat
+    // against each other so the rhythm does not read as a loop.
+    const reach = foamGeoms[0].userData.reach || 4;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uT: { value: 0 }, uReach: { value: reach } }]),
+      vertexShader: /* glsl */ `
+        attribute vec2 aDir;
+        attribute float aEdge;
+        attribute float aPhase;
+        uniform float uT;
+        uniform float uReach;
+        varying float vA;
+        #include <fog_pars_vertex>
+        void main() {
+          // two beating rates -> a rhythm that never quite repeats
+          float w = sin(uT * 0.9 + aPhase) * 0.65 + sin(uT * 0.53 + aPhase * 1.7) * 0.35;
+          vec3 pos = position;
+          pos.xz += aDir * (w * uReach * (0.35 + aEdge));
+          // brightest at the leading edge of the wash, thin as it retreats
+          vA = (0.30 + 0.55 * (1.0 - aEdge)) * (0.55 + 0.45 * w);
+          vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying float vA;
+        #include <fog_pars_fragment>
+        void main() {
+          gl_FragColor = vec4(0.86, 0.97, 0.93, clamp(vA, 0.0, 1.0));
+          #include <fog_fragment>
+        }
+      `,
+    });
+    let vc = 0;
+    for (const gg of foamGeoms) vc += gg.getAttribute('position').count;
+    const fPos = new Float32Array(vc * 3), fDir = new Float32Array(vc * 2);
+    const fEdge = new Float32Array(vc), fPh = new Float32Array(vc);
+    let fo = 0;
+    for (const gg of foamGeoms) {
+      const n = gg.getAttribute('position').count;
+      fPos.set(gg.getAttribute('position').array, fo * 3);
+      fDir.set(gg.getAttribute('aDir').array, fo * 2);
+      fEdge.set(gg.getAttribute('aEdge').array, fo);
+      fPh.set(gg.getAttribute('aPhase').array, fo);
+      fo += n;
+    }
+    const fGeo = new THREE.BufferGeometry();
+    fGeo.setAttribute('position', new THREE.BufferAttribute(fPos, 3));
+    fGeo.setAttribute('aDir', new THREE.BufferAttribute(fDir, 2));
+    fGeo.setAttribute('aEdge', new THREE.BufferAttribute(fEdge, 1));
+    fGeo.setAttribute('aPhase', new THREE.BufferAttribute(fPh, 1));
+    const surf = new THREE.Mesh(fGeo, mat);
+    surf.name = 'surf';
+    surf.renderOrder = 1;
+    out.add(surf);
+    WIND.push({ uWindT: mat.uniforms.uT });   // gets the world clock each frame
   }
   out.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
   return out;

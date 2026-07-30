@@ -1234,6 +1234,7 @@ const _shock = (() => {
     },
   };
 })();
+const _n = new THREE.Vector3();   // contact normal for spark fans
 const _dots = [];
 const _dustA = new THREE.Color(0x9a8a6a); // ground kick-up tint (per world)
 const _dustB = new THREE.Color(0x33271a);
@@ -1242,7 +1243,13 @@ const _WHITE_C = new THREE.Color(0xffffff);
 juice.on('wallHit', ({ side, severity }) => {
   spline.frameAt(ship.s, _f);
   _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.6)).addScaledVector(_f.U, 0.5);
-  _vel.copy(_f.T).multiplyScalar(ship.v * 0.5);
+  // Sparks are struck OFF the wall and left there; they do not accelerate down
+  // the track with you. At 0.5x the ship's speed they nearly kept pace, which
+  // gave them half a second of straight-line flight while the track curved
+  // underneath — measured 6 metres of drift on a 100m-radius corner, so a
+  // right-hand scrape ended up showering to the ship's LEFT. Slower, and they
+  // stay where they were made.
+  _vel.copy(_f.T).multiplyScalar(ship.v * 0.26);
   sparks.spawn(_v, _vel, 14 + severity * 10, T.SPARK_HIT_COUNT, undefined, undefined, undefined, _f.pos.y);
   if (state === 'race') { tally.wallHits++; input.rumble(Math.min(1, 0.45 + severity * 0.5), 220); }
 });
@@ -1813,8 +1820,11 @@ function tick(now) {
     spline.frameAt(ship.s, _f);
     const side = Math.sign(ship.d) || 1;
     _v.copy(_f.pos).addScaledVector(_f.R, side * (_f.width - T.WALL_MARGIN + 0.55)).addScaledVector(_f.U, 0.35);
-    _vel.copy(_f.T).multiplyScalar(ship.v * 0.7);
-    sparks.spawn(_v, _vel, 6, n, undefined, undefined, undefined, _f.pos.y);
+    _vel.copy(_f.T).multiplyScalar(ship.v * 0.24);   // see wallHit: drift, not speed
+    // Fan them AWAY from the wall so the stream hugs the side it came from
+    // instead of wandering toward the centreline.
+    _n.copy(_f.R).multiplyScalar(-side);
+    sparks.spawn(_v, _vel, 7, n, undefined, undefined, _n, _f.pos.y);
   }
 
   // Visuals.

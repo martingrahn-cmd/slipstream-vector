@@ -16,7 +16,12 @@ export class Sparks {
   constructor(scene) {
     const n = T.SPARK_POOL;
     this.mesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.14, 0.14, 0.14),
+      // A SLIVER, not a cube. This was 0.14 cubed and then stretched along its
+      // own velocity — and a wall hit spawns sparks at half the ship's speed,
+      // which at 300km/h is 40m/s, so the stretch ran to nearly a metre. The
+      // result was additive pink SLABS the size of the ship's nose, not sparks.
+      // Thin cross-section, short base, and the stretch is capped below.
+      new THREE.BoxGeometry(0.05, 0.05, 0.16),
       new THREE.MeshBasicMaterial({
         transparent: true, blending: THREE.AdditiveBlending,
         depthWrite: false, fog: false,
@@ -61,7 +66,11 @@ export class Sparks {
         vel.z + (this.rng() - 0.5) * spread,
       );
       if (normal) p.vel.addScaledVector(normal, spread * 0.6);
-      p.maxLife = 0.3 + this.rng() * 0.3;
+      // Shorter. Drift from flying straight while the track curves grows with
+      // the SQUARE of the time in the air, so trimming the tail is worth more
+      // than it costs in looks — and a spark that lingers half a second is
+      // reading as debris anyway.
+      p.maxLife = 0.20 + this.rng() * 0.22;
       p.life = p.maxLife;
       p.floorY = (floorY !== undefined) ? floorY : pos.y; // bounce off the real surface
       p.bounced = false;
@@ -97,7 +106,10 @@ export class Sparks {
       if (speed > 0.4) { _v.copy(p.vel).multiplyScalar(1 / speed); _q.setFromUnitVectors(_forward, _v); }
       else { _q.identity(); }
       const birth = t < 0.12 ? (1 - t / 0.12) : 0;   // bright flash-frame at birth
-      _s.set(sc, sc, sc + speed * 0.12).multiplyScalar(1 + birth * 0.3);
+      // Cap the streak. Uncapped it scaled straight off the spawn velocity, so
+      // the faster you were going the more the screen filled with confetti.
+      const stretch = Math.min(sc + speed * 0.09, 3.2);
+      _s.set(sc, sc, stretch).multiplyScalar(1 + birth * 0.3);
       _m.compose(p.pos, _q, _s);
       this.mesh.setMatrixAt(i, _m);
       this._c.copy(p.colA).lerp(p.colB, t).lerp(_white, birth * 0.8);

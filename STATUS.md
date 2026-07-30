@@ -196,6 +196,13 @@ build.
 - **Weather as a per-race variable** rather than a per-world constant — a wet
   Coral Keys, a whiteout on Moonlit Mile. The wet-sheen and snow systems exist;
   what's missing is making them a race-time choice.
+- **A long tunnel as a set piece on a city circuit** (Martin's idea). Neon
+  Sprawl is the obvious host. The appeal is the contrast — the sky, the fog and
+  the horizon all cut out for a few seconds and the only light is the track's
+  own edges and your engines, then it spits you back into the skyline. Nothing
+  in the engine does enclosure yet: the sky dome is drawn every frame and fog is
+  a per-world constant, so a tunnel means a volume that overrides both while
+  you're inside it. That is the actual work, not the geometry.
 
 ### 3.3 Would make it feel better
 - **A real replay system.** `ship/shipPhysics.js` and `ship/aiDriver.js` are
