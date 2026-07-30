@@ -1356,8 +1356,14 @@ function buildMesas(rng, spline, groundY, theme) {
     // detail 2, not 3: 320 tris against 1280, and across 50 islands that is
     // +16k on the frame instead of +64k for a silhouette difference you cannot
     // see at lagoon distance.
-    [() => { const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.05); g.scale(1, 0.42, 1); return g; }, 0.84, 0], // jungle dome
-    [() => weather(new THREE.ConeGeometry(1, 0.55, 18, 5), 0.045), 0.55, 0],          // low hill
+    // Height matters as much as smoothness. At y-scale 0.42 the "jungle dome"
+    // was a green pancake lying on the sand — it did not read as a hill, it
+    // read as a stain, and the first question anyone asks looking at it is what
+    // it is supposed to be. Islands get real vertical relief now: the dome is
+    // half again as tall, the hill cone is a proper cone rather than a bump,
+    // and only the atoll stays deliberately flat so the chain has variety.
+    [() => { const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.05); g.scale(1, 0.66, 1); return g; }, 1.32, 0], // jungle hill
+    [() => weather(new THREE.ConeGeometry(1, 0.86, 18, 5), 0.05), 0.86, 0],           // headland
     [() => weather(new THREE.CylinderGeometry(0.55, 1, 0.4, 20, 4), 0.04), 0.4, 0],   // flat atoll
   ] : [
     // Height segments matter: strata bands are vertex colours, so the side
@@ -1514,7 +1520,11 @@ function buildMesas(rng, spline, groundY, theme) {
     const colorPick = rng();
     const base = colorPick < 0.6 ? theme.mesaLit : theme.mesaShadow;
     const bakedMesa = bakeFlatColors(g, base, { shadow: theme.mesaShadow });
-    if (!towers) bakeStrata(bakedMesa, rng, groundY, Math.max(3, scale * ys * 0.16), theme.mesaRim, theme.ground);
+    // Strata are sedimentary bands — they belong on a desert mesa and nowhere
+    // else. Baked onto a smooth green island cone they came out as a starburst
+    // of sand-coloured triangles running up the slope, which is what made the
+    // islands read as "what is that green thing supposed to be".
+    if (!towers && !islands) bakeStrata(bakedMesa, rng, groundY, Math.max(3, scale * ys * 0.16), theme.mesaRim, theme.ground);
     geoms.push(bakedMesa);
     if (islands) {
       // Remember the island so the flora scatterer can plant ON it. Palms used
@@ -1792,7 +1802,12 @@ function buildGantry(spline, groundY) {
   // ground beside the road sits lower — and lower still when the start line is
   // sloped/banked or elevated. Drop the legs to the ground plane (capped so a
   // crest start doesn't grow absurd stilts) so the feet are always planted.
-  const legBottom = Math.max(groundY - f.pos.y, -7) - 0.4;
+  // groundAt, not groundY: on a displaced world the surface under the gate is
+  // not the flat constant, and the -7 cap meant that anywhere the road ran more
+  // than seven metres up the legs simply stopped in mid-air. Over the lagoon
+  // that is most of the lap, which is why the start gate looked like it stood
+  // on nothing. Deeper cap + the footing block below reads as a pier.
+  const legBottom = Math.max(groundAt(groundY, f.pos.x, f.pos.z) - f.pos.y, -17) - 0.4;
   for (const s of [-1, 1]) {
     const px = s * PX;
     const legTop = 2.6;
@@ -2275,7 +2290,15 @@ function buildBillboards(rng, spline, groundY, every = 220, adGlow = 0) {
     const dist = f.width + 16 + rng() * 8;
     const px = f.pos.x + (rx / rl) * spot.side * dist;
     const pz = f.pos.z + (rz / rl) * spot.side * dist;
-    const py = Math.max(groundY + 8.5, f.pos.y + 4.5);
+    // Mount height off the LOCAL ground, and skip the spot entirely when there
+    // is no ground within reach. The old maths took the flat groundY, so beside
+    // an elevated road the legs grew to whatever the road's height happened to
+    // be — 20m stilts under a hoarding on the lagoon crossings. A billboard
+    // with no ground under it is not a billboard on longer legs; it is a
+    // billboard that should not be there.
+    const gAt = groundAt(groundY, px, pz);
+    const py = Math.max(gAt + 8.5, f.pos.y + 4.5);
+    if (py - gAt > 15) return;   // nothing to stand on here
     // Face back along the track, tilted toward it.
     Z.set(-f.T.x - (rx / rl) * spot.side * 0.45, 0, -f.T.z - (rz / rl) * spot.side * 0.45).normalize();
     X.crossVectors(Y, Z).normalize();
@@ -2297,7 +2320,7 @@ function buildBillboards(rng, spline, groundY, every = 220, adGlow = 0) {
     }
     faces.push(place(face, 0, 0, 0.28));
     for (const lx of [-W / 2 + 1, W / 2 - 1]) {
-      const legH = py - groundY;
+      const legH = py - gAt;
       opa.push(bakeFlatColors(
         place(new THREE.BoxGeometry(0.55, legH, 0.55), lx, -legH / 2, -0.1), 0x140a2e, { rim: false }));
     }

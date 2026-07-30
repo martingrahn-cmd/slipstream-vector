@@ -149,8 +149,10 @@ export const THEMES = {
     // the racing line (which, on a world whose ground IS the lagoon, stood them
     // in open water). Concentrated on the bigger half of the islands, so the
     // count buys density on the islands that have palms at all — one instanced
-    // draw either way.
-    floraCount: 340,
+    // draw either way. 340 still read as a sparse handful per island; a palm
+    // island should look overgrown, and this costs vertices on a mesh already
+    // being drawn, not a draw call.
+    floraCount: 760,
     rockCount: 160,
     scrubCount: 95,       // low coastal scrub on the sandbars
     roadside: 'marina',   // stage-2 near-band kit: weathered mooring posts
