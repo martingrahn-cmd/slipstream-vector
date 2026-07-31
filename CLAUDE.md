@@ -170,6 +170,12 @@ fixed.)
   "add a track" seam). Stunts via `features: [{type:'loop'|'corkscrew'|'jump'}]`.
 - `src/weapons/weaponSystem.js` — pads, five weapons, projectiles, hit/disable
   model, AI fire policy (skill-gated reaction, never position).
+- `src/ui/trophyScene.js` — the 31 trophies as OBJECTS: nine procedural forms
+  on a plinth, four tier metals plus a dead metal for locked, and `TrophyBaker`,
+  which renders each to a data URL once and caches it (`form|tier|locked`).
+  It owns a **second WebGLRenderer** — small, offscreen, created on first bake.
+  The gallery fills its cards a few per frame (`_fillShots`), never all 31 in
+  one go. The unlock toast deliberately stays on the emoji: it fires mid-race.
 - `src/ui/banter.js` — `BanterFeed` + exported `LINES` bank: the **single
   source of truth** for pilot lines (game, labs and the voice generator all
   import it).

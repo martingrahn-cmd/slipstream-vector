@@ -134,12 +134,24 @@ body.reduced-motion #position.pos-gain b, body.reduced-motion #position.pos-lose
 }
 #tro-gallery .trophy-card {
   display: flex; flex-direction: column; gap: 3px;
-  padding: 10px; min-height: 78px;
+  padding: 10px 10px 12px; min-height: 78px; text-align: center;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   opacity: 0.45;
 }
 #tro-gallery .trophy-card.on { opacity: 1; border-color: rgba(0, 240, 255, 0.3); }
+/* The trophy itself, baked to an image by ui/trophyScene.js. Centred and given
+   room: this is the thing you won, it should be the card, not a corner glyph. */
+#tro-gallery .tc-shot {
+  display: block; width: 104px; height: 104px; margin: 0 auto 2px;
+  image-rendering: auto;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.55));
+  transition: transform 0.16s ease;
+}
+#tro-gallery .trophy-card.on .tc-shot {
+  filter: drop-shadow(0 3px 12px rgba(0, 240, 255, 0.28));
+}
+#tro-gallery .trophy-card:hover .tc-shot { transform: translateY(-2px) scale(1.06); }
 #tro-gallery .tc-icon { font-size: 22px; line-height: 1; }
 #tro-gallery .tc-name {
   font-family: 'Orbitron', monospace; font-weight: 600;

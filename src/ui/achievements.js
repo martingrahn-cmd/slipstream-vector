@@ -3,6 +3,10 @@
 // queue with a procedural unlock jingle, and a tier-grouped gallery screen.
 // Detection lives in main.js (it has the race state); this module owns
 // storage, the toast, the career-stat counters and the gallery render.
+import { TrophyBaker } from './trophyScene.js';
+
+// 1x1 transparent GIF: the card reserves its space before its trophy is baked.
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
 export const TIERS = {
   bronze: { color: '#cd7f32', label: 'BRONZE' },
@@ -12,46 +16,51 @@ export const TIERS = {
 };
 
 // 31 trophies: 15 bronze, 10 silver, 5 gold, 1 platinum.
+// `form` names the 3D shape the gallery renders for it (src/ui/trophyScene.js).
+// `icon` is kept for the unlock TOAST. The toast fires MID-RACE: baking there
+// would spin up the second WebGL context and render on the frame the player is
+// least able to spare, to be read for two seconds at the edge of vision. An
+// emoji costs nothing and reads faster. The objects live in the gallery.
 // Order within a tier = display order.
 export const ACHIEVEMENTS = [
   // --- bronze (15): you'll get most just by playing ---
-  { id: 'first_race', name: 'Off the Line', desc: 'Finish your first race', icon: '🏁', tier: 'bronze' },
-  { id: 'first_win', name: 'Top Step', desc: 'Win a race', icon: '🥇', tier: 'bronze' },
-  { id: 'first_boost', name: 'Pad Runner', desc: 'Hit a boost pad', icon: '⚡', tier: 'bronze' },
-  { id: 'first_drift', name: 'Sideways', desc: 'Land a drift mini-boost', icon: '🌀', tier: 'bronze' },
-  { id: 'airbrake', name: 'Air Brake', desc: 'Use the airbrake', icon: '✋', tier: 'bronze' },
-  { id: 'perfect_start', name: 'Reflexes', desc: 'Nail a PERFECT START', icon: '🚦', tier: 'bronze' },
-  { id: 'top_speed', name: 'Terminal Velocity', desc: 'Reach top speed', icon: '🚀', tier: 'bronze' },
-  { id: 'pad_chain', name: 'Pad Chain', desc: 'Hit 3 boost pads in one race', icon: '🔗', tier: 'bronze' },
-  { id: 'overtake', name: 'Overtake', desc: 'Pass an opponent', icon: '↗️', tier: 'bronze' },
-  { id: 'loop', name: 'Gravity Optional', desc: 'Clear a full loop', icon: '🔄', tier: 'bronze' },
-  { id: 'race_3', name: 'Regular', desc: 'Finish three races', icon: '🔂', tier: 'bronze' },
-  { id: 'tt_play', name: 'Solo Run', desc: 'Finish a time trial', icon: '⏲️', tier: 'bronze' },
-  { id: 'champ_play', name: 'Contender', desc: 'Enter a championship', icon: '🎟️', tier: 'bronze' },
-  { id: 'all_tracks', name: 'Grand Tour', desc: 'Race on all six circuits', icon: '🗺️', tier: 'bronze' },
-  { id: 'all_teams', name: 'Free Agent', desc: 'Race for all four teams', icon: '🛠️', tier: 'bronze' },
+  { id: 'first_race', name: 'Off the Line', desc: 'Finish your first race', icon: '🏁', form: 'chevron', tier: 'bronze' },
+  { id: 'first_win', name: 'Top Step', desc: 'Win a race', icon: '🥇', form: 'cup', tier: 'bronze' },
+  { id: 'first_boost', name: 'Pad Runner', desc: 'Hit a boost pad', icon: '⚡', form: 'bolt', tier: 'bronze' },
+  { id: 'first_drift', name: 'Sideways', desc: 'Land a drift mini-boost', icon: '🌀', form: 'ring', tier: 'bronze' },
+  { id: 'airbrake', name: 'Air Brake', desc: 'Use the airbrake', icon: '✋', form: 'wing', tier: 'bronze' },
+  { id: 'perfect_start', name: 'Reflexes', desc: 'Nail a PERFECT START', icon: '🚦', form: 'bolt', tier: 'bronze' },
+  { id: 'top_speed', name: 'Terminal Velocity', desc: 'Reach top speed', icon: '🚀', form: 'wing', tier: 'bronze' },
+  { id: 'pad_chain', name: 'Pad Chain', desc: 'Hit 3 boost pads in one race', icon: '🔗', form: 'bolt', tier: 'bronze' },
+  { id: 'overtake', name: 'Overtake', desc: 'Pass an opponent', icon: '↗️', form: 'chevron', tier: 'bronze' },
+  { id: 'loop', name: 'Gravity Optional', desc: 'Clear a full loop', icon: '🔄', form: 'ring', tier: 'bronze' },
+  { id: 'race_3', name: 'Regular', desc: 'Finish three races', icon: '🔂', form: 'chevron', tier: 'bronze' },
+  { id: 'tt_play', name: 'Solo Run', desc: 'Finish a time trial', icon: '⏲️', form: 'disc', tier: 'bronze' },
+  { id: 'champ_play', name: 'Contender', desc: 'Enter a championship', icon: '🎟️', form: 'shield', tier: 'bronze' },
+  { id: 'all_tracks', name: 'Grand Tour', desc: 'Race on all six circuits', icon: '🗺️', form: 'disc', tier: 'bronze' },
+  { id: 'all_teams', name: 'Free Agent', desc: 'Race for all four teams', icon: '🛠️', form: 'shield', tier: 'bronze' },
 
   // --- silver (10): takes some skill ---
-  { id: 'record', name: 'Record Holder', desc: 'Set a track lap record', icon: '⏱️', tier: 'silver' },
-  { id: 'clean_win', name: 'Not a Scratch', desc: 'Win without touching a wall', icon: '✨', tier: 'silver' },
-  { id: 'comeback', name: 'Through the Pack', desc: 'Win after a wall hit', icon: '💥', tier: 'silver' },
-  { id: 'surge_win', name: 'Up to Speed', desc: 'Win a race on SURGE', icon: '🔵', tier: 'silver' },
-  { id: 'cup', name: 'Silverware', desc: 'Win a championship', icon: '🏆', tier: 'silver' },
-  { id: 'wins_5', name: 'On a Roll', desc: 'Win five races', icon: '🔥', tier: 'silver' },
-  { id: 'wins_10', name: 'Veteran', desc: 'Win ten races', icon: '🎖️', tier: 'silver' },
-  { id: 'record_3', name: 'Pace Setter', desc: 'Hold the lap record on three circuits', icon: '📊', tier: 'silver' },
-  { id: 'loop_master', name: 'Loop the Loop', desc: 'Clear both loop circuits', icon: '🌐', tier: 'silver' },
-  { id: 'clean_3', name: 'Spotless', desc: 'Win three races without a wall hit', icon: '🧼', tier: 'silver' },
+  { id: 'record', name: 'Record Holder', desc: 'Set a track lap record', icon: '⏱️', form: 'disc', tier: 'silver' },
+  { id: 'clean_win', name: 'Not a Scratch', desc: 'Win without touching a wall', icon: '✨', form: 'star', tier: 'silver' },
+  { id: 'comeback', name: 'Through the Pack', desc: 'Win after a wall hit', icon: '💥', form: 'shield', tier: 'silver' },
+  { id: 'surge_win', name: 'Up to Speed', desc: 'Win a race on SURGE', icon: '🔵', form: 'bolt', tier: 'silver' },
+  { id: 'cup', name: 'Silverware', desc: 'Win a championship', icon: '🏆', form: 'cup', tier: 'silver' },
+  { id: 'wins_5', name: 'On a Roll', desc: 'Win five races', icon: '🔥', form: 'star', tier: 'silver' },
+  { id: 'wins_10', name: 'Veteran', desc: 'Win ten races', icon: '🎖️', form: 'star', tier: 'silver' },
+  { id: 'record_3', name: 'Pace Setter', desc: 'Hold the lap record on three circuits', icon: '📊', form: 'disc', tier: 'silver' },
+  { id: 'loop_master', name: 'Loop the Loop', desc: 'Clear both loop circuits', icon: '🌐', form: 'ring', tier: 'silver' },
+  { id: 'clean_3', name: 'Spotless', desc: 'Win three races without a wall hit', icon: '🧼', form: 'star', tier: 'silver' },
 
   // --- gold (5): the real challenges ---
-  { id: 'overdrive_win', name: 'Redline', desc: 'Win a race on OVERDRIVE', icon: '🟣', tier: 'gold' },
-  { id: 'overdrive_cup', name: 'Untamed', desc: 'Win the OVERDRIVE championship', icon: '👑', tier: 'gold' },
-  { id: 'sweep', name: 'Clean Sweep', desc: 'Win every round of a championship', icon: '🧹', tier: 'gold' },
-  { id: 'untouchable', name: 'Untouchable', desc: 'Win with no wall or ship contact', icon: '🛡️', tier: 'gold' },
-  { id: 'all_records', name: 'Benchmark', desc: 'Hold the lap record on every circuit', icon: '📈', tier: 'gold' },
+  { id: 'overdrive_win', name: 'Redline', desc: 'Win a race on OVERDRIVE', icon: '🟣', form: 'bolt', tier: 'gold' },
+  { id: 'overdrive_cup', name: 'Untamed', desc: 'Win the OVERDRIVE championship', icon: '👑', form: 'cup', tier: 'gold' },
+  { id: 'sweep', name: 'Clean Sweep', desc: 'Win every round of a championship', icon: '🧹', form: 'cup', tier: 'gold' },
+  { id: 'untouchable', name: 'Untouchable', desc: 'Win with no wall or ship contact', icon: '🛡️', form: 'shield', tier: 'gold' },
+  { id: 'all_records', name: 'Benchmark', desc: 'Hold the lap record on every circuit', icon: '📈', form: 'disc', tier: 'gold' },
 
   // --- platinum (1): everything ---
-  { id: 'legend', name: 'Slipstream Legend', desc: 'Unlock every other trophy', icon: '💎', tier: 'platinum' },
+  { id: 'legend', name: 'Slipstream Legend', desc: 'Unlock every other trophy', icon: '💎', form: 'gem', tier: 'platinum' },
 ];
 
 const KEY = 'sv-ach';
@@ -144,6 +153,9 @@ export class Achievements {
   // ---- gallery ----
   // `filter` is 'all' or a tier key (bronze/silver/gold/platinum).
   renderGallery(el, filter = 'all') {
+    // The baker is built on first open and kept: 31 small renders once, then
+    // cache hits. A menu screen should not pay for this twice.
+    if (!this._baker) this._baker = new TrophyBaker(176);
     const order = ['bronze', 'silver', 'gold', 'platinum'];
     const shown = filter === 'all' ? order : order.filter((t) => t === filter);
     const groups = shown.map((tier) => {
@@ -151,10 +163,13 @@ export class Achievements {
       const got = items.filter((a) => this.unlocked[a.id]).length;
       const cards = items.map((a) => {
         const on = this.unlocked[a.id];
-        // Name + description always show (so locked trophies read as goals);
-        // the lock icon + dimmed 'on'-less card is what marks it unearned.
+        // Name + description always show (so locked trophies read as goals).
+        // A locked trophy renders the SAME OBJECT in dead metal rather than a
+        // padlock: the silhouette of the thing you have not won yet is a goal,
+        // a padlock is just a padlock.
         return `<div class="trophy-card${on ? ' on' : ''}">
-            <div class="tc-icon">${on ? a.icon : '🔒'}</div>
+            <img class="tc-shot" src="${BLANK}" alt="" width="104" height="104"
+                 data-form="${a.form || 'cup'}" data-tier="${a.tier}" data-locked="${on ? 0 : 1}">
             <div class="tc-name">${a.name}</div>
             <div class="tc-desc">${a.desc}</div>
           </div>`;
@@ -164,5 +179,25 @@ export class Achievements {
         <div class="trophy-grid">${cards}</div>`;
     }).join('');
     el.innerHTML = groups;
+    this._fillShots(el);
+  }
+
+  // Bake the trophies across frames instead of all 31 in one go. Cold, that is
+  // 31 renders plus 31 toDataURL calls — on a slow machine enough to stall the
+  // menu on open. Warm (second open) the cache answers instantly and this
+  // finishes inside the first slice.
+  _fillShots(el) {
+    if (this._fillRaf) cancelAnimationFrame(this._fillRaf);
+    const imgs = [...el.querySelectorAll('img.tc-shot')];
+    let i = 0;
+    const step = () => {
+      const t0 = performance.now();
+      while (i < imgs.length && performance.now() - t0 < 8) {
+        const im = imgs[i++];
+        im.src = this._baker.bake(im.dataset.form, im.dataset.tier, im.dataset.locked === '1');
+      }
+      this._fillRaf = i < imgs.length ? requestAnimationFrame(step) : 0;
+    };
+    step();
   }
 }

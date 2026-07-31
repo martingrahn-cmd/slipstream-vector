@@ -187,6 +187,13 @@ gameplay, persist, and pop a queued toast with a tier jingle; the gallery (the
 TROPHIES nav section) shows locked/unlocked with progress per tier.
 `src/ui/achievements.js`.
 
+Each trophy is an actual **object** — nine procedural low-poly forms (cup,
+star, shield, gem, wing, medal, bolt, ring, chevron) on a plinth, cast in the
+metal of its tier and lit by the game's own cyan/magenta pair. A locked trophy
+is the *same object in dead metal*, not a padlock: the silhouette of what you
+have not won yet is a goal. They are rendered once into images and cached, a
+few per frame so opening the screen never stalls. `src/ui/trophyScene.js`.
+
 **Speed classes & unlocks:** the CLASS row picks a global tier — **PULSE**
 (246 km/h, approachable), **SURGE** (300, full speed) and **OVERDRIVE** (354,
 brutal). A class scales top speed, acceleration and AI skill *identically for
@@ -387,6 +394,7 @@ src/
   ui/menu.js               "THE BAY" console controller: nav rail + section focus, thumbnails
   ui/banter.js             the rival comms feed + LINES bank (single source of truth)
   ui/achievements.js       31 trophies: unlock logic, persistence, toasts, gallery
+  ui/trophyScene.js        the trophies as objects: 9 procedural forms, tier metals, baker
   ui/minimap.js            canvas minimap: track outline, pads, start line, ship + rivals
   ui/podium.js             spinning 3D ship model for the Garage display bay
   ui/podiumScene.js        full-screen 3D championship podium ceremony

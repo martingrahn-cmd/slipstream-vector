@@ -26,8 +26,9 @@ build step.
   and resume.
 - **4 teams / 8 pilots**, one livery per pilot, portraits + expression faces +
   intro videos, 172 voice clips over a radio-comms chain.
-- **31 trophies** (15 bronze · 10 silver · 5 gold · 1 platinum), persisted
-  records per track *and* per game mode.
+- **31 trophies** (15 bronze · 10 silver · 5 gold · 1 platinum), each shown in
+  the gallery as a rendered object rather than an emoji; persisted records per
+  track *and* per game mode.
 - **Stunt kit** — loops, corkscrews and jumps as track-file data (`features`).
 
 ### Systems
