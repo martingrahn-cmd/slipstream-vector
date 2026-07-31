@@ -1189,13 +1189,48 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
     group.add(glowMesh);
     // The beam: one long horizontal cone on a pivot at the lamp, sweeping the
     // sea — same recipe as the city searchlights (cheap, low opacity).
-    const beamGeo = new THREE.CylinderGeometry(13, 0.9, 380, 8, 1, true);
+    // The beam has to read as LIGHT, not as a panel. A uniform-opacity cone with
+    // eight segments and fog off is a flat wedge with a hard straight edge, and
+    // swept across the sky it looked like two mismatched images butted together
+    // — confirmed by hiding it and watching the seam vanish. Three things fix
+    // it: fade along the length so it dies away from the lamp, fade toward the
+    // silhouette so the edge is soft instead of a cut, and let the fog take it
+    // like everything else in the world.
+    const beamGeo = new THREE.CylinderGeometry(13, 0.9, 380, 22, 8, true);
     beamGeo.translate(0, 190, 0);
     beamGeo.rotateZ(Math.PI / 2 + 0.04); // near-horizontal
-    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
-      color: 0xfff2c8, transparent: true, opacity: 0.05,
-      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      side: THREE.DoubleSide,
+    const beam = new THREE.Mesh(beamGeo, new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, fog: true,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
+      vertexShader: /* glsl */ `
+        varying float vT;      // 0 at the lamp, 1 at the far end
+        varying vec3 vN;
+        varying vec3 vV;
+        #include <fog_pars_vertex>
+        void main() {
+          vT = clamp(position.x / 380.0, 0.0, 1.0);
+          vN = normalize(normalMatrix * normal);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vV = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+          #include <fog_vertex>
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying float vT;
+        varying vec3 vN;
+        varying vec3 vV;
+        #include <fog_pars_fragment>
+        void main() {
+          // brightest where the wall faces the camera (looking along the shaft),
+          // vanishing at the silhouette so there is no hard rim
+          float face = pow(abs(dot(normalize(vN), normalize(vV))), 0.7);
+          float a = 0.085 * pow(1.0 - vT, 1.8) * (0.12 + 0.88 * face);
+          gl_FragColor = vec4(1.0, 0.95, 0.78, a);
+          #include <fog_fragment>
+        }
+      `,
     }));
     beam.frustumCulled = false;
     const pivot = new THREE.Group();
