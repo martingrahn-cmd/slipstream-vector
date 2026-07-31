@@ -11,6 +11,22 @@ import { buildBillboardAtlas } from '../ui/logos.js';
 let _adAtlas = null; // built once, shared across tracks
 function adAtlas() { return _adAtlas || (_adAtlas = buildBillboardAtlas()); }
 
+// A soft round falloff for the lighthouse's lamp flare — a bare sprite is a
+// square, and a square does not read as a light. Built fresh per world rather
+// than cached in the module: tearing a world down disposes every material's
+// map, so a shared texture would be freed out from under the next build.
+function softDot() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.22, 'rgba(255,246,214,0.72)');
+  g.addColorStop(0.55, 'rgba(255,214,140,0.18)');
+  g.addColorStop(1, 'rgba(255,190,90,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -445,7 +461,7 @@ export function buildScenery(spline, scene, theme) {
         if (ground.mat.uniforms.uCam) ground.mat.uniforms.uCam.value.copy(cameraPos);
       }
       if (lights) lights.update(t);
-      if (landmarks && landmarks.update) landmarks.update(t);
+      if (landmarks && landmarks.update) landmarks.update(t, cameraPos);
       if (canyon) canyon.update(t);
       if (traffic) traffic.update(t);
       if (drones) drones.update(t);
@@ -1219,18 +1235,29 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
     const beam = new THREE.Mesh(beamGeo, new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: true,
       blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]),
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uHead: { value: 0 } }]),
       vertexShader: /* glsl */ `
         varying float vT;      // 0 at the lamp, 1 at the far end
         varying vec3 vN;
         varying vec3 vV;
         #include <fog_pars_vertex>
         void main() {
-          vT = clamp(position.x / 380.0, 0.0, 1.0);
+          // The geometry was rotated a quarter turn at build time, so the shaft
+          // runs along NEGATIVE x. Dividing by +380 clamped vT to 0 everywhere:
+          // both falloffs below evaluated to 1 and the beam was a slab of even
+          // brightness end to end, which is exactly what a light is not.
+          vT = clamp(-position.x / 380.0, 0.0, 1.0);
           vN = normalize(normalMatrix * normal);
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vV = normalize(-mv.xyz);
-          gl_Position = projectionMatrix * mv;
+          // Named mvPosition because the fog_vertex chunk reads exactly that
+          // name. It was called mv here, so this shader FAILED TO COMPILE the
+          // moment fog was switched on — the beam has drawn nothing at all
+          // since, which is why the lighthouse looked like it did nothing.
+          // NB: no backticks in these comments. The whole shader is a JS
+          // template literal and one backtick ends it; node --check passes and
+          // the page throws.
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vV = normalize(-mvPosition.xyz);
+          gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
         }
       `,
@@ -1238,6 +1265,7 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
         varying float vT;
         varying vec3 vN;
         varying vec3 vV;
+        uniform float uHead;   // 1 when the shaft is swinging straight at you
         #include <fog_pars_fragment>
         void main() {
           // brightest where the wall faces the camera (looking along the shaft),
@@ -1249,6 +1277,12 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
           // the brightness can come back up as long as they stay.
           float a = 0.19 * pow(1.0 - vT, 1.5) * (0.10 + 0.90 * face);
           a += 0.10 * pow(1.0 - vT, 6.0) * face;   // a hot root at the lamp
+          // The sweep has to ANNOUNCE itself. face is smallest exactly when
+          // the shaft points at the camera — seen down the barrel the walls are
+          // edge-on — so the beam was dimmest at the one moment a lighthouse is
+          // supposed to flash. uHead puts that moment back, and because the
+          // cone is seen end-on then, it costs almost no screen area.
+          a += 0.42 * uHead * pow(1.0 - vT, 0.8);
           gl_FragColor = vec4(1.0, 0.95, 0.78, a);
           #include <fog_fragment>
         }
@@ -1259,7 +1293,38 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
     pivot.position.set(px, lampY, pz);
     pivot.add(beam);
     group.add(pivot);
-    return { group, update: (t) => { pivot.rotation.y = t * 0.35; } };
+    // The lamp flare. This world is BRIGHT — golden-hour daylight, warm fog — and
+    // an additive shaft 385m out adds almost nothing over a lit sky. What reads
+    // at that distance in daylight is the lamp flashing, the same as a real
+    // lighthouse: you see the light, not the beam. One sprite, one draw.
+    const flare = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: softDot(), color: 0xfff0c8, transparent: true, opacity: 0.25,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    flare.position.set(px, lampY, pz);
+    flare.scale.setScalar(18);
+    group.add(flare);
+
+    const toCam = new THREE.Vector3();
+    return {
+      group,
+      update: (t, camPos) => {
+        const th = t * 0.55;                       // ~11s a revolution
+        pivot.rotation.y = th;
+        // Where the shaft points, in world XZ. The geometry runs down -x, so a
+        // pivot turn of th aims it at (-cos th, sin th).
+        let head = 0;
+        if (camPos) {
+          toCam.set(camPos.x - px, 0, camPos.z - pz);
+          const L = toCam.length();
+          if (L > 1e-3) head = Math.max(0, (-Math.cos(th) * toCam.x + Math.sin(th) * toCam.z) / L);
+        }
+        const f = Math.pow(head, 7);               // a flash, not a slow glow
+        beam.material.uniforms.uHead.value = f;
+        flare.material.opacity = 0.25 + 0.75 * f;
+        flare.scale.setScalar(18 + 40 * f);
+      },
+    };
   }
 
   return null;

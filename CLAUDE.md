@@ -137,6 +137,13 @@ fixed.)
   time without appearing to fail.
 - Verify per stage by panning the horizon on each track; regressions-check all
   three worlds after scenery/theme changes.
+- **A ShaderMaterial that fails to compile draws NOTHING and the game keeps
+  running.** The only sign is one console line among the boot noise, and the
+  effect looks like it was never wired up. Two traps have each cost a session:
+  a backtick inside a GLSL comment (the shader is a JS template literal —
+  `node --check` passes, the page throws), and using any name but `mvPosition`
+  for the model-view position when the shader includes the fog chunks. If an
+  effect "does nothing", read the console before reading the maths.
 
 ## Where things live
 
