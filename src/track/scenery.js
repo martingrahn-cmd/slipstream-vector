@@ -671,16 +671,33 @@ function buildSky(S) {
         // Drifting bands: thin dusk streaks (puff=1) up to fat cumulus banks
         // or smog (puff>2) — width and lobe frequency scale together.
         float az = atan(d.x, d.z);
+        // EVERY frequency multiplying az must be a WHOLE NUMBER. atan is
+        // discontinuous across the -x meridian (+pi flips to -pi), and sin(k*az)
+        // is only 2*pi-periodic when k is an integer — so a fractional
+        // coefficient makes the term jump by a finite amount along one vertical
+        // line of the sky, from zenith to horizon. That was the "two images that
+        // fit badly together" seam: dividing these frequencies by the per-world
+        // cloudPuff turned 9.0 into 5.625 and cut the sky in half.
+        //
+        // Rounding costs nothing artistically — the band count changes by less
+        // than one across the whole sky — and it is the only way to keep the
+        // horizon closed.
+        float f1 = max(2.0, floor(9.0 / cloudPuff + 0.5));
+        float f2 = max(2.0, floor(13.0 / cloudPuff + 0.5));
+        float f3 = max(2.0, floor(17.0 / cloudPuff + 0.5));
+        float g1 = max(1.0, floor(3.0 / cloudPuff + 0.5));
+        float g2 = max(1.0, floor(5.0 / cloudPuff + 0.5));
+        float g3 = max(1.0, floor(7.0 / cloudPuff + 0.5));
         // Ragged edges. A single sine per band gives an airbrushed stripe; a
         // second, faster harmonic multiplied in gives it lumps and gaps, and
         // nudging each band's CENTRE height by the same term stops the three
         // from reading as parallel rules across the sky.
-        float rag1 = 0.60 + 0.40 * sin(az * 9.0 / cloudPuff + time * 0.045 + 1.3) * sin(az * 3.7 - time * 0.020);
-        float rag2 = 0.60 + 0.40 * sin(az * 13.0 / cloudPuff - time * 0.035) * sin(az * 5.1 + time * 0.030 + 2.4);
-        float rag3 = 0.60 + 0.40 * sin(az * 17.0 / cloudPuff + time * 0.026 + 3.1) * sin(az * 6.9 - time * 0.015);
-        float c1 = exp(-pow((y - 0.085 - 0.014 * (rag1 - 0.6)) * 60.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 3.0 / cloudPuff + time * 0.05)) * rag1;
-        float c2 = exp(-pow((y - 0.16 - 0.020 * (rag2 - 0.6)) * 40.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * 5.0 / cloudPuff - time * 0.04 + 2.0)) * rag2;
-        float c3 = exp(-pow((y - 0.30 - 0.026 * (rag3 - 0.6)) * 30.0 / cloudPuff, 2.0)) * (0.3 + 0.7 * sin(az * 7.0 / cloudPuff + time * 0.07 + 4.0)) * rag3;
+        float rag1 = 0.60 + 0.40 * sin(az * f1 + time * 0.045 + 1.3) * sin(az * 4.0 - time * 0.020);
+        float rag2 = 0.60 + 0.40 * sin(az * f2 - time * 0.035) * sin(az * 5.0 + time * 0.030 + 2.4);
+        float rag3 = 0.60 + 0.40 * sin(az * f3 + time * 0.026 + 3.1) * sin(az * 7.0 - time * 0.015);
+        float c1 = exp(-pow((y - 0.085 - 0.014 * (rag1 - 0.6)) * 60.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * g1 + time * 0.05)) * rag1;
+        float c2 = exp(-pow((y - 0.16 - 0.020 * (rag2 - 0.6)) * 40.0 / cloudPuff, 2.0)) * (0.4 + 0.6 * sin(az * g2 - time * 0.04 + 2.0)) * rag2;
+        float c3 = exp(-pow((y - 0.30 - 0.026 * (rag3 - 0.6)) * 30.0 / cloudPuff, 2.0)) * (0.3 + 0.7 * sin(az * g3 + time * 0.07 + 4.0)) * rag3;
         col = mix(col, cloud, clamp(c1 + c2 + c3 * step(0.4, cloudAmp), 0.0, 1.0) * cloudAmp);
         // Time-of-day mood drift: the world deepens as the race progresses.
         col *= mix(1.0, 0.78, progress);
@@ -1226,7 +1243,12 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
           // brightest where the wall faces the camera (looking along the shaft),
           // vanishing at the silhouette so there is no hard rim
           float face = pow(abs(dot(normalize(vN), normalize(vV))), 0.7);
-          float a = 0.085 * pow(1.0 - vT, 1.8) * (0.12 + 0.88 * face);
+          // Bright enough to SEE sweeping. The first pass at this was 0.085 and
+          // read as nothing at all — "does the lighthouse do anything now?" The
+          // falloffs are what stop it being a flat panel, not the dimness, so
+          // the brightness can come back up as long as they stay.
+          float a = 0.19 * pow(1.0 - vT, 1.5) * (0.10 + 0.90 * face);
+          a += 0.10 * pow(1.0 - vT, 6.0) * face;   // a hot root at the lamp
           gl_FragColor = vec4(1.0, 0.95, 0.78, a);
           #include <fog_fragment>
         }
