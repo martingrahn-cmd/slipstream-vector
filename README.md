@@ -138,6 +138,14 @@ options click too, and an in-race PAUSE button sits by the fullscreen button.
 interactive controls opt back in.) Below ~1120px the layout tightens and below
 ~900px it collapses to the rail plus a single content column.
 
+**The speedometer** is a 26-segment arc over the numerals — a rev counter, not
+a progress bar. The segments grow along the sweep, and each keeps its own hue
+whether lit or not (cyan at the low end through to magenta at the top), so the
+instrument has a shape you learn rather than a bar that just gets longer. Boost
+drives the whole lit arc white-hot on the same event that pops the number.
+`src/ui/hud.js` builds it; it is SVG, and only the segments that changed are
+touched each frame.
+
 **Pause menu** (`ui/pauseMenu.js`): P (or Esc) mid-race opens a centered panel —
 Resume / Restart / Options / Quit — navigable by keyboard or gamepad, in the
 same neon style. Back is **Backspace** (Esc is hijacked by the browser to leave

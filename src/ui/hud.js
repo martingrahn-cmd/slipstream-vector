@@ -3,6 +3,46 @@
 import { TUNING as T } from '../config.js';
 import { WEAPON_ICONS } from '../weapons/icons.js';
 
+// ---------------------------------------------------------------- speed arc
+// A rev-counter as a fan of segments over the number, built once as SVG rects
+// and then only switched on and off. Two things make it read as an instrument
+// rather than a progress bar:
+//   * the segments GROW along the sweep, so the top end is visibly "more" even
+//     before you read the colour;
+//   * the colour is a property of the POSITION, not of the current speed — each
+//     segment keeps its own hue whether lit or not, so the arc has a shape you
+//     learn. Cyan through to magenta, which is the game's own pair; the last
+//     few sit in the magenta because that end is the edge of the machine.
+const GAUGE_N = 26;
+const GAUGE_SWEEP = 122;    // degrees, centred on straight up
+
+function buildGauge(svg) {
+  if (!svg) return null;
+  const NS = 'http://www.w3.org/2000/svg';
+  // The circle's CENTRE sits well below the viewBox: only the crown of the arc
+  // is on screen, which is what makes it a wide shallow instrument sitting over
+  // the number rather than a ring around it. A ring around an 84px numeral
+  // needs a 120px inner radius and then it no longer fits the corner.
+  const cx = 150, cy = 200, rIn = 118, w = 8.4;
+  const segs = [];
+  for (let i = 0; i < GAUGE_N; i++) {
+    const t = i / (GAUGE_N - 1);
+    const len = 13 + t * 24;                       // grows along the sweep
+    const hue = 186 + t * 132;                     // cyan -> magenta
+    const r = document.createElementNS(NS, 'rect');
+    r.setAttribute('x', cx - w / 2);
+    r.setAttribute('y', cy - rIn - len);
+    r.setAttribute('width', w);
+    r.setAttribute('height', len);
+    r.setAttribute('rx', w / 2);
+    r.setAttribute('transform', `rotate(${(t - 0.5) * GAUGE_SWEEP} ${cx} ${cy})`);
+    r.style.setProperty('--seg', `hsl(${hue} 100% 62%)`);
+    svg.appendChild(r);
+    segs.push(r);
+  }
+  return { segs, n: GAUGE_N };
+}
+
 export class Hud {
   constructor(juice) {
     this.el = {
@@ -22,10 +62,13 @@ export class Hud {
       stats: document.getElementById('stats'),
       weaponSlot: document.getElementById('weapon-slot'),
       lockWarn: document.getElementById('lock-warn'),
+      gauge: document.getElementById('speed-gauge'),
     };
     this.ghost = 0;
     this.lastSpeed = 0;
     this._lockStage = 0;
+    this.gauge = buildGauge(this.el.gauge);
+    this._lit = 0;
 
     juice.on('boost', () => this.pop(this.el.speed, 'boost-pop'));
     juice.on('miniboost', () => this.pop(this.el.speed, 'boost-pop'));
@@ -162,6 +205,18 @@ export class Hud {
     const accelScale = 1 + 0.12 * Math.min(Math.max(ship.accel / T.ACCEL, 0), 1.4);
     this.el.speed.style.scale = `${accelScale}`;
 
+    // The arc. Only the segments that CHANGED get touched — this runs every
+    // frame, and toggling 26 classes a frame to set 25 of them to what they
+    // already were is work the browser has to redo layout-adjacent style for.
+    if (this.gauge) {
+      const lit = Math.round(Math.min(Math.max(ship.speedNorm, 0), 1) * this.gauge.n);
+      if (lit !== this._lit) {
+        const lo = Math.min(lit, this._lit), hi = Math.max(lit, this._lit);
+        for (let i = lo; i < hi; i++) this.gauge.segs[i].classList.toggle('on', i < lit);
+        this._lit = lit;
+      }
+    }
+
     this.el.lap.textContent = `LAP ${Math.min(Math.max(ship.lap, 1), totalLaps || 99)}${totalLaps ? ' / ' + totalLaps : ''}`;
     this.el.lapTime.textContent = fmt(ship.lapTime);
     this.el.lastLap.textContent = ship.lastLap ? `LAST ${fmt(ship.lastLap)}` : '';
@@ -173,6 +228,7 @@ export class Hud {
     this.el.boostFill.style.width = `${frac * 100}%`;
     this.el.boostGhost.style.width = `${this.ghost * 100}%`;
     document.getElementById('boost-meter').classList.toggle('active', frac > 0);
+    if (this.el.gauge) this.el.gauge.classList.toggle('boosting', frac > 0);
 
   }
 

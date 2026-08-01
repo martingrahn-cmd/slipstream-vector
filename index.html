@@ -28,6 +28,9 @@
   <div class="hud hidden" id="trophy-toast"></div>
 
   <div class="hud" id="speed-block">
+    <!-- Segment arc over the number. Geometry is generated in ui/hud.js so the
+         segment count and the sweep live in one place, not split across two. -->
+    <svg id="speed-gauge" viewBox="0 40 300 104" aria-hidden="true"></svg>
     <span id="speed">0</span>
     <div id="speed-unit">KM/H</div>
   </div>
