@@ -16,6 +16,11 @@
 //   --size 1920x1080    viewport                           (default: 1920x1080)
 //   --jpeg              also write JPEGs (quality 92) + README.txt
 //   --no-caption        skip the burned-in caption plate
+//   --shots 2           how many per circuit                (default: 3)
+//                       They are dropped from the END of the list below, so 2
+//                       keeps vista + stunt: those two are scored on every
+//                       track, where `stand` only exists if the track has a
+//                       grandstand far enough from the other two.
 //
 // Environment:
 //   PW_CHROMIUM=/path/to/chrome   use a specific browser binary
@@ -54,6 +59,7 @@ const URL_ = flag('url', 'http://127.0.0.1:8741/index.html');
 const [W, H] = flag('size', '1920x1080').split('x').map(Number);
 const WANT_JPEG = has('jpeg');
 const CAPTION = !has('no-caption');
+const SHOTS = Math.max(1, Math.min(3, +flag('shots', 3)));
 const SEPARATION = 700;   // metres between two picks before they count as the same view
 
 const { chromium } = await import('playwright').catch(() => {
@@ -127,7 +133,7 @@ const shoot = async (file) => {
 
 const rows = [];
 for (const ti of TRACKS) {
-  const info = await page.evaluate(([ti, SEP]) => {
+  const info = await page.evaluate(([ti, SEP, SHOTS]) => {
     const g = window.__game;
     g.setTrack(ti); g.start(); g.setQuality('full');
     const sp = g.spline, th = g.theme;
@@ -174,12 +180,13 @@ for (const ti of TRACKS) {
 
     const picks = [['vista', vista], ['stunt', stunt]];
     if (stand != null) picks.push(['stand', stand]);
+    picks.length = Math.min(picks.length, SHOTS);
     return {
       name: (g.trackDef && g.trackDef.name) || `TRACK ${ti}`,
       world: th.name || String(th.id).toUpperCase(),
       picks,
     };
-  }, [ti, SEPARATION]);
+  }, [ti, SEPARATION, SHOTS]);
 
   if (CAPTION) {
     await page.evaluate(([t, w]) => {
