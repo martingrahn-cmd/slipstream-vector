@@ -126,9 +126,21 @@ await page.evaluate((caption) => {
 // rAF is throttled in a headless tab, so a screenshot is what forces a frame.
 // Three warm-up shots let the tier settle and the world finish its first
 // update before the one that counts.
+// HOLD THE THROTTLE while the warm-ups run. Each of those screenshots forces a
+// frame, and between frames the real render loop steps the sim against the real
+// input — which, with no key held, is a lift. On a fast GPU that is milliseconds
+// and does not show; in software GL a frame takes about a second, so the ship
+// spent four seconds coasting and the speedo in the finished shot read half
+// what the drive-to reported. A racing game's press kit should not be
+// photographed decelerating. This is the real input path, not a staged number.
 const shoot = async (file) => {
-  for (let i = 0; i < 3; i++) await page.screenshot({ path: path.join(OUT, '_warm.png') });
-  await page.screenshot({ path: file });
+  await page.keyboard.down('ArrowUp');
+  try {
+    for (let i = 0; i < 3; i++) await page.screenshot({ path: path.join(OUT, '_warm.png') });
+    await page.screenshot({ path: file });
+  } finally {
+    await page.keyboard.up('ArrowUp');
+  }
 };
 
 const rows = [];
