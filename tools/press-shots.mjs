@@ -69,10 +69,20 @@ const { chromium } = await import('playwright').catch(() => {
 
 fs.mkdirSync(OUT, { recursive: true });
 
+// PW_CHROMIUM means somebody is pointing this at a specific binary, which in
+// practice means a sandboxed CI-style image. Those images run everything behind
+// an HTTPS proxy, and Chromium inherits HTTPS_PROXY from the environment and
+// routes even 127.0.0.1 through it — so the shoot dies on page.goto against its
+// own dev server, with a timeout that looks like the server is down when curl
+// says it is up. Same accommodation the audit tools make. A normal run (no
+// PW_CHROMIUM) is untouched.
 const browser = await chromium.launch(
-  process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {},
+  process.env.PW_CHROMIUM
+    ? { executablePath: process.env.PW_CHROMIUM, args: ['--no-sandbox', '--no-proxy-server'] }
+    : {},
 );
 const page = await browser.newPage({ viewport: { width: W, height: H } });
+page.setDefaultTimeout(240000);   // BEFORE the goto: software GL boots slowly
 
 // Serve three.js from node_modules when it is there, so the shoot does not
 // depend on the CDN (and does not silently shoot a DIFFERENT three version
@@ -96,8 +106,7 @@ page.on('console', (m) => {
   if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`CONSOLE ${m.text()}`);
 });
 
-await page.goto(URL_, { waitUntil: 'load' });
-page.setDefaultTimeout(240000);
+await page.goto(URL_, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.__game && window.__game.spline, null, { timeout: 90000 });
 // The shot picker needs real Vector3s for spline.frameAt (it writes into them).
 await page.addScriptTag({ type: 'module', content: "import * as T from 'three'; window.THREE = T;" });
