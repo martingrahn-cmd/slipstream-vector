@@ -186,11 +186,32 @@ function groundAt(groundY, x, z) {
 // guessing the water level is exactly what buried palms inside hillsides.
 function islandHeightAt(is, x, z) {
   if (!is.grid) return null;
-  const gi = Math.floor((x - is.ox) / is.cell);
-  const gj = Math.floor((z - is.oz) / is.cell);
-  if (gi < 0 || gj < 0 || gi >= is.gn || gj >= is.gn) return null;
-  const y = is.grid[gj * is.gn + gi];
-  return Number.isFinite(y) ? y : null;
+  // BILINEAR, not nearest. A cell spans ~2m across a big island, and on a steep
+  // face two metres horizontally is several metres of height — which is exactly
+  // how a palm ends up hovering or half-swallowed. Nearest-cell was survivable
+  // while the islands were smooth domes; it stopped being survivable the moment
+  // they grew ridges and cliffs.
+  //
+  // Cells outside the island body hold -Infinity. They are skipped and the
+  // weights renormalised rather than blended, so the rim samples the land it
+  // actually has instead of being dragged to nothing.
+  const fx = (x - is.ox) / is.cell - 0.5;
+  const fz = (z - is.oz) / is.cell - 0.5;
+  const gi = Math.floor(fx), gj = Math.floor(fz);
+  const tx = fx - gi, tz = fz - gj;
+  let sum = 0, wsum = 0;
+  for (let dj = 0; dj <= 1; dj++) {
+    for (let di = 0; di <= 1; di++) {
+      const i = gi + di, j = gj + dj;
+      if (i < 0 || j < 0 || i >= is.gn || j >= is.gn) continue;
+      const y = is.grid[j * is.gn + i];
+      if (!Number.isFinite(y)) continue;
+      const w = (di ? tx : 1 - tx) * (dj ? tz : 1 - tz);
+      if (w <= 0) continue;
+      sum += y * w; wsum += w;
+    }
+  }
+  return wsum > 0 ? sum / wsum : null;
 }
 
 // The highest island surface at (x, z), across every island — or null if none
@@ -208,6 +229,16 @@ function topSurfaceAt(islands, x, z) {
   return best;
 }
 
+// Central-difference gradient of the top surface, one cell either side.
+function steeperThan(islands, x, z, cell, bar) {
+  const d = cell || 1;
+  const xa = topSurfaceAt(islands, x + d, z), xb = topSurfaceAt(islands, x - d, z);
+  const za = topSurfaceAt(islands, x, z + d), zb = topSurfaceAt(islands, x, z - d);
+  if (xa === null || xb === null || za === null || zb === null) return false;
+  const gx = (xa - xb) / (2 * d), gz = (za - zb) / (2 * d);
+  return Math.hypot(gx, gz) > bar;
+}
+
 function makeIslandPicker(rng, islands, fraction = 1) {
   const planted = [...islands].sort((a, b) => b.r - a.r)
     .slice(0, Math.max(1, Math.round(islands.length * fraction)));
@@ -221,7 +252,13 @@ function makeIslandPicker(rng, islands, fraction = 1) {
   // one island's footprint is often inside a taller neighbour too, and the
   // re-roll runs out of attempts often enough that silently keeping the last
   // try buried a third of the palms — up to 54 metres down.
-  return (bandLo, bandHi) => {
+  // `maxSlope` (rise over run, so 0.8 is about 39 degrees) rejects cliff faces.
+  // Two reasons, and the second is the one that matters: nothing tall grows on
+  // a cliff, and the height field's residual error is proportional to the
+  // slope — one cell of horizontal error is metres of vertical error on a
+  // sheer face, which is where every remaining hovering or half-buried palm
+  // was. Callers that are happy on steep ground (rocks, scrub) leave it off.
+  return (bandLo, bandHi, maxSlope = 0) => {
     let x = 0, z = 0, u = 0, is = planted[0], clear = false;
     for (let attempt = 0; attempt < 20; attempt++) {
       const t = rng() * cdf[cdf.length - 1];
@@ -237,7 +274,9 @@ function makeIslandPicker(rng, islands, fraction = 1) {
         if (other === is) continue;
         if (Math.hypot(x - other.x, z - other.z) < other.r * 1.24) { buried = true; break; }
       }
-      if (!buried) { clear = true; break; }
+      if (buried) continue;
+      if (maxSlope > 0 && attempt < 19 && steeperThan(islands, x, z, is.cell, maxSlope)) continue;
+      clear = true; break;
     }
     return { x, z, u, is, clear };
   };
@@ -316,6 +355,15 @@ function windify(material, geom, amp) {
 // six faces is a crate at any distance, and the fix costs nothing but vertices,
 // which is the axis with headroom. Apply BEFORE the geometry is rotated or
 // translated, so the displacement is around the form's own centre.
+const TAU = Math.PI * 2;
+
+// Shortest signed angle from b to a, so a bearing-centred falloff does not tear
+// where atan2 wraps.
+function angDelta(a, b) {
+  const d = a - b;
+  return Math.atan2(Math.sin(d), Math.cos(d));
+}
+
 function weather(geom, amt) {
   const pos = geom.getAttribute('position');
   const v = new THREE.Vector3();
@@ -1558,34 +1606,105 @@ function buildMesas(rng, spline, groundY, theme) {
     // and only the atoll stays deliberately flat so the chain has variety.
     // A dome is a BUN however you shear it — the giveaway is that its profile
     // is the same in every direction. A hill has RIDGES and saddles: high along
-    // one axis, cut away between. So modulate the height by angle with two
-    // lobes at different frequencies, lean the summit off-centre, and pull the
-    // waist in as it rises. detail 3 rather than 2 because a lobed surface
-    // needs vertices to bend with; ~1280 tris x 50 islands is 48k, on the axis
-    // with headroom, for the thing that has been complained about twice.
-    [() => {
-      const g = weather(new THREE.IcosahedronGeometry(1, 3), 0.09);
-      g.scale(1, 0.72, 0.86);
+    // one axis, cut away between.
+    //
+    // EVERY ISLAND IS ITS OWN SHAPE. The factories used to take no arguments,
+    // so a lagoon of ~50 islands was three geometries repeated, scaled and spun
+    // — and a cone or a frustum looks identical from every bearing, so the
+    // random Y rotation hid nothing at all. That repetition read as "simple"
+    // more than any one silhouette did. They take the world rng now: lobe
+    // count, phase, amplitude, lean, bays and summits are all per island.
+    //
+    // Two rules hold for every archetype here:
+    //  * the horizontal radius never grows past 1. The scatterer bands start at
+    //    1.08 r and the beach shelf sits at 1.12-1.22, so an island that swells
+    //    past its unit radius walks out of its own sand. Outline variation is
+    //    therefore always a pull INWARD — bays, not headlands.
+    //  * height variation is free. It costs vertices on a mesh already being
+    //    drawn, which is the axis with headroom (CLAUDE.md graphics budget).
+    [(r) => {
+      const g = weather(new THREE.IcosahedronGeometry(1, 3), 0.07 + r() * 0.05);
+      const hy = 0.58 + r() * 0.16;
+      g.scale(1, hy, 0.80 + r() * 0.16);
+      const f1 = 2 + Math.floor(r() * 2), f2 = f1 + 1 + Math.floor(r() * 2);
+      const a1 = 0.20 + r() * 0.16, a2 = 0.09 + r() * 0.13;
+      const p1 = r() * TAU, p2 = r() * TAU;
+      const b1 = 0.16 + r() * 0.16, b2 = 0.08 + r() * 0.12;   // bays in the outline
+      const q1 = r() * TAU, q2 = r() * TAU;
+      const sa = r() * TAU, sh = 0.22 + r() * 0.22;           // the second summit
+      const lean = 0.20 + r() * 0.26, la = r() * TAU;
       const pa = g.getAttribute('position');
       const v = new THREE.Vector3();
       for (let i = 0; i < pa.count; i++) {
         v.fromBufferAttribute(pa, i);
-        const up = Math.max(0, v.y / 0.72);          // 0 at the waterline, 1 at the top
+        const up = Math.max(0, v.y / hy);            // 0 at the waterline, 1 at the top
         const a = Math.atan2(v.z, v.x);
-        const ridge = 0.34 * Math.cos(a * 2.0) + 0.18 * Math.cos(a * 3.0 + 1.1);
-        const waist = 1 - 0.13 * up;                 // taper as it climbs
+        const ridge = a1 * Math.cos(a * f1 + p1) + a2 * Math.cos(a * f2 + p2);
+        const bay = 1 - b1 * Math.max(0, Math.cos(a * 2 + q1)) - b2 * Math.max(0, Math.cos(a * 3 + q2));
+        const waist = (1 - 0.15 * up) * bay;         // taper as it climbs
+        // One peak is a bun. Two peaks and the saddle between them is a hill,
+        // and the saddle is the part that actually reads at lagoon distance.
+        const shoulder = sh * Math.exp(-(angDelta(a, sa) ** 2) / 0.9) * up * (1.45 - up);
         pa.setXYZ(
           i,
-          v.x * waist + up * up * 0.30,              // summit leans
-          v.y * (1 + ridge * up),                    // ridges and saddles
-          v.z * waist - up * up * 0.10,
+          v.x * waist + up * up * lean * Math.cos(la),
+          v.y * (1 + ridge * up) + shoulder * hy,
+          v.z * waist + up * up * lean * Math.sin(la),
         );
       }
       pa.needsUpdate = true;
       return g;
     }, 1.32, 0],  // jungle hill
-    [() => weather(new THREE.ConeGeometry(1, 0.86, 18, 5), 0.05), 0.86, 0],           // headland
-    [() => weather(new THREE.CylinderGeometry(0.55, 1, 0.4, 20, 4), 0.04), 0.4, 0],   // flat atoll
+    // Headland: was an 18-sided cone, which is the one form a random spin
+    // cannot disguise. Now a promontory — a blade footprint with the land
+    // climbing along its spine and one flank cut away as a cliff.
+    [(r) => {
+      const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.06 + r() * 0.04);
+      const hy = 0.50 + r() * 0.20;
+      g.scale(1, hy, 1);
+      const ax = r() * TAU;                          // the ridge bearing
+      const nar = 0.40 + r() * 0.22;                 // how narrow across the ridge
+      const cliffA = ax + Math.PI * (0.40 + r() * 0.30);
+      const pa = g.getAttribute('position');
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i);
+        const up = Math.max(0, v.y / hy);
+        const a = Math.atan2(v.z, v.x);
+        const rf = Math.abs(Math.cos(a - ax));       // 1 along the spine, 0 across it
+        const k = nar + (1 - nar) * rf * rf;         // squeeze into a blade
+        const spine = 0.45 + 0.85 * rf * rf;         // and climb along it
+        const c = Math.max(0, Math.cos(a - cliffA));
+        const cut = 1 - 0.42 * c * c * up;           // one flank falls sheer
+        pa.setXYZ(i, v.x * k * cut, v.y * spine, v.z * k * cut);
+      }
+      pa.needsUpdate = true;
+      return g;
+    }, 0.86, 0],
+    // Atoll: was a plain frustum — a lid on a cone. Now a low sandbar with a
+    // lobed outline and a couple of humps, so the chain still has something
+    // deliberately flat in it without that thing being a primitive.
+    [(r) => {
+      const g = weather(new THREE.IcosahedronGeometry(1, 2), 0.05 + r() * 0.03);
+      const hy = 0.26 + r() * 0.13;
+      g.scale(1, hy, 1);
+      const f1 = 2 + Math.floor(r() * 3), f2 = f1 + 2;
+      const p1 = r() * TAU, p2 = r() * TAU;
+      const hA = r() * TAU, hB = hA + 1.8 + r() * 2.2;
+      const pa = g.getAttribute('position');
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pa.count; i++) {
+        v.fromBufferAttribute(pa, i);
+        const up = Math.max(0, v.y / hy);
+        const a = Math.atan2(v.z, v.x);
+        const lobe = 1 - 0.22 * Math.max(0, Math.cos(a * f1 + p1)) - 0.13 * Math.max(0, Math.cos(a * f2 + p2));
+        const humps = (0.55 * Math.exp(-(angDelta(a, hA) ** 2) / 0.7)
+                     + 0.36 * Math.exp(-(angDelta(a, hB) ** 2) / 0.55)) * up;
+        pa.setXYZ(i, v.x * lobe, v.y * (1 + humps), v.z * lobe);
+      }
+      pa.needsUpdate = true;
+      return g;
+    }, 0.4, 0],
   ] : [
     // Height segments matter: strata bands are vertex colours, so the side
     // walls need vertex rows to band across (1 segment = one giant flat quad).
@@ -1730,7 +1849,7 @@ function buildMesas(rng, spline, groundY, theme) {
     census.push({ s: Math.round(s), x: px, z: pz, scale: Math.round(scale), arch: archIdx, dist: Math.round(dist) });
     const ys = towers ? 0.9 + rng() * 1.3 : islands ? 0.7 + rng() * 0.45 : 0.7 + rng() * 0.6;
     const ry = rng() * Math.PI * 2;
-    const g = make();
+    const g = make(rng);   // island archetypes roll their own shape per instance
     const ub = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position')); // unit bbox for the window grid
     g.scale(scale, scale * ys, scale);
     g.rotateY(ry);
@@ -2601,13 +2720,22 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
     // and otherwise poke up through the surface on the inside of curves.
     let x = 0, z = 0;
     if (onIslands) {
-      // ONE rule: pick a spot anywhere on the island, ask for the highest
-      // surface there, stand on it. No steepness gate, no ownership test, no
-      // "is this spot clear of a neighbour" — the height field already answers
-      // all of it, because the highest surface at a point IS the ground there.
-      // The heuristics those questions used to need are what buried a third of
-      // the palms while every x/z audit reported success.
-      const spot = rng() < 0.5 ? pickSpot(0.25, 0.95) : pickSpot(1.02, 1.20);
+      // Pick a spot anywhere on the island, ask for the highest surface there,
+      // stand on it. No ownership test and no "is this spot clear of a
+      // neighbour" — the height field answers both, because the highest surface
+      // at a point IS the ground there, and the heuristics those questions used
+      // to need are what buried a third of the palms while every x/z audit
+      // reported success. The ONE gate that earns its place is slope: once the
+      // islands grew ridges and cliffs the field's residual error concentrated
+      // entirely on the sheer faces, which is also the last place a palm should
+      // be standing. The sand band gets a looser bar rather than none: the
+      // shelf's own outer edge is a slope, but a "beach" spot that has drifted
+      // onto a neighbouring island's flank is not a beach.
+      //
+      // Measured (tools/audit-planting.mjs, 760 palms x 3 coast tracks): 34
+      // misplaced before, 5 after, and hovering — the failure you can actually
+      // see from the road — goes to zero on all three.
+      const spot = rng() < 0.5 ? pickSpot(0.25, 0.95, 0.8) : pickSpot(1.02, 1.20, 1.1);
       x = spot.x; z = spot.z;
       const surf = topSurfaceAt(islands, x, z);
       if (surf === null) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); continue; }

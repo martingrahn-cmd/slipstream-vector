@@ -180,13 +180,18 @@ not pending — do not re-propose it. The effects budget went into hits,
 explosions and boost instead. If the readability question ever comes back it
 wants a different answer than a glyph on a hull.
 
-### 2.6a Two art notes Martin raised that nobody has confirmed on hardware
-Both were rebuilt on 2026-07-30 and only ever checked headless:
+### 2.6a Art notes Martin raised
 - **Mountains "mera bergslika".** They were literally four-sided cones —
-  pyramids — and are now angular lobed massifs. Martin has not seen the
-  rebuilt version in play.
-- **Island hills as "stora gröna bullar".** Rebuilt with angle-modulated
-  ridges on a subdivided icosahedron. Same: unconfirmed on hardware.
+  pyramids — and are now angular lobed massifs. **Martin passed them
+  2026-08-01**; this one is closed.
+- **Island shapes "väldigt enkla på vissa ställen"** (2026-08-01). The
+  diagnosis was not the silhouette of any one island: the three archetype
+  factories took no arguments, so a lagoon of ~50 islands was three geometries
+  repeated, and two of the three were a plain cone and a plain frustum, which a
+  random Y spin cannot disguise. They take the world rng now — lobes, phase,
+  bays, lean and summits are per island — and the cone and frustum became a
+  blade-footed promontory with a cliff flank and a lobed two-humped sandbar.
+  Unconfirmed on hardware.
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
