@@ -144,6 +144,16 @@ fixed.)
   `node --check` passes, the page throws), and using any name but `mvPosition`
   for the model-view position when the shader includes the fog chunks. If an
   effect "does nothing", read the console before reading the maths.
+- **A black BLOCK in the frame means a NaN, not a black object.** The bloom
+  bright pass is the narrowest point in the picture and its output is smeared
+  by a quarter-res and an eighth-res blur, so one non-finite fragment anywhere
+  comes back as a rectangle with a dithered fringe. `pow()` of a negative base
+  is undefined in GLSL — clamp any `1.0 - varying` before raising it to a
+  power, because perspective-correct interpolation lands a hair outside [0,1].
+  SwiftShader does NOT reproduce it (it returns 0); Apple's driver does. The
+  bright pass now carries a `!(l >= 0.0)` guard so the blast radius is one
+  object instead of a third of the screen — reproduce with a NaN quad if you
+  ever need to see it.
 
 ## Where things live
 

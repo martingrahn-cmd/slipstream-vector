@@ -1268,22 +1268,33 @@ function buildLandmarks(rng, spline, groundY, cx, cz, theme) {
         uniform float uHead;   // 1 when the shaft is swinging straight at you
         #include <fog_pars_fragment>
         void main() {
+          // CLAMP BEFORE pow. vT is clamped to [0,1] in the vertex shader, but a
+          // varying is interpolated, and perspective-correct interpolation can
+          // land a hair above 1.0 — so 1.0 - vT goes very slightly NEGATIVE at
+          // the far end of the shaft. pow() of a negative base is UNDEFINED in
+          // GLSL; drivers that evaluate it as exp2(y * log2(x)) return NaN. One
+          // NaN fragment reaches the bloom bright pass, the quarter- and
+          // eighth-res blurs smear it across their neighbourhoods, and it comes
+          // back as a BLOCK of black. That is the artifact at the end of the
+          // beam, and it only became reachable when vT was fixed to actually
+          // vary — before that 1.0 - vT was exactly 1.0 everywhere.
+          float u = clamp(1.0 - vT, 0.0, 1.0);
           // brightest where the wall faces the camera (looking along the shaft),
           // vanishing at the silhouette so there is no hard rim
-          float face = pow(abs(dot(normalize(vN), normalize(vV))), 0.7);
+          float face = pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 0.7);
           // Bright enough to SEE sweeping. The first pass at this was 0.085 and
           // read as nothing at all — "does the lighthouse do anything now?" The
           // falloffs are what stop it being a flat panel, not the dimness, so
           // the brightness can come back up as long as they stay.
-          float a = 0.19 * pow(1.0 - vT, 1.5) * (0.10 + 0.90 * face);
-          a += 0.10 * pow(1.0 - vT, 6.0) * face;   // a hot root at the lamp
+          float a = 0.19 * pow(u, 1.5) * (0.10 + 0.90 * face);
+          a += 0.10 * pow(u, 6.0) * face;   // a hot root at the lamp
           // The sweep has to ANNOUNCE itself. face is smallest exactly when
           // the shaft points at the camera — seen down the barrel the walls are
           // edge-on — so the beam was dimmest at the one moment a lighthouse is
           // supposed to flash. uHead puts that moment back, and because the
           // cone is seen end-on then, it costs almost no screen area.
-          a += 0.42 * uHead * pow(1.0 - vT, 0.8);
-          gl_FragColor = vec4(1.0, 0.95, 0.78, a);
+          a += 0.42 * uHead * pow(u, 0.8);
+          gl_FragColor = vec4(1.0, 0.95, 0.78, clamp(a, 0.0, 1.0));
           #include <fog_fragment>
         }
       `,

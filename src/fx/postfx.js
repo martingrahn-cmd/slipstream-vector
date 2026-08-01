@@ -131,6 +131,15 @@ const BrightShader = {
       // bloom magenta, not white. Soft knee so the threshold has no visible
       // contour crawling across a gradient.
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      // NaN GUARD. This is the narrowest point in the frame: everything the
+      // scene drew passes through here, and whatever leaves gets smeared by a
+      // quarter-res and an eighth-res blur. So ONE non-finite fragment anywhere
+      // in the world does not come back as one bad pixel — it comes back as a
+      // BLOCK of black the size of the blur's footprint, which is how a stray
+      // pow() of a negative base in a landmark's beam shader turned into a
+      // rectangle on the horizon. NaN fails every comparison, so !(l >= 0.0)
+      // catches it where max() and clamp() cannot.
+      if (!(l >= 0.0)) { gl_FragColor = vec4(0.0); return; }
       float w = smoothstep(threshold, threshold + knee, l);
       gl_FragColor = vec4(c * w, 1.0);
     }
