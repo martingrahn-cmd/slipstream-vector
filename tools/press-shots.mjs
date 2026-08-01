@@ -116,6 +116,12 @@ await page.waitForFunction(() => !!window.THREE, null, { timeout: 30000 });
 await page.evaluate((caption) => {
   const stats = document.getElementById('stats');
   if (stats) stats.style.display = 'none';   // fps/draws/tris is a debug overlay
+  // The comms feed lives in the bottom-left, which is exactly where the caption
+  // plate goes — a rival's line lands ON the track name and both become
+  // unreadable. It fires on race events, so it hits some shots and not others,
+  // which is worse than always: the kit comes back inconsistent.
+  const comms = document.getElementById('comms-feed');
+  if (comms) comms.style.display = 'none';
   if (!caption) return;
   const el = document.createElement('div');
   el.id = '__cap';
