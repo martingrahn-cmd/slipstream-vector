@@ -1,8 +1,8 @@
 # STATUS.md — where Slipstream Vector actually is
 
-Written 2026-07-28, at commit `acec5c8`, 116 commits in. This is the honest
-board: what is **built and verified**, what is **open**, and what is **an idea
-nobody has committed to**. It is deliberately separate from `README.md` (which
+Written 2026-07-28 at commit `acec5c8`; refreshed 2026-08-01 at `0f80eae`,
+131 commits in. This is the honest board: what is **built and verified**, what
+is **open**, and what is **an idea nobody has committed to**. It is deliberately separate from `README.md` (which
 describes the game as it exists to a player) and from `FIDELITY.md` /
 `TERRAIN.md` (which are design records for one system each).
 
@@ -58,6 +58,18 @@ build step.
   contact shading, weathered rock forms, aurora rebuilt as curtains.
 - **Per-vertex flat shading** everywhere, bake direction now derived from each
   world's own sun.
+- **The effects came off the leash** (2026-07-30) once the additive layer was
+  measured and found to cost ~0.05 of a fill: LOW got its particles back, hits
+  and explosions got a staggered fireball plus shock rings, sparks became
+  stretched slivers thrown from the real contact point.
+- **Palm Coast got planted properly.** Every scatterer now stands on
+  `groundAt()` / the island height field instead of the flat `groundY` — palms,
+  rocks, scrub, mooring posts, beaches, billboards, the start gantry and the
+  grandstands were each, separately, standing in the lagoon or floating.
+- **The landmark works.** The lighthouse beam had never drawn: its shader
+  failed to compile the moment fog was switched on. It now sweeps, fades along
+  its length and flashes when it swings at you, with a lamp flare that carries
+  the sweep in daylight.
 
 ### Tooling and gates
 - `tools/audit-tracks.mjs` — surface-accurate self-intersection audit (3.5 m
@@ -161,7 +173,20 @@ readability, not fairness:
 
 The cheap fix is neither the roll nor the AI: put the held weapon on rival ships
 (a small glyph, or an engine-tone tell) so the other four outcomes become
-visible too. Nobody has built it.
+visible too.
+
+**Martin's design call (2026-07-30): no tell on the ships.** This is decided,
+not pending — do not re-propose it. The effects budget went into hits,
+explosions and boost instead. If the readability question ever comes back it
+wants a different answer than a glyph on a hull.
+
+### 2.6a Two art notes Martin raised that nobody has confirmed on hardware
+Both were rebuilt on 2026-07-30 and only ever checked headless:
+- **Mountains "mera bergslika".** They were literally four-sided cones —
+  pyramids — and are now angular lobed massifs. Martin has not seen the
+  rebuilt version in play.
+- **Island hills as "stora gröna bullar".** Rebuilt with angle-modulated
+  ridges on a subdivided icosahedron. Same: unconfirmed on hardware.
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
