@@ -234,6 +234,15 @@ The full history, so nobody re-derives it:
   is alpha), amber against the magenta city, heads near-white at 1.1 kissing
   the bloom threshold, near-camera fade within 7-34m guarding the fill budget.
 
+### 2.6c World 4 polish (in progress)
+The snow pass is IN: moon glitter (distance-faded twinkle cells) and cold
+hollows (relief tinted toward the shadow blue) in the dune shader's uSnow mode,
+scrub blotches off on snow. Verified by before/after press pairs on all three
+frost tracks — reads as sparkle and tonal variation in stills, twinkles in
+motion. STILL OPEN: the near cliff faces (horizonMask ridge walls and rockCut)
+read as flat pale slabs — the "paper" complaint from the press review stands
+and is the next frost work item.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no
