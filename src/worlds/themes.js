@@ -239,6 +239,10 @@ export const THEMES = {
     // plane where it meets the towers.
     terrain: { amp: 4, freq: 0.0070, octaves: 2 },
     wind: 0.8,            // sheltered by the towers
+    // Street lighting along the ribbon — masts, arms over the road, warm heads
+    // and a soft cone each, evenly spaced because the RHYTHM is what reads at
+    // 250 km/h. Warm white on purpose: never the cyan/magenta pair.
+    trackLamps: { every: 44, col: 0xffdcae, height: 9.5, glow: 0.34 },
     roadside: 'street',   // stage-2 near-band kit: barrier blocks + lit vents
     roadsideCount: 420,
     blimp: true,          // stage-4 ambient life: an ad blimp rounding the skyline

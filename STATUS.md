@@ -193,29 +193,34 @@ wants a different answer than a glyph on a hull.
   blade-footed promontory with a cliff flank and a lobed two-humped sandbar.
   Unconfirmed on hardware.
 
-### 2.6b Track lamps: built twice, never landed
+### 2.6b Track lamps: SOLVED as a diagnosis, tuning in progress
 Street lighting along the ribbon — masts, arms over the road, warm heads and a
-soft cone each, evenly spaced for rhythm. Written, reverted, rewritten with a
-real bug fixed, reverted again. It is NOT in the game.
+soft cone each, evenly spaced for rhythm. Now IN the game, at a deliberately
+conservative first intensity, while a readability pass is chosen.
 
-What is known, so the third attempt does not re-derive it:
-- **Placement is correct.** `tools/audit-props.mjs` (written for this) reports
-  the lamps at lateral median 0.0m from the road edge, height median 7.9m, 100%
-  within 40m, 79 of an expected 78 placed. Placement is ruled out.
+The full history, so nobody re-derives it:
+- **Placement is correct.** `tools/audit-props.mjs` reports the lamps at
+  lateral median 0.0m from the road edge, height median 7.9m, 100% within 40m.
 - **A plain `clearOfTrack()` rejects most of them** on a curved circuit: it
   tests every spline sample including the neighbours of the lamp's own section,
-  and inside a corner those are closer than the margin. Needs the arc-length
-  exclusion `buildCanyon` uses (skip samples within ~70m of arc).
-- **An additive material with `fog: true` is a real bug** and was fixed: fog
-  mixes the colour toward the fog colour BEFORE it is added, so a warm lamp in
-  a pink-fogged world adds haze instead of light. 21 of the 23 glow materials
-  in scenery.js are `fog: false`; this one was not. Fixing it changed the frame
-  (verified by hash) but did not make the lamps visible.
-- **Still unexplained:** with all of the above correct, the lamps do not read in
-  a press frame. The next step is a VISIBILITY tool — project known object
-  positions into the shot camera and report on-screen/occluded — not another
-  guess. Or hang the lights on `buildOverheads`' gantries, which audit-props
-  confirms sit at lateral -0.6m, 5-11m up, and are visibly in every city frame.
+  and inside a corner those are closer than the margin. Fixed with the same
+  arc-length exclusion `buildCanyon` uses.
+- **An additive material with `fog: true` is a real bug**, fixed: fog mixes the
+  colour toward the fog colour BEFORE it is added, so a warm lamp in a
+  pink-fogged world adds haze instead of light. 21 of the 23 glow materials in
+  scenery.js are `fog: false`; this one was not.
+- **The "still invisible" verdict was wrong.** `tools/audit-visibility.mjs`
+  (written for this) pixel-diffs a scenery child in and out of the frame with
+  an animation-noise floor — the city RAINS, 20% of the frame changes every
+  frame, so it isolates the child and averages 4 frames per state. Result: the
+  lamps contribute 3.7% of the frame at mean luma delta 55 against a noise
+  floor of 17, with the heatmap showing the cone row marching down the road.
+  **They render and always did.** What remains is READABILITY: 0.34-opacity
+  warm-white is camouflage against a skyline of warm windows, and the cones
+  stop 2.6m above the road so the light never grips the asphalt.
+- The readability candidates (hotter heads / road pools / gantry underglow /
+  grounded cones) were rendered as runtime variants from one parked camera;
+  the chosen combination ships as its own commit.
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so

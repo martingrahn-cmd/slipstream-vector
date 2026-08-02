@@ -429,6 +429,8 @@ export function buildScenery(spline, scene, theme) {
   if (theme.roadside) group.add(buildRoadside(rng, spline, groundY, theme, mesas.userData.islands));
   if (theme.flora && theme.floraCount) group.add(buildFlora(rng, spline, groundY, theme, mesas.userData.islands));
   group.add(buildBillboards(rng, spline, groundY, theme.billboardEvery ?? 220, theme.adGlow ?? 0));
+  const lamps = buildTrackLamps(spline, groundY, theme);
+  if (lamps) group.add(lamps);
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
   if (canyon) group.add(canyon.group);
   if (theme.sprawl) group.add(buildSprawl(rng, spline, groundY, theme));
@@ -2550,6 +2552,93 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
 // opaque (zero overdraw cost). Styles: 'tufts' (dry grass + pebbles),
 // 'marina' (weathered mooring posts on the lagoon), 'street' (barrier blocks
 // + vent boxes, aligned with the road). Knobs: theme.roadside/roadsideCount.
+// -------------------------------------------------------------- track lamps
+// Street lighting along the ribbon: a mast beside the road, an arm reaching out
+// over it, a glowing head and a soft cone under it.
+//
+// Two things make this read at 250 km/h where the scattered roadside kit does
+// not. It is RHYTHMIC — evenly spaced, so it strobes past and gives the eye a
+// speed reference the road markings alone do not. And it is OVERHEAD, so it is
+// in frame whatever the camera is doing, unlike anything at kerb height.
+//
+// The light is warm-white, NOT the cyan/magenta pair. Track edge neon is
+// gameplay language (CLAUDE.md); a lamp borrowing those colours would be one
+// more cyan thing on the left to parse mid-corner. Lighting is the one thing
+// out here that is allowed to be plain white.
+//
+// THE GLOW MESH MUST BE `fog: false`. An additive material with fog on has its
+// colour mixed toward the fog colour BEFORE it is added, so at any distance the
+// lamp stops adding light and starts adding haze — this world's fog is bright
+// pink, so a warm lamp became a faint pink smear. Every other glow in this
+// file is fog:false; this one was the exception. tools/audit-props.mjs ruled
+// placement out; tools/audit-visibility.mjs measures what a child contributes.
+function buildTrackLamps(spline, groundY, theme) {
+  const cfg = theme.trackLamps;
+  if (!cfg) return null;
+  const every = cfg.every ?? 46;
+  const col = new THREE.Color(cfg.col ?? 0xffd9a0);
+  const H = cfg.height ?? 9.5;
+  const solid = [], glow = [];
+  const f = makeFrame();
+  let side = 1;
+  for (let s = 0; s < spline.length - 1; s += every, side = -side) {
+    spline.frameAt(s, f);
+    const rl = Math.hypot(f.R.x, f.R.z) || 1;
+    const nx = (f.R.x / rl) * side, nz = (f.R.z / rl) * side;
+    const off = f.width + 2.6;
+    const bx = f.pos.x + nx * off, bz = f.pos.z + nz * off;
+    // Clear OTHER passes of the road (loops, flyovers, the grid crossing
+    // itself) but not the stretch this lamp is lining. A plain clearOfTrack()
+    // tests every sample including the ones a few metres ahead, and on any
+    // corner the inside of the curve comes closer to the mast than the margin —
+    // it rejected most of the lamps on a curved circuit. Same arc-length
+    // exclusion buildCanyon uses, for the same reason.
+    const iSelf = Math.round(s / spline.step);
+    let ok = true;
+    for (let i = 0; i < spline.n; i += 4) {
+      const steps = Math.abs(i - iSelf);
+      const arc = Math.min(steps, spline.n - steps) * spline.step;
+      if (arc < 70) continue;
+      const dx = spline.pos[i * 3] - bx, dz = spline.pos[i * 3 + 2] - bz;
+      if (Math.hypot(dx, dz) - spline.width[i] < 2.5) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const gy = groundAt(groundY, bx, bz);
+    const base = f.pos.y > gy + 2 ? f.pos.y - 1.2 : gy;   // elevated sections carry their own
+    const mast = new THREE.BoxGeometry(0.38, H, 0.38);
+    mast.translate(bx, base + H / 2, bz);
+    solid.push(bakeFlatColors(mast, 0x322f4a, { rim: false }));
+    const reach = 3.6;
+    const arm = new THREE.BoxGeometry(0.28, 0.28, reach);
+    arm.rotateY(Math.atan2(nx, nz));
+    arm.translate(bx - nx * reach * 0.5, base + H - 0.3, bz - nz * reach * 0.5);
+    solid.push(bakeFlatColors(arm, 0x322f4a, { rim: false }));
+    const hx = bx - nx * reach, hz2 = bz - nz * reach, hy = base + H - 0.5;
+    const head = new THREE.BoxGeometry(1.1, 0.34, 1.9);
+    head.rotateY(Math.atan2(nx, nz));
+    head.translate(hx, hy, hz2);
+    glow.push(colorTint(head, col));
+    // Short and wide: a suggestion of a light pool, and the fill it costs is
+    // proportional to how far down the road it reaches.
+    const cone = new THREE.ConeGeometry(3.4, 6.4, 10, 1, true);
+    cone.rotateX(Math.PI);
+    cone.translate(hx, hy - 3.2, hz2);
+    glow.push(colorTint(cone, col));
+  }
+  if (!solid.length) return null;
+  const g = new THREE.Group();
+  g.name = 'lamps';
+  g.add(new THREE.Mesh(mergeGeoms(solid), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
+  const glowMesh = new THREE.Mesh(mergeGeoms(glow), new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: cfg.glow ?? 0.34,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  }));
+  glowMesh.renderOrder = 1;
+  g.add(glowMesh);
+  g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
+  return g;
+}
+
 function buildRoadside(rng, spline, groundY, theme, islands = null) {
   const style = theme.roadside;
   // Water world: the "near band beside the road" is open lagoon, so the kit that
