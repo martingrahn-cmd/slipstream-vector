@@ -2556,7 +2556,7 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
 // AdditiveBlending the vertex colour IS the alpha, so fading the colour toward
 // one end lands a light cone on the road as falloff instead of a hard-edged
 // translucent sail — which is exactly how the ungraded cone read at 30m.
-function gradeAdditiveY(geom, color, kTop, kBottom) {
+function gradeAdditiveY(geom, color, kTop, kBottom, keepNormal = false) {
   const g = geom.index ? geom.toNonIndexed() : geom;
   const pa = g.getAttribute('position');
   const bb = new THREE.Box3().setFromBufferAttribute(pa);
@@ -2568,7 +2568,10 @@ function gradeAdditiveY(geom, color, kTop, kBottom) {
     c[i * 3] = color.r * k; c[i * 3 + 1] = color.g * k; c[i * 3 + 2] = color.b * k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  // keepNormal: the lamp cones need normals for the silhouette fade in their
+  // fragment shader — but geometry headed for mergeGeoms() must drop them.
+  if (!keepNormal) g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
   return g;
 }
 
@@ -2603,7 +2606,7 @@ function buildTrackLamps(spline, groundY, theme) {
   const col = new THREE.Color(cfg.col ?? 0xffd9a8);
   const headCol = new THREE.Color(0xfff2d8).multiplyScalar(1.1 * Math.min(1.2, glowK));
   const H = cfg.height ?? 9.5;
-  const solid = [], glow = [];
+  const solid = [], glow = [], cones = [];
   const f = makeFrame();
   let side = 1;
   for (let s = 0; s < spline.length - 1; s += every, side = -side) {
@@ -2648,19 +2651,19 @@ function buildTrackLamps(spline, groundY, theme) {
     // which is the whole visual signature of a street lamp (four rendered
     // variants, one parked camera: grounding was the only cue that read).
     //
-    // Geometry note, learned the expensive way: this is wide at the HEAD with
-    // the apex in the deck — physically upside down, and that is the version
-    // that reads. A physically correct cone (apex at the lamp, wide base on
-    // the road) needs its base rim faded to kill the hard silhouette, and the
-    // faded base is exactly the road contact — grounding dies with it. Wide
-    // top + apex-down keeps the whole volume hanging over the road, and the
-    // gradient toward the apex lands the light as falloff instead of an edge.
-    const coneH = Math.max(4, hy - f.pos.y + 0.5);   // apex ends inside the deck
-    let cone = new THREE.ConeGeometry(5.2, coneH, 14, 1, true);
-    cone.rotateX(Math.PI);                            // wide end up, at the head
-    cone = gradeAdditiveY(cone, col, glowK * 0.38, glowK * 0.07);
-    cone.translate(hx, hy - coneH / 2, hz2);
-    glow.push(cone);
+    // And it points the RIGHT way now — narrow at the lamp, wide on the road.
+    // An intermediate version shipped it inverted, because the correct
+    // orientation has a hard base rim at road level and fading the rim faded
+    // the road contact with it. Martin caught the upside-down lamp from a
+    // screenshot. The real fix is the lighthouse beam's recipe: fade toward
+    // the SILHOUETTE per fragment (normal dot view), so the rim dissolves
+    // while the core stays lit all the way down — which needs normals, and a
+    // separate mesh, since mergeGeoms() drops everything but position+colour.
+    const coneH = Math.max(4, hy - f.pos.y + 0.3);
+    let cone = new THREE.ConeGeometry(4.6, coneH, 14, 1, true);
+    cone = gradeAdditiveY(cone, col, glowK * 0.55, glowK * 0.28, true);
+    cone.translate(hx, hy - coneH / 2, hz2);   // apex at the head, base on the deck
+    cones.push(cone);
   }
   if (!solid.length) return null;
   const g = new THREE.Group();
@@ -2694,6 +2697,41 @@ function buildTrackLamps(spline, groundY, theme) {
   }));
   glowMesh.renderOrder = 1;
   g.add(glowMesh);
+  if (cones.length) {
+    // The cones carry normals, merged with the attribute-preserving merger.
+    // Fragment shader = the lighthouse beam's face term: brightest where the
+    // surface faces the camera, dissolving at the silhouette, so the wide base
+    // grips the road with no hard rim. clamp before pow — perspective-correct
+    // interpolation lands a hair outside [0,1] and pow of a negative base is
+    // NaN on Apple's driver (the bloom turns one NaN into a black block).
+    const coneMesh = new THREE.Mesh(mergeGeometries(cones, false), new THREE.ShaderMaterial({
+      vertexColors: true, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      vertexShader: [
+        'varying vec3 vCol;',
+        'varying vec3 vN;',
+        'varying vec3 vV;',
+        'void main() {',
+        '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+        '  vN = normalize(normalMatrix * normal);',
+        '  vV = normalize(-mvPosition.xyz);',
+        '  vCol = color * smoothstep(7.0, 34.0, length(mvPosition.xyz));',
+        '  gl_Position = projectionMatrix * mvPosition;',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vCol;',
+        'varying vec3 vN;',
+        'varying vec3 vV;',
+        'void main() {',
+        '  float face = pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 0.7);',
+        '  gl_FragColor = vec4(vCol * (0.12 + 0.88 * face), 1.0);',
+        '}',
+      ].join('\n'),
+    }));
+    coneMesh.renderOrder = 1;
+    g.add(coneMesh);
+  }
   g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
   return g;
 }
