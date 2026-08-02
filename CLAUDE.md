@@ -103,6 +103,13 @@ fixed.)
   fragment count of the additive layer, per track and tier, with an optional
   heatmap dump (`OD_DUMP=<dir>`). Not a gate; a measuring stick to reach for
   before believing an effect is expensive.
+- **Audit:** `node tools/audit-props.mjs [track] [nameFilter]` — where scenery
+  actually landed: per scenery child, its vertex count and the distribution of
+  lateral distance from the road edge and height above the road surface. The
+  question it answers is "I added props along the track and cannot see them —
+  are they mispositioned or are they there and invisible?", which is otherwise
+  six minutes of press shots per guess. A prop meant to line the road reads as a
+  lateral median under ~10m with "within 40m" near 100%.
 - **Audit:** `node tools/audit-pads.mjs [tracks]` — weapon-pad pickup
   distribution and what a whole pack gets off one pad. The standing answer to
   "does the field share a weapon?" (it does not; see `STATUS.md` §2.5).

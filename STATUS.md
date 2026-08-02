@@ -193,6 +193,30 @@ wants a different answer than a glyph on a hull.
   blade-footed promontory with a cliff flank and a lobed two-humped sandbar.
   Unconfirmed on hardware.
 
+### 2.6b Track lamps: built twice, never landed
+Street lighting along the ribbon — masts, arms over the road, warm heads and a
+soft cone each, evenly spaced for rhythm. Written, reverted, rewritten with a
+real bug fixed, reverted again. It is NOT in the game.
+
+What is known, so the third attempt does not re-derive it:
+- **Placement is correct.** `tools/audit-props.mjs` (written for this) reports
+  the lamps at lateral median 0.0m from the road edge, height median 7.9m, 100%
+  within 40m, 79 of an expected 78 placed. Placement is ruled out.
+- **A plain `clearOfTrack()` rejects most of them** on a curved circuit: it
+  tests every spline sample including the neighbours of the lamp's own section,
+  and inside a corner those are closer than the margin. Needs the arc-length
+  exclusion `buildCanyon` uses (skip samples within ~70m of arc).
+- **An additive material with `fog: true` is a real bug** and was fixed: fog
+  mixes the colour toward the fog colour BEFORE it is added, so a warm lamp in
+  a pink-fogged world adds haze instead of light. 21 of the 23 glow materials
+  in scenery.js are `fog: false`; this one was not. Fixing it changed the frame
+  (verified by hash) but did not make the lamps visible.
+- **Still unexplained:** with all of the above correct, the lamps do not read in
+  a press frame. The next step is a VISIBILITY tool — project known object
+  positions into the shot camera and report on-screen/occluded — not another
+  guess. Or hang the lights on `buildOverheads`' gantries, which audit-props
+  confirms sit at lateral -0.6m, 5-11m up, and are visibly in every city frame.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no
