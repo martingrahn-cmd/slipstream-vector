@@ -2959,9 +2959,12 @@ function buildCanyon(rng, spline, groundY, theme) {
   const winA = new THREE.Color(TUNING.COL.EDGE_L);
   const winB = new THREE.Color(TUNING.COL.EDGE_R);
   const winC = new THREE.Color(0xffd9a0);
+  // Seven, not four. The reference for this street is a wall of competing
+  // advertisers, and four colours in rotation reads as one company's livery.
   const signCols = [
     new THREE.Color(0x00f0ff), new THREE.Color(0xff2ec8),
     new THREE.Color(0xffe066), new THREE.Color(0x7df9ff),
+    new THREE.Color(0xff5a3c), new THREE.Color(0xffffff), new THREE.Color(0x9d4bff),
   ];
   for (let s = 0; s < spline.length; s += 26) {
     spline.frameAt(s, f);
@@ -3020,18 +3023,47 @@ function buildCanyon(rng, spline, groundY, theme) {
         const c = rng() < 0.55 ? winA : rng() < 0.6 ? winB : winC;
         glows.push(colorTint(strip, c));
       }
-      // Big pulsing neon signs on some street-facing facades — two banks
-      // breathing in counter-phase so the canyon flickers like a strip.
-      if (h > 38 && rng() < 0.45) {
-        const sh = h * (0.32 + rng() * 0.25);
-        const sign = new THREE.BoxGeometry(2.0, sh, 2.0);
-        sign.translate(
-          px - (rx / rl) * side * (foot * 0.5),
-          groundY + h * 0.35 + rng() * h * 0.2,
-          pz - (rz / rl) * side * (foot * 0.5),
-        );
-        const tinted = colorTint(sign, signCols[Math.floor(rng() * signCols.length)]);
-        (rng() < 0.5 ? signsA : signsB).push(tinted);
+      // SIGNAGE. One vertical bar per tall block read as a lit strip, not as a
+      // street where every facade is selling something. Three kinds now, at
+      // three scales: a bar hugging the facade, a BLADE projecting out over the
+      // road (the shape that says "this is a city street" more than any other),
+      // and a band across the crown. Two banks still, breathing in counter-
+      // phase, so the canyon flickers instead of glowing evenly.
+      //
+      // A wet-ground reflection streak under each sign was built here and then
+      // REMOVED. It is the strongest cyberpunk cue in the reference, and it
+      // does not work in this game: the track rides elevated above the city
+      // floor, so from the chase camera the ground beside it is almost entirely
+      // occluded. Probed by forcing the streaks to pure green — they were on
+      // screen, as a few slivers, for a full extra additive layer's worth of
+      // fill. If wet ground is ever wanted here it belongs on the ROAD surface
+      // shader, which is the only ground the camera actually sees.
+      const nx = (rx / rl) * side, nz = (rz / rl) * side;   // facade normal, outward
+      const faceX = px - nx * (foot * 0.5), faceZ = pz - nz * (foot * 0.5);
+      const nSign = h > 26 ? 1 + (rng() < 0.55 ? 1 : 0) + (rng() < 0.28 ? 1 : 0) : 0;
+      for (let q = 0; q < nSign; q++) {
+        const col = signCols[Math.floor(rng() * signCols.length)];
+        const bank = rng() < 0.5 ? signsA : signsB;
+        const kind = rng();
+        const yBase = groundY + h * (0.16 + rng() * 0.48);
+        if (kind < 0.40) {
+          const sh = h * (0.24 + rng() * 0.26);
+          const sg = new THREE.BoxGeometry(1.9, sh, 1.9);
+          sg.translate(faceX + (rng() - 0.5) * foot * 0.4, yBase + sh / 2, faceZ + (rng() - 0.5) * foot * 0.4);
+          bank.push(colorTint(sg, col));
+        } else if (kind < 0.78) {
+          const bw = 3.5 + rng() * 5.0, bh = h * (0.13 + rng() * 0.15);
+          const sg = new THREE.BoxGeometry(0.45, bh, bw);
+          sg.rotateY(Math.atan2(nx, nz));              // depth along the normal
+          sg.translate(faceX - nx * bw * 0.45, yBase + bh / 2, faceZ - nz * bw * 0.45);
+          bank.push(colorTint(sg, col));
+        } else {
+          const bh = 1.5 + rng() * 2.2;
+          const sg = new THREE.BoxGeometry(foot * 0.9, bh, 1.1);
+          sg.rotateY(ry);
+          sg.translate(faceX, groundY + h - bh * 1.7, faceZ);
+          bank.push(colorTint(sg, col));
+        }
       }
     }
   }
