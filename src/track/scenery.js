@@ -1094,7 +1094,33 @@ function buildFarMountains(rng, groundY, cx, cz, spline, cityAng = null, theme) 
     }
     if (ridges) { pushRidge(px, pz, ang, w, h, theme.mountainFar); continue; }
     const g = towers
-      ? new THREE.BoxGeometry(w, h, w * (0.6 + rng() * 0.7))
+      ? (() => {
+        // The far skyline is pure silhouette — no windows, no facets, nothing
+        // but the top edge — and a row of flat-topped boxes is a comb. Setback,
+        // pyramid cap or mast, so the edge breaks. One merged draw either way.
+        const d = w * (0.6 + rng() * 0.7);
+        const parts = [new THREE.BoxGeometry(w, h, d)];
+        const p = rng();
+        if (p < 0.34) {
+          let ww = w, dd = d, y = h / 2;
+          for (let k = 0; k < 2; k++) {
+            const hh = h * (0.08 + rng() * 0.11);
+            ww *= 0.60 + rng() * 0.18; dd *= 0.60 + rng() * 0.18;
+            const b = new THREE.BoxGeometry(ww, hh, dd);
+            b.translate(0, y + hh / 2, 0); parts.push(b); y += hh;
+          }
+        } else if (p < 0.62) {
+          const ph = h * (0.12 + rng() * 0.17);
+          const c = new THREE.ConeGeometry(Math.min(w, d) * 0.7, ph, 4);
+          c.rotateY(Math.PI / 4);
+          c.translate(0, h / 2 + ph / 2, 0); parts.push(c);
+        } else if (p < 0.84) {
+          const mh = h * (0.18 + rng() * 0.32);
+          const m = new THREE.CylinderGeometry(w * 0.02, w * 0.055, mh, 5);
+          m.translate(0, h / 2 + mh / 2, 0); parts.push(m);
+        }
+        return mergeGeometries(parts, false);
+      })()
       : (() => {
         // A single cone is a single peak, and a horizon of single peaks reads
         // as a row of tents. Modulate the height by angle so each mountain
@@ -1578,12 +1604,59 @@ function buildMesas(rng, spline, groundY, theme) {
   const towers = theme.mesaStyle === 'towers';
   const islands = theme.mesaStyle === 'islands';
   // [factory, unit height, half-depth of the +z face]
+  // A crown on the shaft. This is the whole city upgrade in one function: five
+  // flat-topped boxes repeated across a skyline read as a COMB, and at the
+  // distance a skyline is seen the top edge is the only thing you can read.
+  // Windows are generated from the SHAFT's box alone (userData.winTop below),
+  // so a crown never gets a grid of lit rectangles floating over it.
+  const crownFor = (r, hx, hz, top) => {
+    const out = [];
+    const pick = r();
+    if (pick < 0.32) {                                   // stepped setback
+      let w = hx, d = hz, y = top;
+      for (let k = 0; k < 2; k++) {
+        const hh = 0.10 + r() * 0.13;
+        w *= 0.64 + r() * 0.16; d *= 0.64 + r() * 0.16;
+        const b = new THREE.BoxGeometry(w * 2, hh, d * 2);
+        b.translate(0, y + hh / 2, 0); out.push(b); y += hh;
+      }
+    } else if (pick < 0.56) {                            // cap plus a mast
+      const hh = 0.06 + r() * 0.05;
+      const cap = new THREE.BoxGeometry(hx * 1.3, hh, hz * 1.3);
+      cap.translate(0, top + hh / 2, 0); out.push(cap);
+      const mh = 0.35 + r() * 0.6;
+      const m = new THREE.CylinderGeometry(0.012, 0.032, mh, 5);
+      m.translate(0, top + hh + mh / 2, 0); out.push(m);
+    } else if (pick < 0.80) {                            // pyramid cap
+      const ph = 0.18 + r() * 0.30;
+      const p = new THREE.ConeGeometry(Math.min(hx, hz) * 1.34, ph, 4);
+      p.rotateY(Math.PI / 4);
+      p.translate(0, top + ph / 2, 0); out.push(p);
+    } else {                                             // parapet lip
+      const hh = 0.05 + r() * 0.06;
+      const b = new THREE.BoxGeometry(hx * 2.2, hh, hz * 2.2);
+      b.translate(0, top + hh / 2, 0); out.push(b);
+    }
+    return out;
+  };
+  // Shaft + crown, merged. The proportions are per instance too: five fixed
+  // aspect ratios spun at random is still five buildings, and a box is the one
+  // form a random Y rotation cannot disguise — all four sides are the same.
+  const tower = (r, wLo, wHi, dLo, dHi, hLo, hHi, round = false) => {
+    const w = wLo + r() * (wHi - wLo), d = dLo + r() * (dHi - dLo), h = hLo + r() * (hHi - hLo);
+    const shaft = round
+      ? new THREE.CylinderGeometry(w / 2, w / 2, h, 8 + Math.floor(r() * 5))
+      : new THREE.BoxGeometry(w, h, d);
+    const g = mergeGeometries([shaft, ...crownFor(r, w / 2, (round ? w : d) / 2, h / 2)], false);
+    g.userData.winTop = h / 2;
+    return g;
+  };
   const archetypes = towers ? [
-    [() => new THREE.BoxGeometry(1, 2.4, 1), 2.4, 0.5],
-    [() => new THREE.BoxGeometry(1.3, 1.6, 0.9), 1.6, 0.45],
-    [() => new THREE.BoxGeometry(0.7, 3.2, 0.7), 3.2, 0.35],
-    [() => new THREE.BoxGeometry(1.1, 1.0, 1.1), 1.0, 0.55],
-    [() => new THREE.CylinderGeometry(0.5, 0.5, 2.8, 6), 2.8, 0.5],
+    [(r) => tower(r, 0.80, 1.25, 0.70, 1.15, 1.9, 3.0), 2.4, 0.5],
+    [(r) => tower(r, 1.10, 1.60, 0.80, 1.20, 1.3, 2.0), 1.6, 0.45],
+    [(r) => tower(r, 0.55, 0.85, 0.55, 0.85, 2.8, 4.0), 3.2, 0.35],
+    [(r) => tower(r, 0.95, 1.35, 0.95, 1.35, 0.8, 1.4), 1.0, 0.55],
+    [(r) => tower(r, 0.85, 1.15, 0.85, 1.15, 2.3, 3.4, true), 2.8, 0.5],
   ] : islands ? [
     // Islands are the one form here the camera looks straight AT for seconds at
     // a time, across a flat lagoon with nothing to hide behind. At detail 1 and
@@ -1851,6 +1924,8 @@ function buildMesas(rng, spline, groundY, theme) {
     const ry = rng() * Math.PI * 2;
     const g = make(rng);   // island archetypes roll their own shape per instance
     const ub = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position')); // unit bbox for the window grid
+    // A crowned tower's bbox includes its mast. Windows belong on the SHAFT.
+    if (g.userData.winTop !== undefined) ub.max.y = g.userData.winTop;
     g.scale(scale, scale * ys, scale);
     g.rotateY(ry);
     const box = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
