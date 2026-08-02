@@ -102,7 +102,13 @@ fixed.)
 - **Audit:** `node tools/audit-overdraw.mjs [tracks] [tiers] [samples]` — exact
   fragment count of the additive layer, per track and tier, with an optional
   heatmap dump (`OD_DUMP=<dir>`). Not a gate; a measuring stick to reach for
-  before believing an effect is expensive.
+  before believing an effect is expensive. **Never run it with another headless
+  browser alive**: a concurrent chromium in software GL corrupts the numbers
+  wholesale — the same build measured 0.415 peak under load and 0.112 solo, and
+  the corrupted run nearly triggered a rework of a feature that was fine. It
+  counts FRAGMENTS, not brightness: dimming a material changes nothing here,
+  only geometry coverage does (culling a back wall halves it; a near fade does
+  not).
 - **Audit:** `node tools/audit-props.mjs [track] [nameFilter]` — where scenery
   actually landed: per scenery child, its vertex count and the distribution of
   lateral distance from the road edge and height above the road surface. The
