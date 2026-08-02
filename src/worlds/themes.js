@@ -286,6 +286,7 @@ export const THEMES = {
     fog: 0x2a3a5e,        // cold blue haze
     ground: 0xc7d4e8,     // moonlit snowpack
     groundB: 0xa7b9d6,    // wind-drift bands (sastrugi read via the dune shader)
+    snow: true,           // dune shader's snow mode: moon glitter + cold hollows
     warm: 0xdfe9ff,       // moonlight 'warm' highlight — actually the coldest light
     sand: 0xdde8f6,
     mesaLit: 0xb2c4e0,    // snowbound peaks, lit side

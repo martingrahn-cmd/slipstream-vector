@@ -870,27 +870,39 @@ function buildGround(groundY, cx, cz, theme, terrain) {
             theme.sky.sunAz ? theme.sky.sunAz[0] : -0.35,
             theme.sky.sunAz ? theme.sky.sunAz[1] : -0.94).normalize() },
           uCenter: { value: new THREE.Vector2(cx, cz) },
+          // Snow extensions (uSnow gates them; desert runs the same program
+          // with all of it off): moon glitter needs time and a camera to fade
+          // by distance, cold pools need the shadow blue.
+          time: { value: 0 },
+          uSnow: { value: theme.snow ? 1 : 0 },
+          uCam: { value: new THREE.Vector3() },
+          uShadow: { value: new THREE.Color(theme.mesaShadow ?? 0x44548e) },
         },
       ]),
       vertexShader: /* glsl */ `
         attribute float aOcc;
         varying vec2 vXZ;
         varying float vOcc;
+        varying float vY;
         #include <fog_pars_vertex>
         void main() {
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vXZ = wp.xz;
           vOcc = aOcc;
+          vY = position.y;
           vec4 mvPosition = viewMatrix * wp;
           gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
         }
       `,
       fragmentShader: /* glsl */ `
-        uniform vec3 colA, colB, uWarm;
+        uniform vec3 colA, colB, uWarm, uShadow;
         uniform vec2 uSunDir, uCenter;
+        uniform vec3 uCam;
+        uniform float time, uSnow;
         varying vec2 vXZ;
         varying float vOcc;
+        varying float vY;
         #include <fog_pars_fragment>
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -909,9 +921,24 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // Coarse grain so the surface never reads as a flat fill.
           float g = hash(floor(vXZ * 0.9));
           col += (g - 0.5) * 0.035;
-          // Sparse darker scrub blotches.
+          // Sparse darker scrub blotches - desert language, so snow skips them.
           float blotch = hash(floor(vXZ * 0.045));
-          col = mix(col, colA * 0.72, step(0.82, blotch) * 0.5);
+          col = mix(col, colA * 0.72, step(0.82, blotch) * 0.5 * (1.0 - uSnow));
+          // SNOW, both cues gated off for the desert:
+          // Cold pools - hollows sink toward the deep blue shadow, crests stay
+          // moonlit, so the relief the disc already carries becomes legible
+          // instead of one white fill. vY is the vertex's own displaced
+          // height, written by the CPU terrain function at build time.
+          float hollow = (1.0 - smoothstep(0.8, 7.5, vY)) * uSnow;
+          col = mix(col, uShadow, hollow * 0.34);
+          // Moon glitter - the sparkle is what says snow rather than plaster.
+          // Sparse hashed cells twinkle on their own phase, faded by distance
+          // so the far field does not boil.
+          float twk = hash(floor(vXZ * 2.1));
+          float ph = sin(time * (1.4 + twk * 3.2) + twk * 43.0);
+          float nearFade = 1.0 - smoothstep(130.0, 330.0, length(vXZ - uCam.xz));
+          float glint = step(0.974, twk) * smoothstep(0.55, 1.0, ph) * nearFade * uSnow;
+          col += vec3(0.88, 0.95, 1.0) * glint * 0.55;
           // Sun-kiss: dune band crests brighten toward the sun side of the
           // world — a warm gold brush that dies into the fog.
           float crest = smoothstep(0.72, 0.98, band);
@@ -927,7 +954,10 @@ function buildGround(groundY, cx, cz, theme, terrain) {
       fog: true,
     });
     mesh = new THREE.Mesh(geom, mat);
-    mat = null; // static — nothing to animate per frame
+    // Desert stays static; SNOW keeps its material registered - the glitter
+    // twinkles on time and fades by camera distance, both fed per frame by
+    // the same update loop that already drives the water.
+    if (!theme.snow) mat = null;
   } else if (theme.groundStyle === 'water' || theme.groundStyle === 'grid') {
     const water = theme.groundStyle === 'water';
     mat = new THREE.ShaderMaterial({
@@ -2556,7 +2586,7 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
 // AdditiveBlending the vertex colour IS the alpha, so fading the colour toward
 // one end lands a light cone on the road as falloff instead of a hard-edged
 // translucent sail — which is exactly how the ungraded cone read at 30m.
-function gradeAdditiveY(geom, color, kTop, kBottom, keepNormal = false) {
+function gradeAdditiveY(geom, color, kTop, kBottom, keepNormal = false, softBase = 0) {
   const g = geom.index ? geom.toNonIndexed() : geom;
   const pa = g.getAttribute('position');
   const bb = new THREE.Box3().setFromBufferAttribute(pa);
@@ -2564,7 +2594,15 @@ function gradeAdditiveY(geom, color, kTop, kBottom, keepNormal = false) {
   const span = Math.max(bb.max.y - bb.min.y, 1e-6);
   for (let i = 0; i < pa.count; i++) {
     const t = (pa.getY(i) - bb.min.y) / span;
-    const k = kBottom + (kTop - kBottom) * t;
+    let k = kBottom + (kTop - kBottom) * t;
+    // softBase: fade the bottom fraction to zero so the volume TERMINATES as
+    // falloff instead of a hard rim where the geometry is cut. Needs enough
+    // height segments to carry the curve — two rings interpolate linearly and
+    // cannot express "flat until the last fifth, then out".
+    if (softBase > 0) {
+      const u = Math.min(t / softBase, 1);
+      k *= u * u * (3 - 2 * u);
+    }
     c[i * 3] = color.r * k; c[i * 3 + 1] = color.g * k; c[i * 3 + 2] = color.b * k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
@@ -2660,8 +2698,8 @@ function buildTrackLamps(spline, groundY, theme) {
     // while the core stays lit all the way down — which needs normals, and a
     // separate mesh, since mergeGeoms() drops everything but position+colour.
     const coneH = Math.max(4, hy - f.pos.y + 0.3);
-    let cone = new THREE.ConeGeometry(4.6, coneH, 14, 1, true);
-    cone = gradeAdditiveY(cone, col, glowK * 0.55, glowK * 0.28, true);
+    let cone = new THREE.ConeGeometry(4.8, coneH, 14, 6, true);
+    cone = gradeAdditiveY(cone, col, glowK * 0.78, glowK * 0.42, true, 0.18);
     cone.translate(hx, hy - coneH / 2, hz2);   // apex at the head, base on the deck
     cones.push(cone);
   }
@@ -2705,8 +2743,15 @@ function buildTrackLamps(spline, groundY, theme) {
     // interpolation lands a hair outside [0,1] and pow of a negative base is
     // NaN on Apple's driver (the bloom turns one NaN into a black block).
     const coneMesh = new THREE.Mesh(mergeGeometries(cones, false), new THREE.ShaderMaterial({
+      // FrontSide, deliberately: the overdraw audit counts FRAGMENTS, not
+      // brightness, and DoubleSide draws both cone walls — measured 0.372 of a
+      // fill worst-frame against the 0.175 ceiling. Culling the back wall
+      // halves the coverage, and driving INSIDE a cone leaves zero fragments
+      // (you face the far wall's back), which the near fade blanked anyway.
+      // Intensity compensates for the lost second wall: intensity is free,
+      // fragments are not.
       vertexColors: true, transparent: true,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
       vertexShader: [
         'varying vec3 vCol;',
         'varying vec3 vN;',
@@ -2724,8 +2769,8 @@ function buildTrackLamps(spline, groundY, theme) {
         'varying vec3 vN;',
         'varying vec3 vV;',
         'void main() {',
-        '  float face = pow(clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0), 0.7);',
-        '  gl_FragColor = vec4(vCol * (0.12 + 0.88 * face), 1.0);',
+        '  float face = clamp(abs(dot(normalize(vN), normalize(vV))), 0.0, 1.0);',
+        '  gl_FragColor = vec4(vCol * pow(face, 1.5), 1.0);',
         '}',
       ].join('\n'),
     }));
