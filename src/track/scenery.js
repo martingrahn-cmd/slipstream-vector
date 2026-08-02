@@ -2666,12 +2666,31 @@ function buildTrackLamps(spline, groundY, theme) {
   const g = new THREE.Group();
   g.name = 'lamps';
   g.add(new THREE.Mesh(mergeGeoms(solid), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
-  // Opacity 1: per-part intensity is baked into the VERTEX colours (head
-  // bright, cone graded), so one merged mesh carries the whole range and the
-  // theme's `glow` knob scales it all.
-  const glowMesh = new THREE.Mesh(mergeGeoms(glow), new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 1,
-    blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  // Per-part intensity is baked into the VERTEX colours (head bright, cone
+  // graded), and the shader adds a NEAR-CAMERA FADE: driving through a cone
+  // otherwise fills a third of the screen with additive wash — measured 0.350
+  // of a fill worst-frame against the survey's 0.175 ceiling. Fading within
+  // ~7-34m kills that peak while the mid-distance rhythm, which is the whole
+  // point of the lamps, is untouched. (V4 of the variant panel called this:
+  // prefer a near fade over shortening the cone — shortening is what made the
+  // original float.) No fog include, so no mvPosition naming trap; additive
+  // output uses the colour directly and leaves alpha at 1.
+  const glowMesh = new THREE.Mesh(mergeGeoms(glow), new THREE.ShaderMaterial({
+    vertexColors: true, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+    vertexShader: [
+      'varying vec3 vCol;',
+      'void main() {',
+      '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+      '  float d = length(mvPosition.xyz);',
+      '  vCol = color * smoothstep(7.0, 34.0, d);',
+      '  gl_Position = projectionMatrix * mvPosition;',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'varying vec3 vCol;',
+      'void main() { gl_FragColor = vec4(vCol, 1.0); }',
+    ].join('\n'),
   }));
   glowMesh.renderOrder = 1;
   g.add(glowMesh);
