@@ -5,12 +5,26 @@ import * as THREE from 'three';
 import { TUNING } from '../config.js';
 import { makeFrame } from './spline.js';
 
+// The wall body and the road's underside are a SHARED colour — they are track
+// structure, not scenery, and they read the same on every circuit by design.
+// But 0x0d0820 is luma 12, and on a night world that is indistinguishable from
+// the void: measured over the press kit, Neon Sprawl came in at mean luma 39
+// against tropic's 71, with 62% of the frame under luma 24, and an A/B with the
+// wall forced to green showed the two black wedges flanking the road ARE this.
+// `theme.wallLift` lerps the shared colour toward that world's own ground.
+// Absent (every world but the city) it is a no-op, so nothing else moves.
+function wallColour(theme) {
+  const c = new THREE.Color(TUNING.COL.WALL);
+  const lift = theme && theme.wallLift;
+  return lift ? c.lerp(new THREE.Color(theme.ground), lift) : c;
+}
+
 export function buildTrackMesh(spline, theme) {
   const group = new THREE.Group();
   const surface = buildSurface(spline, theme);
   group.add(surface.mesh);
-  group.add(buildUnderside(spline));
-  group.add(buildWalls(spline));
+  group.add(buildUnderside(spline, theme));
+  group.add(buildWalls(spline, theme));
   if (spline.splits && spline.splits.length) group.add(buildSplitIslands(spline));
   const edges = buildEdgeStrips(spline);
   group.add(edges);
@@ -252,17 +266,17 @@ function buildSurface(spline, theme) {
 // from every angle. One draw, no additive coverage — free on a fill-bound
 // budget. Vertex colours lift the outer edges slightly so the belly catches a
 // hint of the edge neon instead of reading as a dead black plane.
-function buildUnderside(spline) {
+function buildUnderside(spline, theme) {
   const n = sliceCount(spline);
   const across = 5;
   const pos = new Float32Array((n + 1) * across * 3);
   const col = new Float32Array((n + 1) * across * 3);
   const v = new THREE.Vector3();
-  const deep = new THREE.Color(TUNING.COL.WALL);
+  const deep = wallColour(theme);
   // Outer lips catch a dark bleed of the edge neon they sit under — cyan left,
   // magenta right, the same gameplay language as the surface, just 12% of it.
-  const lipL = new THREE.Color(TUNING.COL.WALL).lerp(new THREE.Color(TUNING.COL.EDGE_L), 0.12);
-  const lipR = new THREE.Color(TUNING.COL.WALL).lerp(new THREE.Color(TUNING.COL.EDGE_R), 0.12);
+  const lipL = wallColour(theme).lerp(new THREE.Color(TUNING.COL.EDGE_L), 0.12);
+  const lipR = wallColour(theme).lerp(new THREE.Color(TUNING.COL.EDGE_R), 0.12);
 
   eachSlice(spline, (i, s, f) => {
     const W = f.width;
@@ -299,14 +313,14 @@ function buildUnderside(spline) {
 }
 
 // ---------------------------------------------------------------- walls
-function buildWalls(spline) {
+function buildWalls(spline, theme) {
   const n = sliceCount(spline);
   const pos = new Float32Array((n + 1) * 4 * 3);
   const col = new Float32Array((n + 1) * 4 * 3);
   const v = new THREE.Vector3();
   const lean = Math.tan(TUNING.WALL_LEAN) * TUNING.WALL_HEIGHT;
-  const cWall = new THREE.Color(TUNING.COL.WALL);
-  const cWallLit = new THREE.Color(TUNING.COL.WALL).multiplyScalar(2.2);
+  const cWall = wallColour(theme);
+  const cWallLit = wallColour(theme).multiplyScalar(2.2);
 
   eachSlice(spline, (i, s, f) => {
     const W = f.width;

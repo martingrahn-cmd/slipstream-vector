@@ -194,15 +194,30 @@ export const THEMES = {
                           // and the blue hour had nothing in it above the towers
     },
     fog: 0xd668a8,
-    ground: 0x1e1a38,     // lifted asphalt
-    mesaLit: 0x3c3568,    // tower blocks catch the evening light
-    mesaShadow: 0x262048,
+    // SECOND LIGHT PASS (Martin, again: "ser inte staden lite mörk ut också?").
+    // The first one lifted the SKY, and the sky was never the problem. Measured
+    // over the press kit with the HUD bands masked out: city mean luma 39
+    // against tropic's 71 and desert's 98, and 62% of the frame under luma 24 —
+    // 72% on Grid Lock. What fills a racing frame is the ROAD and the GROUND,
+    // and both were sitting at luma 25-31, so two thirds of the picture carried
+    // no information at all. The tower faces were the third offender: an unlit
+    // side at 38 makes a building a silhouette even when it is right next to
+    // you. These are the surfaces, lifted; the neon, the rim and the grid glow
+    // are untouched, so the contrast the world is built on is unchanged.
+    ground: 0x2f2a55,     // lifted asphalt
+    mesaLit: 0x544b8a,    // tower blocks catch the evening light
+    mesaShadow: 0x342c62,
     mesaRim: 0xff9fd0,
     warm: 0xc6ceff,       // cool blue-hour highlight
-    mountainFar: 0x2e2658,
-    rock: 0x342c54,
-    trackBase: 0x161630,
-    trackBand: 0x242444,
+    mountainFar: 0x3d3474,
+    rock: 0x453a70,
+    trackBase: 0x232342,
+    trackBand: 0x35355e,
+    // The walls and the road's underside flank the ribbon down the whole lap
+    // and are the single largest dark area in a city frame. Lift them toward
+    // the city's own ground so they read as structure at night instead of as
+    // two black wedges. See wallColour() in track/trackMesh.js.
+    wallLift: 0.62,
     gridGlow: 0xff2ec8,   // street grid shining through the asphalt
     mesaStyle: 'towers',
     mesaMax: 92,
