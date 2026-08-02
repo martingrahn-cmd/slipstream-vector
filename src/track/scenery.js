@@ -1600,6 +1600,49 @@ const ZONE_SEED = 9001;
 // ------------------------------------------------------------------ mesas
 // Rock spires in the wilderness worlds; tower blocks (with glowing window
 // columns) in the city. Same scatterer, different archetypes.
+// A grid of OPAQUE lit window cells over a box's four faces, built in the box's
+// OWN space so it can be scaled/rotated/translated exactly like the box.
+// Opaque, not additive: a window has to read crisply against the facade, and
+// additive over a bright magenta wall washes to nothing.
+//
+// Shared by the mesa towers, the canyon rows AND the sprawl. It used to live
+// inside buildMesas, which is why only the mesas had windows — the canyon rows
+// made do with one or two glowing pillars and the sprawl had nothing at all,
+// so most of the city read as dark silhouettes however bright the signage got.
+// `fill` is the share of cells that light up, `cellPx` the target cell size.
+function windowGrid(rng, pick, ub, sc, ysc, fill = 0.4, cellPx = 7) {
+  const hx = (ub.max.x - ub.min.x) / 2, hz = (ub.max.z - ub.min.z) / 2, y0 = ub.min.y, y1 = ub.max.y, uh = y1 - y0;
+  if (hx < 0.05 || hz < 0.05 || uh < 0.05) return null;
+  const P = [], C = [];
+  const quad = (ax, ay, az, ux, uy, uz, vx, vy, vz, col) => {
+    P.push(ax, ay, az, ax + ux, ay + uy, az + uz, ax + ux + vx, ay + uy + vy, az + uz + vz,
+      ax, ay, az, ax + ux + vx, ay + uy + vy, az + uz + vz, ax + vx, ay + vy, az + vz);
+    for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
+  };
+  const rows = Math.max(3, Math.round(uh * sc * ysc / 8));
+  const cuh = uh / rows, winUh = cuh * 0.62, eps = 0.02;
+  for (const face of [0, 1, 2, 3]) {
+    const onX = face < 2, sign = face % 2 ? 1 : -1;
+    const halfOut = onX ? hx : hz, halfSpan = onX ? hz : hx;
+    const nc = Math.max(2, Math.round((halfSpan * 2 * sc) / cellPx));
+    const cuw = (halfSpan * 2) / nc, winUw = cuw * 0.6;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < nc; c++) {
+        if (rng() > fill) continue;
+        const cyU = y0 + (r + 0.5) * cuh - winUh / 2, ctU = -halfSpan + (c + 0.5) * cuw - winUw / 2;
+        const col = pick();
+        if (onX) quad(sign * (halfOut + eps), cyU, ctU, 0, winUh, 0, 0, 0, winUw, col);
+        else quad(ctU, cyU, sign * (halfOut + eps), winUw, 0, 0, 0, winUh, 0, col);
+      }
+    }
+  }
+  if (!P.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  return g;
+};
+
 function buildMesas(rng, spline, groundY, theme) {
   const towers = theme.mesaStyle === 'towers';
   const islands = theme.mesaStyle === 'islands';
@@ -1809,42 +1852,7 @@ function buildMesas(rng, spline, groundY, theme) {
   const winW = [new THREE.Color(0xffb15a), new THREE.Color(0xff7e3c), new THREE.Color(0xfff0d0)]; // warm spread
   // Warm-dominant office-window picker (a little cyan/magenta neon mixed in).
   const winPick = () => { const r = rng(); return r < 0.40 ? winC : r < 0.58 ? winW[0] : r < 0.70 ? winW[1] : r < 0.80 ? winW[2] : r < 0.90 ? winA : winB; };
-  // A dense grid of OPAQUE lit window cells over a tower's four faces, built in
-  // the archetype's UNIT space (from its bbox) so it can be scaled/rotated/
-  // translated exactly like the tower. Opaque so the windows read crisply over
-  // the bright magenta facade instead of washing out the way additive would.
-  const mesaWindows = (ub, sc, ysc) => {
-    const hx = (ub.max.x - ub.min.x) / 2, hz = (ub.max.z - ub.min.z) / 2, y0 = ub.min.y, y1 = ub.max.y, uh = y1 - y0;
-    if (hx < 0.05 || hz < 0.05 || uh < 0.05) return null;
-    const P = [], C = [];
-    const quad = (ax, ay, az, ux, uy, uz, vx, vy, vz, col) => {
-      P.push(ax, ay, az, ax + ux, ay + uy, az + uz, ax + ux + vx, ay + uy + vy, az + uz + vz,
-        ax, ay, az, ax + ux + vx, ay + uy + vy, az + uz + vz, ax + vx, ay + vy, az + vz);
-      for (let k = 0; k < 6; k++) C.push(col.r, col.g, col.b);
-    };
-    const rows = Math.max(4, Math.round(uh * sc * ysc / 8));
-    const cuh = uh / rows, winUh = cuh * 0.62, eps = 0.02;
-    for (const face of [0, 1, 2, 3]) {
-      const onX = face < 2, sign = face % 2 ? 1 : -1;
-      const halfOut = onX ? hx : hz, halfSpan = onX ? hz : hx;
-      const nc = Math.max(2, Math.round(halfSpan * 2 * sc / 7));
-      const cuw = (halfSpan * 2) / nc, winUw = cuw * 0.6;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < nc; c++) {
-          if (rng() > 0.6) continue;
-          const cyU = y0 + (r + 0.5) * cuh - winUh / 2, ctU = -halfSpan + (c + 0.5) * cuw - winUw / 2;
-          const col = winPick();
-          if (onX) quad(sign * (halfOut + eps), cyU, ctU, 0, winUh, 0, 0, 0, winUw, col);
-          else quad(ctU, cyU, sign * (halfOut + eps), winUw, 0, 0, 0, winUh, 0, col);
-        }
-      }
-    }
-    if (!P.length) return null;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
-    return g;
-  };
+  const mesaWindows = (ub, sc, ysc) => windowGrid(rng, winPick, ub, sc, ysc);
   const f = makeFrame();
   const tries = 600, placed = [];
   const MAX = theme.mesaMax ?? 150;
@@ -2961,6 +2969,11 @@ function buildCanyon(rng, spline, groundY, theme) {
   const winC = new THREE.Color(0xffd9a0);
   // Seven, not four. The reference for this street is a wall of competing
   // advertisers, and four colours in rotation reads as one company's livery.
+  const canyonPick = () => {
+    const r = rng();
+    return r < 0.46 ? winC : r < 0.66 ? new THREE.Color(0xffb15a)
+      : r < 0.80 ? new THREE.Color(0xfff0d0) : r < 0.91 ? winA : winB;
+  };
   const signCols = [
     new THREE.Color(0x00f0ff), new THREE.Color(0xff2ec8),
     new THREE.Color(0xffe066), new THREE.Color(0x7df9ff),
@@ -2995,10 +3008,23 @@ function buildCanyon(rng, spline, groundY, theme) {
       const ry = (rng() - 0.5) * 0.5;
       const depth = foot * (0.7 + rng() * 0.6);
       const g = new THREE.BoxGeometry(foot, h, depth);
+      // Windows are built BEFORE the rotation and then carried through the same
+      // transform. Taking a bbox after rotateY gives an axis-aligned box bigger
+      // than the block, and every window would float off the facade.
+      const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
+      const win = windowGrid(rng, canyonPick, bb, 1, 1, 0.34, 5.5);
       g.rotateY(ry);
       g.translate(px, groundY + h / 2, pz);
-      geoms.push(bakeFlatColors(g, rng() < 0.5 ? theme.mesaLit : theme.mesaShadow,
+      // Was a coin flip between mesaLit and mesaShadow, and a shadow-coloured
+      // block with two glowing pillars on it is a silhouette. Lit is now the
+      // common case and the dark one is the exception, not half the street.
+      geoms.push(bakeFlatColors(g, rng() < 0.78 ? theme.mesaLit : theme.mesaShadow,
         { shadow: theme.mesaShadow }));
+      if (win) {
+        win.rotateY(ry);
+        win.translate(px, groundY + h / 2, pz);
+        geoms.push(win);
+      }
       // Tall blocks get a rooftop antenna with a blinking aircraft light.
       if (h > 62) {
         const ah = 5 + rng() * 8;
@@ -3120,6 +3146,11 @@ function buildCanyon(rng, spline, groundY, theme) {
 function buildSprawl(rng, spline, groundY, theme) {
   const count = 170;
   const geoms = [];
+  const sprawlPick = () => {
+    const r = rng();
+    return r < 0.52 ? new THREE.Color(0xffd9a0) : r < 0.74 ? new THREE.Color(0xffb15a)
+      : r < 0.88 ? new THREE.Color(0x00f0ff) : new THREE.Color(0xff2ec8);
+  };
   const fr = makeFrame();
   for (let i = 0; i < count; i++) {
     const s = rng() * spline.length;
@@ -3140,9 +3171,18 @@ function buildSprawl(rng, spline, groundY, theme) {
     if (!ok) continue;
     const h = 4 + rng() * 13;
     const g = new THREE.BoxGeometry(foot, h, foot * (0.6 + rng() * 0.8));
-    g.rotateY(rng() * 0.6 - 0.3);
+    const ry = rng() * 0.6 - 0.3;
+    const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute('position'));
+    // 170 blocks at luma 19 with no windows at all: this is what "many houses
+    // are still just dark silhouettes" was. The city floor is where a night
+    // city's light comes FROM. Lifted, and lit — sparsely, because these are
+    // middle-distance filler and a fully lit grid on every one reads as a
+    // circuit board rather than a city.
+    const win = windowGrid(rng, sprawlPick, bb, 1, 1, 0.22, 5);
+    g.rotateY(ry);
     g.translate(px, groundY + h / 2, pz);
-    geoms.push(bakeFlatColors(g, rng() < 0.7 ? 0x150f2e : 0x1c1440, { rim: false }));
+    geoms.push(bakeFlatColors(g, rng() < 0.7 ? 0x2a2150 : 0x342a63, { rim: false }));
+    if (win) { win.rotateY(ry); win.translate(px, groundY + h / 2, pz); geoms.push(win); }
   }
   const mesh = new THREE.Mesh(mergeGeoms(geoms),
     new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
