@@ -151,6 +151,12 @@ fixed.)
   `node --check` passes, the page throws), and using any name but `mvPosition`
   for the model-view position when the shader includes the fog chunks. If an
   effect "does nothing", read the console before reading the maths.
+- **Spline frames are LEFT-handed for `Matrix4.makeBasis`.** The frame's
+  `R = T x U`, so `makeBasis(f.R, f.U, f.T)` builds a left-handed matrix and
+  `setFromRotationMatrix` on it yields garbage/NaN quaternions that silently
+  frustum-cull the mesh. Negate T — `makeBasis(f.R, f.U, f.T.clone().negate())`
+  — which is exactly what `buildOverheads` does. Found by a probe agent whose
+  injected road quads drew 82 of 103 expected draws with no error anywhere.
 - **A black BLOCK in the frame means a NaN, not a black object.** The bloom
   bright pass is the narrowest point in the picture and its output is smeared
   by a quarter-res and an eighth-res blur, so one non-finite fragment anywhere

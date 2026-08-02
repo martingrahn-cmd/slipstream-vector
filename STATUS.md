@@ -218,9 +218,16 @@ The full history, so nobody re-derives it:
   **They render and always did.** What remains is READABILITY: 0.34-opacity
   warm-white is camouflage against a skyline of warm windows, and the cones
   stop 2.6m above the road so the light never grips the asphalt.
-- The readability candidates (hotter heads / road pools / gantry underglow /
-  grounded cones) were rendered as runtime variants from one parked camera;
-  the chosen combination ships as its own commit.
+- The readability pass is CHOSEN and shipped: four candidates (hotter heads /
+  road pools / gantry underglow / grounded cones) were rendered as runtime
+  variants from one parked camera. Grounding won — pools collapse to 2-6px at
+  this camera height, underglow does not read, intensity alone flares. The
+  shipped cone is wide at the HEAD with its apex in the deck: physically
+  upside down, and the orientation that reads. A physically correct cone needs
+  its base rim faded to kill the silhouette, and the faded base is exactly the
+  road contact — grounding dies with it. Intensity is graded per vertex
+  (additive RGB is alpha), amber against the magenta city, heads near-white at
+  1.1 so they just kiss the bloom threshold.
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so

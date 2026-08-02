@@ -97,11 +97,25 @@ const setup = await page.evaluate(([ti, childName, sMark]) => {
   };
   let child = null;
   g.scenery.group.children.forEach((c, i) => { if ((c.name || `#${i}`) === childName || String(i) === childName) child = c; });
-  // ISOLATE: nothing else in the scenery group may animate into the diff.
+  // ISOLATE: nothing else may animate into the diff. Scenery siblings first —
+  // and then EVERYTHING else in the scene except the sky: the race field laps
+  // the circuit in real wall time while the frames are being captured, and one
+  // pack of ships driving through the parked view once put the noise floor at
+  // 45% of the frame. The background does not need to be complete for a
+  // contribution diff, only static.
   const hidden = [];
   if (child) {
     for (const c of g.scenery.group.children) {
       if (c !== child && c.visible) { c.visible = false; hidden.push(c); }
+    }
+    // The sky is animated IN THE SHADER (cloud drift, rain flashes) and once
+    // everything else is hidden it fills the frame — hiding the city put the
+    // noise floor at 50%. Hide it too: the diff needs a static backdrop, and
+    // the renderer's clear colour is the most static backdrop there is.
+    const keep = new Set([g.scenery.group]);
+    const scene = g.scenery.group.parent;
+    for (const c of scene.children) {
+      if (!keep.has(c) && c.visible) { c.visible = false; hidden.push(c); }
     }
   }
   window.__vis = { child, hidden };

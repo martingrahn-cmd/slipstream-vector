@@ -2552,6 +2552,26 @@ function buildScrub(rng, spline, groundY, theme, islands = null) {
 // opaque (zero overdraw cost). Styles: 'tufts' (dry grass + pebbles),
 // 'marina' (weathered mooring posts on the lagoon), 'street' (barrier blocks
 // + vent boxes, aligned with the road). Knobs: theme.roadside/roadsideCount.
+// Per-vertex intensity gradient along local Y for an ADDITIVE mesh: with
+// AdditiveBlending the vertex colour IS the alpha, so fading the colour toward
+// one end lands a light cone on the road as falloff instead of a hard-edged
+// translucent sail — which is exactly how the ungraded cone read at 30m.
+function gradeAdditiveY(geom, color, kTop, kBottom) {
+  const g = geom.index ? geom.toNonIndexed() : geom;
+  const pa = g.getAttribute('position');
+  const bb = new THREE.Box3().setFromBufferAttribute(pa);
+  const c = new Float32Array(pa.count * 3);
+  const span = Math.max(bb.max.y - bb.min.y, 1e-6);
+  for (let i = 0; i < pa.count; i++) {
+    const t = (pa.getY(i) - bb.min.y) / span;
+    const k = kBottom + (kTop - kBottom) * t;
+    c[i * 3] = color.r * k; c[i * 3 + 1] = color.g * k; c[i * 3 + 2] = color.b * k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  return g;
+}
+
 // -------------------------------------------------------------- track lamps
 // Street lighting along the ribbon: a mast beside the road, an arm reaching out
 // over it, a glowing head and a soft cone under it.
@@ -2576,7 +2596,12 @@ function buildTrackLamps(spline, groundY, theme) {
   const cfg = theme.trackLamps;
   if (!cfg) return null;
   const every = cfg.every ?? 46;
-  const col = new THREE.Color(cfg.col ?? 0xffd9a0);
+  // Two colours on purpose: the HEAD stays near-white (it is the lamp), the
+  // CONE goes amber — additive over a magenta city washes everything toward
+  // white, and hue is what keeps a street lamp from reading as a searchlight.
+  const glowK = cfg.glow ?? 1;
+  const col = new THREE.Color(cfg.col ?? 0xffd9a8);
+  const headCol = new THREE.Color(0xfff2d8).multiplyScalar(1.1 * Math.min(1.2, glowK));
   const H = cfg.height ?? 9.5;
   const solid = [], glow = [];
   const f = makeFrame();
@@ -2614,23 +2639,38 @@ function buildTrackLamps(spline, groundY, theme) {
     arm.translate(bx - nx * reach * 0.5, base + H - 0.3, bz - nz * reach * 0.5);
     solid.push(bakeFlatColors(arm, 0x322f4a, { rim: false }));
     const hx = bx - nx * reach, hz2 = bz - nz * reach, hy = base + H - 0.5;
-    const head = new THREE.BoxGeometry(1.1, 0.34, 1.9);
+    const head = new THREE.BoxGeometry(1.2, 0.4, 2.0);
     head.rotateY(Math.atan2(nx, nz));
     head.translate(hx, hy, hz2);
-    glow.push(colorTint(head, col));
-    // Short and wide: a suggestion of a light pool, and the fill it costs is
-    // proportional to how far down the road it reaches.
-    const cone = new THREE.ConeGeometry(3.4, 6.4, 10, 1, true);
-    cone.rotateX(Math.PI);
-    cone.translate(hx, hy - 3.2, hz2);
-    glow.push(colorTint(cone, col));
+    glow.push(colorTint(head, headCol));
+    // THE CONE REACHES THE ROAD. The first version was 6.4m under a 9m head —
+    // it stopped 2.6m above the asphalt and the light never gripped the road,
+    // which is the whole visual signature of a street lamp (four rendered
+    // variants, one parked camera: grounding was the only cue that read).
+    //
+    // Geometry note, learned the expensive way: this is wide at the HEAD with
+    // the apex in the deck — physically upside down, and that is the version
+    // that reads. A physically correct cone (apex at the lamp, wide base on
+    // the road) needs its base rim faded to kill the hard silhouette, and the
+    // faded base is exactly the road contact — grounding dies with it. Wide
+    // top + apex-down keeps the whole volume hanging over the road, and the
+    // gradient toward the apex lands the light as falloff instead of an edge.
+    const coneH = Math.max(4, hy - f.pos.y + 0.5);   // apex ends inside the deck
+    let cone = new THREE.ConeGeometry(5.2, coneH, 14, 1, true);
+    cone.rotateX(Math.PI);                            // wide end up, at the head
+    cone = gradeAdditiveY(cone, col, glowK * 0.38, glowK * 0.07);
+    cone.translate(hx, hy - coneH / 2, hz2);
+    glow.push(cone);
   }
   if (!solid.length) return null;
   const g = new THREE.Group();
   g.name = 'lamps';
   g.add(new THREE.Mesh(mergeGeoms(solid), new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })));
+  // Opacity 1: per-part intensity is baked into the VERTEX colours (head
+  // bright, cone graded), so one merged mesh carries the whole range and the
+  // theme's `glow` knob scales it all.
   const glowMesh = new THREE.Mesh(mergeGeoms(glow), new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: cfg.glow ?? 0.34,
+    vertexColors: true, transparent: true, opacity: 1,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
   }));
   glowMesh.renderOrder = 1;
