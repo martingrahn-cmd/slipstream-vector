@@ -929,7 +929,9 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // moonlit, so the relief the disc already carries becomes legible
           // instead of one white fill. vY is the vertex's own displaced
           // height, written by the CPU terrain function at build time.
-          float hollow = (1.0 - smoothstep(0.8, 7.5, vY)) * uSnow;
+          // Range matched to the frost terrain amp (30): low slopes pool blue,
+          // crests break white, mid-slopes grade between.
+          float hollow = (1.0 - smoothstep(1.0, 14.0, vY)) * uSnow;
           col = mix(col, uShadow, hollow * 0.34);
           // Moon glitter - the sparkle is what says snow rather than plaster.
           // Sparse hashed cells twinkle on their own phase, faded by distance

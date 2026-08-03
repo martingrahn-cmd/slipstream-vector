@@ -312,7 +312,12 @@ export const THEMES = {
     farCount: 42,
     groundStyle: 'dunes', // the dune shader IS the snow shader: drift bands + sastrugi ripples
     // Snow drifts: sharper crests than sand, hence the ridge term.
-    terrain: { amp: 17, freq: 0.0048, octaves: 3, ridge: 0.55 },
+    // Martin: "lite kullar som ser ut som kullar hade inte skadat." Amp up to
+    // real hill height and the wavelength widened to ~250m so the rolls read
+    // as landforms, not lumps. The flat corridor by the road is carved by
+    // construction (terrain.js FLAT_TO/RAMP_TO), so the racing line loses
+    // nothing — audit-terrain must still read 0.000 on all three.
+    terrain: { amp: 30, freq: 0.0040, octaves: 3, ridge: 0.55 },
     wind: 0.7,            // cold, heavy air — the spruce barely shrugs
     scrubCount: 0,
     flora: 'pines',
