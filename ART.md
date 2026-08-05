@@ -171,11 +171,31 @@ evenly-sized objects scattered on it, and the eye has nothing to hold.
 
 The city is the exception: the canyon tower rows fill exactly that band, which
 is why it reads as a **place** while the others read as **a road across a
-field**. The scatter reads as litter rather than landscape because it has no
-size hierarchy — real landscape is a few big forms, some medium, many small,
-and they cluster. This is the same diagnosis the islands got ("three geometries
-repeated") and the frost cliff faces have now ("boxes with vertex jitter"). It
-is the project's recurring weakness: **quantity without hierarchy.**
+field**.
+
+The scatter reads as litter rather than landscape, and the code says exactly
+why. Every near-band scatterer picks its size from a range about 2-3x wide,
+all of it small, and picks its position from a flat uniform along the lap:
+
+| builder | count | size expression | placement |
+|---|---|---|---|
+| `buildRocks` | desert 340, frost 240 | `0.5 + rng() * 1.9` (world radius) | `rng() * spline.length` |
+| `buildScrub` | desert 210 | `1 + rng() * 1.5` | `rng() * spline.length` |
+| `buildRoadside` | 240-560 | `0.8 + rng() * 1.2` | `rng() * spline.length` |
+| `buildBillboards` | every 130-320m | **fixed 11 x 5.5 — one size** | by curvature |
+
+So the largest natural form anywhere in the near band of a wilderness world is
+a **2.4 m rock**, and nothing anywhere clusters — `rng() * spline.length` is a
+flat uniform, with no zones and no rejection. Real landscape is a few big
+forms, some medium, many small, and they clump. This is the same diagnosis the
+islands got ("three geometries repeated") and the frost cliff faces have now
+("boxes with vertex jitter"). It is the project's recurring weakness:
+**quantity without hierarchy.**
+
+The fix is therefore not "more rocks". It is a size hierarchy with forms at 5,
+10 and 20 m, and a clustering rule so the field has empty stretches to make the
+clusters read. `monumentZones` (frost) and `buildCanyon` (city) are the two
+places in the file that already do something like this.
 
 ---
 
