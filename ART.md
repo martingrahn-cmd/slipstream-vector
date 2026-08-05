@@ -69,7 +69,7 @@ near-neutral:
 |---|---|---|---|
 | `ground` | `0xc7d4e8` | 0.83 | **0.129** |
 | `groundB` | `0xa7b9d6` | 0.72 | 0.184 |
-| `warm` | `0xdfe8ff` | 0.91 | **0.125** |
+| `warm` | `0xdfe9ff` | 0.91 | **0.125** |
 | `sand` | `0xdde8f6` | 0.90 | **0.098** |
 | `mesaRim` | `0xeef4ff` | 0.95 | **0.067** |
 | `mesaLit` | `0xb2c4e0` | 0.76 | 0.180 |
@@ -96,6 +96,40 @@ vertex colours baked at build time by `bakeFlatColors`. So the northern lights
 build all race long, own the zenith, and contribute exactly **zero** to the
 snow underneath them. In life that reflected light is the entire reason a
 moonlit-aurora scene is beautiful.
+
+**B4. The same two colours also shade every prop in the world — which means
+"grådaskig" and the "paper" cliff faces are ONE problem, not two.**
+`scenery.js:385` passes the theme straight into the baker:
+
+```js
+setBakeTheme(theme.mesaRim, theme.ground, theme.warm, theme.sky.sunAz);
+```
+
+and `bakeFlatColors` builds every default-shaded face from exactly those:
+
+```js
+const lit    = base.clone().lerp(new THREE.Color(BAKE_WARM), 0.22);
+const shadow = base.clone().multiplyScalar(0.5).lerp(new THREE.Color(BAKE_SHADOW_TINT), 0.25);
+const rim    = new THREE.Color(BAKE_RIM);
+```
+
+So on frost the lit face of every rock, spruce, pole, sculpture, hut and cliff
+is pulled 22% toward `warm` (0xdfe9ff, chroma 0.125, *bluer* than the base it
+sits on) and the shadow face 25% toward `ground` (0xc7d4e8, chroma 0.129).
+**Both ends of every prop's shading are the same near-neutral blue.** That is
+why `STATUS.md` §2.6c's cliff faces read as flat pale slabs: it is not
+primarily their geometry, it is that they have no temperature difference
+between their lit and unlit sides. `mesaRim` at chroma 0.067 means the rim
+light carries none either.
+
+This is the good news in the whole document. Fixing B1 — two hex values — fixes
+the props at the same time, for free, on every frost track, with no new code.
+
+**Housekeeping found on the way** (trivial, but this is where it is written
+down): `warmCrown: 0xffffff` has **no consumer anywhere** in `src/` or the
+labs; `sand: 0xdde8f6` is **dead on frost** (only tropic reads it), while the
+frost drift hump hardcodes that same literal at `scenery.js:2943` instead of
+reading the theme.
 
 ## 4. Finding C — the near band is flat by construction, on every world
 
@@ -206,7 +240,10 @@ Ranked by felt change per unit of work. The first two are hours, not days.
 **1. Give frost a temperature split.** Palette only, ~8 hex values. Blue in the
 shadows, neutral-to-warm in the lights, base value down from 0.83 toward ~0.50.
 Set `grade.saturation` to at least 1.05 like every other world. This is the
-direct answer to "grådaskig" and it needs no new code at all.
+direct answer to "grådaskig" and it needs no new code at all — and per B4 it
+also fixes the cliff faces and every other prop in the world in the same
+stroke, because `ground` and `warm` ARE the baker's shadow and lit tints.
+Judge it on props as well as on snow: that is the same change's blast radius.
 
 **2. Let the aurora light the snow.** The frost sky already computes an aurora
 amplitude that grows over the race. Feed the same value to the snow shader as a
