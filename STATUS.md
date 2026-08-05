@@ -377,6 +377,7 @@ Kept here so the effort doesn't get spent twice:
 |---|---|
 | `README.md` | The game as it exists, for a human |
 | `CLAUDE.md` | Hard rules, architecture invariants, QA gates, workflow |
-| `FIDELITY.md` | Measured survey of what still limits the picture |
+| `FIDELITY.md` | Measured survey of what still limits the picture *technically* |
+| `ART.md` | Measured survey of what limits it *pictorially*, and the order to fix it |
 | `TERRAIN.md` | Design record for the ground-relief system |
 | `MUSIC.md` | The soundtrack |

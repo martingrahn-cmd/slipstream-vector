@@ -1,0 +1,242 @@
+# ART.md — what the picture is doing wrong, and in what order to fix it
+
+Written 2026-08-05. **This is a plan. Nothing in it has shipped.**
+
+It exists because "the snow feels drab" is a true observation that three
+different technical explanations would each fit, and picking the wrong one
+costs a week. Every claim below is measured off real in-engine frames or read
+out of the code, and the measurement recipe is in §7 so the next person can
+check rather than argue.
+
+Companion docs: `FIDELITY.md` is what limits the picture *technically*;
+this is what limits it *pictorially*. They are different lists.
+
+---
+
+## 1. What was measured
+
+Frames shot in-engine at 1280x720, FULL quality, chase camera, four worlds.
+Crops taken on each world's large ground field with the road and sky excluded.
+Luma is Rec.709 on the sRGB triple; chroma is `(max-min)/255`.
+
+| surface | luma p50 | tonal spread (p10-p90) | **chroma** |
+|---|---|---|---|
+| frost snowfield | 0.59-0.71 | 0.06-0.15 | **0.16** |
+| desert sand | 0.70 | 0.07 | 0.40 |
+| desert mesas | 0.59 | 0.13 | 0.50 |
+| tropic water | 0.37 | 0.43 | 0.57 |
+| city mid-ground | 0.13 | 0.18 | 0.39 |
+
+And the gameplay language, measured on the same frames:
+
+| world | ground | **magenta edge** | cyan edge |
+|---|---|---|---|
+| Neon Sprawl | 0.13 | **0.26** | 0.69 |
+| Sunset Mesa | 0.70 | **0.47** | 0.71 |
+| Frostfall Ridge | 0.61 | **0.33** | 0.70 |
+
+---
+
+## 2. Finding A — the gameplay language changes polarity between worlds
+
+`CLAUDE.md` says the track-edge neon is gameplay language: cyan left, magenta
+right, identical across worlds, never restyled per theme. The **colours** are
+identical. The **contrast** is not, and contrast is what makes a thing read.
+
+- In the city, magenta is **lighter** than the ground (0.26 vs 0.13). It glows.
+- On desert and frost it is **darker** than the ground (0.47 vs 0.70; 0.33 vs
+  0.61). It reads as a line painted on the floor.
+- Cyan on desert sits at 0.71 against a 0.70 ground: **zero value contrast.**
+  It survives on hue alone.
+
+So the rule is honoured in the letter and broken in the effect. Half the
+gameplay language inverts polarity depending on which world you loaded.
+
+**The fix is not to tint the neon per world** — that would break the rule
+properly. It is to bring the **ground** down on desert and frost, which is
+where the city already is.
+
+## 3. Finding B — frost is the only world that is both pale and colourless
+
+Martin: *"snön känns lite för grådaskig."* Measured, he is right, and it is not
+subtle — frost carries **less than half the chroma of any other world**
+(0.16 against 0.39-0.57). Three separate causes stack:
+
+**B1. The palette is grey by construction.** Every large frost surface is a
+near-neutral:
+
+| field | hex | luma | chroma |
+|---|---|---|---|
+| `ground` | `0xc7d4e8` | 0.83 | **0.129** |
+| `groundB` | `0xa7b9d6` | 0.72 | 0.184 |
+| `warm` | `0xdfe8ff` | 0.91 | **0.125** |
+| `sand` | `0xdde8f6` | 0.90 | **0.098** |
+| `mesaRim` | `0xeef4ff` | 0.95 | **0.067** |
+| `mesaLit` | `0xb2c4e0` | 0.76 | 0.180 |
+| `mesaShadow` | `0x44548e` | 0.33 | 0.290 |
+
+Desert's ground is `0xd0a068` — chroma **0.408** at a similar lightness.
+Only `mesaShadow` has real colour, and it is the one that covers least screen.
+
+Worse: `warm` is described in `themes.js` as "moonlight 'warm' highlight —
+actually the coldest light", and it is true — it is *bluer* than the base. So
+the highlight and the shadow are the same hue at different lightnesses. **There
+is no temperature separation anywhere in the world.** That is the definition of
+a monochrome picture, and it is why it reads as drab rather than as cold.
+
+**B2. The grade removes what little colour there is.** `theme.grade.saturation`
+is **0.96 on frost — the only world in the game below 1.0.** Desert 1.14,
+tropic 1.12, city 1.10. The least chromatic world is the only one whose grade
+actively desaturates it.
+
+**B3. The aurora — the one genuinely colourful thing in the world — never
+touches the ground.** It is a sky-shader effect. The scene contains **no
+lights at all**: every ground and prop material is `MeshBasicMaterial` with
+vertex colours baked at build time by `bakeFlatColors`. So the northern lights
+build all race long, own the zenith, and contribute exactly **zero** to the
+snow underneath them. In life that reflected light is the entire reason a
+moonlit-aurora scene is beautiful.
+
+## 4. Finding C — the near band is flat by construction, on every world
+
+This is the deepest one, and it explains why the frost hills work
+(`f8cab68`, amp 17 -> 30) did not change how the snow feels.
+
+`terrain.js` has two constants:
+
+```js
+const FLAT_TO = 26;    // metres from the road edge that stay dead flat
+const RAMP_TO = 95;    // ...and where the terrain reaches full amplitude
+```
+
+Everything within **26 m of the road is dead flat**, by design, to protect the
+racing line. The snow shader's cold-hollows pass — the thing that is supposed
+to give the snow tonal variation — keys off `vY`, the vertex's own displaced
+height:
+
+```glsl
+float hollow = (1.0 - smoothstep(1.0, 14.0, vY)) * uSnow;
+col = mix(col, uShadow, hollow * 0.34);
+```
+
+Inside 26 m, `vY` is **exactly 0 everywhere**, so `hollow` is a **constant 1**.
+A constant is a flat tint, not a gradient. The band you actually look at at
+250 km/h is the one band where the effect mathematically cannot vary. Raising
+the terrain amplitude cannot help: it changes nothing inside 26 m.
+
+The only near-field variation left is the dune-band term, and its contrast is
+tiny on both affected worlds — the two band colours differ by 0.10-0.11 luma,
+mixed at 0.55, for an **effective range of 0.056 (desert) and 0.059 (frost)**.
+That matches the measured spreads of 0.07 and 0.06 exactly.
+
+So: **desert and frost share a structural flatness**, and it is not the
+terrain, the tier, or the geometry. Desert gets away with it because it is a
+saturated warm field; frost does not, because it is a grey one. That is the
+whole difference between "sand" and "drab".
+
+## 5. Finding D — the sky drifts, the world does not
+
+`col *= mix(1.0, 0.78, progress)` exists only in the sky fragment shader.
+`raceProgress` has exactly two consumers and both are the sky. Over a race the
+backdrop drops 22% while the ground, road, props and ships stay put, so by the
+last lap the sand is *relatively brighter* against the sky than it was at the
+start. That is the opposite of dusk falling, and it is why the mood drift never
+quite lands.
+
+**The pass order decides how to fix this**, and it is unambiguous
+(`postfx.js:342-377`):
+
+```
+RenderPass -> BloomPass -> JuicePass -> OutputPass
+```
+
+Bloom sits **before** the grade. Therefore:
+
+- Darkening in the **grade** (after bloom) dims the whole picture *including*
+  the glow. Self-consistent, but the neon does not step forward — you get an
+  evenly turned-down image.
+- Darkening in the **scene** (before bloom) shrinks what the ground contributes
+  to the bright pass while the neon keeps its own brightness. Contrast rises,
+  and **the neon steps forward as the world darkens** — which is the effect
+  actually wanted, and it is also what the sky's existing `x0.78` already does.
+
+So this belongs in the scene, not in the grade. It also fixes Finding A for
+free on the back half of every race.
+
+## 6. Finding E — the middle ground is empty on three of four worlds
+
+Foreground (road, ship) is strong. Background (mesas, skyline, ridges) is
+strong. Between roughly 40 and 150 m there is a flat plain with small,
+evenly-sized objects scattered on it, and the eye has nothing to hold.
+
+The city is the exception: the canyon tower rows fill exactly that band, which
+is why it reads as a **place** while the others read as **a road across a
+field**. The scatter reads as litter rather than landscape because it has no
+size hierarchy — real landscape is a few big forms, some medium, many small,
+and they cluster. This is the same diagnosis the islands got ("three geometries
+repeated") and the frost cliff faces have now ("boxes with vertex jitter"). It
+is the project's recurring weakness: **quantity without hierarchy.**
+
+---
+
+## 7. The order to do them in
+
+Ranked by felt change per unit of work. The first two are hours, not days.
+
+**1. Give frost a temperature split.** Palette only, ~8 hex values. Blue in the
+shadows, neutral-to-warm in the lights, base value down from 0.83 toward ~0.50.
+Set `grade.saturation` to at least 1.05 like every other world. This is the
+direct answer to "grådaskig" and it needs no new code at all.
+
+**2. Let the aurora light the snow.** The frost sky already computes an aurora
+amplitude that grows over the race. Feed the same value to the snow shader as a
+faint chromatic wash keyed to the aurora's own colour and bearing. One uniform,
+zero draws. It fixes B3 and gives frost the one thing no other world has — and
+because it grows with `raceProgress`, it is Finding D's mechanism arriving
+early on one world, where it can be judged cheaply.
+
+**3. Widen the near-band variation with something that is not terrain height.**
+Finding C means `hollow` can never vary inside 26 m. Open the dune-band A/B gap
+(the cheapest half: it is two hex values and it doubles the range), and add a
+world-XZ-keyed scour/drift term the way the desert's mid-scale ripples already
+work. Do NOT reach for the terrain amplitude again — it provably cannot help.
+
+**4. Bring the desert and frost ground values down.** Restores the gameplay
+language's polarity (Finding A). Do this after 1-3 so the two changes are
+judged together rather than fighting each other.
+
+**5. World-wide light drift, in the scene and before bloom** (Finding D).
+Bigger blast radius — it touches every material — so it wants 1-4 settled
+first. Risks to check when it happens: HUD readability, the LOW tier which has
+no post at all, and whether the neon stepping forward is *too* strong by the
+final lap.
+
+**6. Middle-ground mass** (Finding E). The biggest job and the one with the
+most authored content in it. `buildCanyon` is the model that already works.
+
+## 8. How to verify any of it
+
+The claim to beat is a number, not an opinion. Shoot a frame in-engine, then:
+
+```python
+from PIL import Image
+def L(r,g,b): return (0.2126*r+0.7152*g+0.0722*b)/255
+def chroma(r,g,b): return (max(r,g,b)-min(r,g,b))/255
+d = [q for q in Image.open(shot).convert('RGB').crop(box).getdata() if L(*q) > 0.35]
+lum, ch = sorted(L(*q) for q in d), sorted(chroma(*q) for q in d)
+n = len(lum)
+print(lum[n//10], lum[n//2], lum[9*n//10], ch[n//2])   # p10, p50, p90, chroma
+```
+
+Crop the large ground field, exclude road and sky, and drop anything under 0.35
+luma so the road does not contaminate the sample — that mistake made the frost
+snowfield read as having a 0.63 tonal spread when the truth is 0.06-0.15.
+
+Targets, so success is falsifiable:
+
+- frost ground chroma **0.16 -> 0.30+**, i.e. inside the range every other
+  world already occupies
+- frost and desert ground tonal spread **0.07 -> 0.15+**, i.e. what the mesas
+  already manage
+- magenta edge **lighter than the ground on every world**, which is the only
+  statement of Finding A that matters
