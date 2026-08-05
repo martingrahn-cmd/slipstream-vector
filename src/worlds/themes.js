@@ -37,8 +37,13 @@ export const THEMES = {
       event: 'planet',    // the sister planet reads as a pale day-moon now
     },
     fog: 0xffa25e,
-    ground: 0xd0a068,     // warm sand (was dark purple)
-    groundB: 0xe2bc84,    // light dune band
+    // VALUE PASS (ART.md §2, Finding A). The sand read at 0.70 on screen while
+    // the magenta right-hand edge read 0.47, so half the gameplay language was
+    // a DARK line on a bright field where the city has it glowing. Sand comes
+    // down; the chroma is deliberately held (0.408 -> 0.404) because desert
+    // gets away with a tonally flat field precisely by being a saturated one.
+    ground: 0xb98a52,     // warm sand, dusk-side of the old value
+    groundB: 0xcda66c,    // light dune band — same 0.10 gap, moved down with it
     mesaLit: 0xe08a56,    // sunlit red rock
     mesaShadow: 0x9a5a86, // violet-magenta shadow side — the synthwave tell
     mesaRim: 0xffc27a,
@@ -301,8 +306,17 @@ export const THEMES = {
     // the world. So this pass also lights every rock, spruce, pole, sculpture,
     // hut and cliff face — which is why STATUS 2.6c's "paper" cliffs were
     // never really a geometry problem. Judge this change on props too.
+    // STEP 4 WAS TRIED HERE AND BACKED OFF, on measurement. Taking the snowpack
+    // down to 0x5b76ad for Finding A's sake cost saturation: 0.417 -> 0.327,
+    // against 0.230 before any of this. The mechanism is that frost carries 850
+    // additive snow flakes plus the moon glitter, and an additive white overlay
+    // is RELATIVE — over a darker base the same flakes wash out proportionally
+    // more colour. Finding A (get the ground under the magenta) and Finding B
+    // (Martin's "grådaskig") pull opposite ways on this one world, and B is the
+    // complaint that was actually made. Desert keeps its full value drop: it has
+    // no additive weather to amplify. See ART.md §9.
     ground: 0x7189bf,     // moonlit snowpack — AND the shadow tint of every prop
-    groundB: 0xaabee0,    // wind-scoured crests: the drift bands now carry 0.113
+    groundB: 0x9db3da,    // wind-scoured crests: the drift bands now carry 0.131
                           // of luma range against the old 0.059, so the near
                           // field has tone instead of one fill
     snow: true,           // dune shader's snow mode: moon glitter + cold hollows

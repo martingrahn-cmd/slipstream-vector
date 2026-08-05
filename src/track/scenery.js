@@ -1065,6 +1065,36 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // crests break white, mid-slopes grade between.
           float hollow = (1.0 - smoothstep(1.0, 14.0, vY)) * uSnow;
           col = mix(col, uShadow, hollow * 0.34);
+          // SASTRUGI — the near field's only possible source of form.
+          // The cold hollows above key on vY, the vertex's own terrain height,
+          // and terrain.js keeps everything within FLAT_TO = 26m of the road
+          // DEAD FLAT to protect the racing line. So inside 26m vY is exactly
+          // 0 everywhere, the hollow term is a CONSTANT, and it paints a flat
+          // tint rather than a gradient in the one band you actually look at
+          // from the cockpit. Raising the terrain amplitude cannot reach in
+          // there either — that is why f8cab68's hills changed nothing about
+          // how the snow feels. This is keyed on world XZ instead, which the
+          // flattening does not touch.
+          //
+          // Wind-carved ridges: abs(sin) gives the real profile — sharp
+          // troughs, rounded crests — combed along one wind bearing and bent
+          // by a slow cross-wave so the lines meander instead of ruling. In
+          // PATCHES, because a snowfield scoured everywhere reads as corduroy.
+          vec2 sWind = vec2(0.80, -0.60);
+          float sRidge = abs(sin(dot(vXZ, sWind) * 0.62
+                       + sin(dot(vXZ, vec2(0.60, 0.80)) * 0.09) * 3.0));
+          float sPatch = smoothstep(0.25, 0.80, hash(floor(vXZ * 0.02))) * uSnow;
+          // TROUGHS ONLY, and that is a measured decision rather than a taste
+          // one. The first cut also lifted the crests toward colB, which is a
+          // pale low-chroma scour colour: at 0.34 it took chroma from 0.271
+          // back to 0.161 — the entire temperature pass, undone — and pushed
+          // luma UP when the whole point was to bring it down. At 0.14 it was
+          // still net negative (0.220). Pooling blue in the troughs opens the
+          // same tonal range while ADDING chroma, because uShadow is the most
+          // saturated colour in the world. The crests are simply what is left
+          // unpooled, which is also how real sastrugi read: the shadow is the
+          // drawing, the crest is just the paper.
+          col = mix(col, uShadow, (1.0 - sRidge) * sPatch * 0.34);
           // Moon glitter - the sparkle is what says snow rather than plaster.
           // Sparse hashed cells twinkle on their own phase, faded by distance
           // so the far field does not boil.

@@ -1,7 +1,7 @@
 # ART.md — what the picture is doing wrong, and in what order to fix it
 
-Written 2026-08-05. **§7 steps 1 and 2 have since shipped — see §9. Steps 3-6
-have not.**
+Written 2026-08-05. **§7 steps 1, 2 and 4-on-desert have shipped; step 3 is in
+but did not beat its own numbers; steps 5-6 have not started. See §9.**
 
 It exists because "the snow feels drab" is a true observation that three
 different technical explanations would each fit, and picking the wrong one
@@ -416,3 +416,57 @@ Verified in-engine: `uAurora` 0.9 at progress 1, `colA #7189bf`, `warm
 Steps 3-6 — near-band variation that is not keyed on terrain height, the
 desert/frost ground values, the world-wide light drift before bloom, and
 middle-ground mass. And the chroma target above, by 0.03.
+
+### Steps 3 and 4 (2026-08-05) — one landed, one is honestly incomplete
+
+**Step 4 on DESERT worked.** Sand `0xd0a068 -> 0xb98a52`, band
+`0xe2bc84 -> 0xcda66c`, chroma deliberately held (0.408 -> 0.404) because
+desert survives a tonally flat field precisely by being a saturated one.
+
+| desert | before | after |
+|---|---|---|
+| luma p50 | 0.697 | **0.575** |
+| saturation | 0.464 | **0.553** |
+
+The neon reads against the sand now instead of on it, and the world is still a
+warm sunset desert rather than a night one.
+
+**Step 3 on FROST did not survive its own measurement, and that is recorded
+rather than smoothed over.** The sastrugi is in — wind-carved ridges keyed on
+world XZ, `abs(sin)` for the sharp-trough profile, in hashed patches, troughs
+pooling toward `uShadow`. It is visible in a frame and it addresses Finding C
+correctly: it is the only near-band variation that the `FLAT_TO = 26` flattening
+cannot erase. But on the measurement crop it costs what step 1 bought:
+
+| frost | before all | step 1 | steps 1-3 |
+|---|---|---|---|
+| luma p50 | 0.588 | 0.511 | 0.525 |
+| tonal spread | 0.149 | **0.270** | 0.177 |
+| saturation | 0.230 | **0.417** | 0.327 |
+
+Three iterations were spent on it. The first lifted crests toward `colB` at
+0.34 and took saturation all the way back to the pre-pass value — `colB` is a
+pale, low-chroma scour colour, so pulling toward it undoes a temperature pass.
+At 0.14 it was still net negative. Troughs-only moved the number not at all,
+which is the tell that the crop is not dominated by what I thought it was.
+
+**Step 4 was tried on frost and BACKED OFF.** Taking the snowpack to `0x5b76ad`
+for Finding A's sake cost saturation 0.417 -> 0.327. The mechanism is real and
+worth keeping: frost carries 850 additive snow flakes plus the moon glitter,
+and **an additive white overlay is relative** — over a darker base the same
+flakes wash out proportionally more colour. Finding A and Finding B pull
+opposite ways on this one world, and B is the complaint Martin actually made.
+Desert has no additive weather to amplify, so it keeps its full drop.
+
+**A flaw in §8's own metric, found here.** `chroma = (max-min)/255` scales with
+brightness, so darkening a surface lowers it even at identical saturation. Use
+HSV saturation `(max-min)/max` for any change that moves value. The §8 targets
+were written in the wrong unit and the numbers above are quoted in both.
+
+**What is not established.** Whether step 3 is a net gain on frost — it looks
+right in a frame and measures worse on a crop, and I could not resolve that
+inside the render budget here (one frame is ~10 minutes in this container's
+software rasteriser). And the §8 polarity target: the magenta probe is not
+robust to the ground changing underneath it, so the "magenta lighter than the
+ground" claim is **unmeasured**, not met. Both want Martin's eye and a machine
+with a GPU.
