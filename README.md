@@ -32,7 +32,9 @@ skid marks, a per-sector tint and a centre **energy spine** that flows forward
 faster the quicker you go (speed sold by the world, never by shake) — all free,
 no extra geometry. Worlds run dense instanced scatter. Over a race the sky
 **drifts**: the sun sinks, the mood deepens and stars come out; desert air
-shimmers with heat-haze and the neon city gets the odd lightning flash. The
+shimmers with heat-haze, and **Neon Sprawl races in a thunderstorm** — driving
+rain through the street canyons, and forked lightning that strikes behind the
+skyline, washes the fog pale and rolls its thunder in seconds later. The
 player's ship reacts too — a boost bloom surges behind it and a brake strip
 lights under braking. Everything stays inside the graphics budget — the
 renderer is **fill-bound, not draw-bound** (~60–100 draws / ~175k tris worst

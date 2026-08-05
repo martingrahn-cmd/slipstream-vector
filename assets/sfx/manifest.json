@@ -58,5 +58,15 @@
     "prompt": "Continuous sci-fi energy shield hum: warm electric force field drone, steady subtle pulsing, seamless loop, no melody.",
     "duration_seconds": 4,
     "loop": true
+  },
+  "thunder-far": {
+    "prompt": "Distant thunder rolling across a city at night: a soft low rumble that swells and tumbles away over several seconds, heavy and far off, no sharp crack. Deep sub-bass weight, long decaying tail. No rain, no music, no voices.",
+    "duration_seconds": 5,
+    "loop": false
+  },
+  "thunder-near": {
+    "prompt": "A close lightning strike: a sharp bright electric crack and tearing snap, immediately followed by a huge deep boom rolling and decaying away. Powerful and cinematic, hits hard at the very start. No rain, no music, no voices.",
+    "duration_seconds": 4,
+    "loop": false
   }
 }

@@ -60,6 +60,15 @@ document.getElementById('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x000000, T.FOG_NEAR, T.FOG_FAR);
+// Storm state (city worlds). The fog colour is the world's response to a
+// lightning strike: everything at distance is fogged, so washing the fog pale
+// for a few frames lights the whole skyline at once for zero draws. Kept here
+// because main.js owns scene.fog; the strike itself is scenery's (scenery.storm).
+const _fogBase = new THREE.Color();
+const _FLASH_FOG = new THREE.Color(0xdfe8ff);
+const _fwdV = new THREE.Vector3();
+let _lastStrike = -1;
+let _fogWashed = false;
 
 const camera = new THREE.PerspectiveCamera(T.FOV_BASE, innerWidth / innerHeight, 0.1, 2200);
 scene.add(camera); // speed lines live in camera space
@@ -356,6 +365,8 @@ function buildWorld(idx) {
   rig = new CameraRig(spline, camera);
   minimap = new Minimap(spline, document.getElementById('minimap'));
   scene.fog.color.setHex(theme.fog);
+  _fogBase.setHex(theme.fog);   // the storm washes the fog off this, per frame
+  _lastStrike = -1;             // a strike from the previous track must not fire here
   postfx.applyTheme(theme); // per-world grade + vignette tint
   trails.reset();
 
@@ -1914,6 +1925,33 @@ function tick(now) {
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {
     scene.fog.far = T.FOG_FAR - T.FOG_SPEED_PULL * sn - T.FOG_BOOST_PULL * juice.boostFactor;
+  }
+
+  // The storm's two consumers outside the sky shader. The fog wash is the whole
+  // world's response — every distant surface is fogged, so lifting the fog
+  // colour lights the skyline, the towers and the far road at once, for zero
+  // draws. The thunder is fired ONCE per strike off the counter, and arrives
+  // late by its own travel time. Deliberately NOT routed through juice: a
+  // weapon-hit flash is gameplay language and the weather must not borrow it.
+  const _storm = scenery.storm;
+  if (_storm) {
+    // Only touch the fog while a strike is lit, plus the one frame that settles
+    // it back — a world with no storm never has its fog written at all.
+    if (_storm.flash > 0 || _fogWashed) {
+      scene.fog.color.copy(_fogBase).lerp(_FLASH_FOG, Math.min(0.5, _storm.flash * 0.55));
+      _fogWashed = _storm.flash > 0;
+    }
+    if (_storm.strikes !== _lastStrike) {
+      if (_lastStrike >= 0 && !paused) {
+        // Bearing of the strike relative to where the camera is looking, so a
+        // bolt off to the left booms from the left.
+        _fwdV.set(0, 0, -1).applyQuaternion(camera.quaternion);
+        let rel = _storm.az - Math.atan2(_fwdV.x, _fwdV.z);
+        rel = ((rel + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        audio.thunder(_storm.dist, _storm.mag, Math.sin(rel));
+      }
+      _lastStrike = _storm.strikes;
+    }
   }
 
   // Keep the gameplay HUD off the title/menu screens (console front-end feel).

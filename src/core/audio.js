@@ -624,15 +624,25 @@ export class AudioEngine {
   // Fire a baked clip through the SFX bus. gain is post-normalisation; pan/panTo
   // ride a StereoPanner ramp (the near-miss whip). Returns false when the clip
   // isn't available so callers can fall back to the synth voice.
-  _playClip(key, gain = 1, { pan = null, panTo = null, panDur = 0.25 } = {}) {
+  // delay schedules it forward (thunder arrives after its lightning); lp rolls
+  // the top end off (distance eats treble long before it eats bass).
+  _playClip(key, gain = 1, { pan = null, panTo = null, panDur = 0.25, delay = 0, lp = 0 } = {}) {
     const c = this._sfxBuf.get(key);
     if (!this.ctx || !c) return false;
-    const t0 = this.ctx.currentTime;
+    const t0 = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
     src.buffer = c.buf;
     const g = this.ctx.createGain();
     g.gain.value = gain * c.norm;
-    src.connect(g);
+    if (lp > 0) {
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = lp;
+      f.Q.value = 0.6;
+      src.connect(f); f.connect(g);
+    } else {
+      src.connect(g);
+    }
     if (pan !== null && this.ctx.createStereoPanner) {
       const p = this.ctx.createStereoPanner();
       p.pan.setValueAtTime(pan, t0);
@@ -715,6 +725,41 @@ export class AudioEngine {
     if (!this.ctx || this.ctx.currentTime - this.lastBump < 0.25) return;
     this.lastBump = this.ctx.currentTime;
     this.blip(130, 0.12, { type: 'sine', gain: 0.16, slideTo: 60 });
+  }
+
+  // Thunder, scheduled at the sound's own travel time. You see the bolt and the
+  // boom lands up to four seconds later — that gap is most of what makes a
+  // storm read as weather rather than as the sky blinking. dist in metres, mag
+  // 0..1, pan -1..1 is the strike's bearing relative to where you are looking.
+  // Ambience, so it never ducks the music and never touches the feel bus.
+  thunder(dist = 800, mag = 0.5, pan = 0) {
+    if (!this.ctx) return;
+    const delay = Math.min(4, dist / 343);        // ~343 m/s, capped so nothing lands in the next race
+    const near = dist < 520;
+    const gain = (near ? 0.42 : 0.3) * (0.5 + 0.5 * mag);
+    // Air eats the top end with distance long before it eats the bottom.
+    const lp = near ? 0 : Math.max(320, 1500 - (dist - 520) * 0.5);
+    const p = Math.max(-1, Math.min(1, pan)) * 0.7;
+    if (this._playClip(near ? 'thunder-near' : 'thunder-far', gain, { delay, lp, pan: p })) return;
+    // Synth fallback: a filtered noise swell that rolls in and away. Slow attack
+    // when it is far off, an immediate crack when it is not.
+    const dur = near ? 2.6 : 4.0;
+    const t0 = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;                              // the noise buffer is one second
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(near ? 900 : 260, t0);
+    f.frequency.exponentialRampToValueAtTime(60, t0 + dur);
+    f.Q.value = 0.7;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, gain * 0.85), t0 + (near ? 0.02 : 0.45));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(this.sfx);
+    src.start(t0);
+    src.stop(t0 + dur + 0.05);
   }
 
   lapChime() {

@@ -476,11 +476,24 @@ export function buildScenery(spline, scene, theme) {
     .filter((o) => o && o.mesh && o.mesh.isInstancedMesh)
     .map((o) => ({ m: o.mesh, base: o.mesh.count }));
 
-  let flash = 0;
+  // ---- the storm (city) ---------------------------------------------------
+  // A strike is one event with a magnitude, a bearing and a DISTANCE, and the
+  // three consumers read it from here: the sky shader draws the channel and the
+  // wash, main.js washes the fog and fires the thunder. `strikes` is a counter
+  // rather than a flag so a consumer can never miss one or handle it twice.
+  //
+  // The rate is per SECOND. It used to be `Math.random() < 0.004` evaluated
+  // inside update(), i.e. per FRAME, so the storm was twice as busy at 120fps
+  // as at 60 — the weather quietly tracked your frame rate.
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
+  const STRIKE_HZ = 0.24;          // mean strikes per second — about one per 4s
+  const storm = { flash: 0, bolt: 0, strikes: 0, mag: 0, dist: 0, az: 0, seed: 0 };
+  const _fwd = new THREE.Vector3();
+  let strikeT = 9, strikeLife = 0, lastT = -1;
   return {
     group,
     sky: sky.mesh,
+    storm,
     // Quality tier hooks. Motes are the additive mass; the life families are
     // the "busier world" the FULL tier pays for. Both thin live via
     // InstancedMesh.count, so neither needs the field rebuilt.
@@ -500,9 +513,55 @@ export function buildScenery(spline, scene, theme) {
       sky.mat.uniforms.meteorAz.value = meteorAz;
       sky.mat.uniforms.auroraFlare.value = auroraFlare;
       if (stormy) {
-        flash *= 0.86;                                 // decay the last strike
-        if (Math.random() < 0.004) flash = 1;          // ~occasional lightning
-        sky.mat.uniforms.flash.value = flash;
+        // update() only ever gets absolute time, so the step is derived here.
+        // Clamped: a backgrounded tab comes back with a multi-second t jump and
+        // an unclamped dt would fire a strike with certainty on the first frame.
+        const dt = lastT < 0 ? 0 : Math.min(0.1, Math.max(0, t - lastT));
+        lastT = t;
+        strikeT += dt;
+        if (strikeT >= strikeLife && Math.random() < STRIKE_HZ * dt) {
+          // Squared uniform: most strikes are weak and far, a few are not.
+          // Distance falls as magnitude rises, because the bright ones ARE the
+          // close ones — the two were rolled separately at first and a dim
+          // little bolt could land 200m away while a blinder went off a mile
+          // out, which is exactly backwards. The first cut used a PRODUCT of
+          // two uniforms and measured 0 close strikes in 110 (expected ~4):
+          // that put the near crack at roughly one a race with the variance to
+          // miss whole races, so the dramatic half of the effect was a coin
+          // flip. Squared lands it around one in seven — 3-4 a race.
+          const mag = Math.random() ** 2;
+          storm.mag = mag;
+          // Distance is what the thunder delay is made of: sound covers ~343m
+          // a second, so a bolt on the far side of the skyline arrives three
+          // seconds after you see it. That gap IS the effect.
+          storm.dist = 200 + (1 - mag) * 1200;
+          // Aim it where the player can see it — within ~75 degrees of where
+          // the camera is looking. A bolt behind you is a bolt nobody saw.
+          _fwd.set(0, 0, -1);
+          if (camQuat) _fwd.applyQuaternion(camQuat);
+          storm.az = Math.atan2(_fwd.x, _fwd.z) + (Math.random() * 2 - 1) * 1.3;
+          storm.seed = Math.random() * 40;
+          storm.strikes++;
+          strikeT = 0;
+          strikeLife = 1.2;
+        }
+        if (strikeT < strikeLife) {
+          // Real lightning strobes: several restrikes down the same channel
+          // inside a quarter second, then the afterglow. Starts at full (cos 0)
+          // so the first frame of a strike is always its brightest.
+          const a = strikeT;
+          const strobe = a < 0.28 ? Math.max(0.16, Math.cos(a * (42 + storm.seed))) : 1;
+          const boltDur = 0.20 + 0.12 * storm.mag;
+          storm.bolt = a < boltDur ? strobe * (1 - a / boltDur) * (0.6 + 0.4 * storm.mag) : 0;
+          storm.flash = Math.exp(-a * 3.1) * strobe * (0.3 + 0.7 * storm.mag);
+        } else {
+          storm.bolt = 0;
+          storm.flash = 0;
+        }
+        sky.mat.uniforms.flash.value = storm.flash;
+        sky.mat.uniforms.bolt.value = storm.bolt;
+        sky.mat.uniforms.boltAz.value = storm.az;
+        sky.mat.uniforms.boltSeed.value = storm.seed;
       }
       rings.update(t);
       if (arches) arches.update(t);
@@ -555,6 +614,9 @@ function buildSky(S) {
       sunFlare: { value: 0 },   // 0..1 sun-gate bloom — swells as you drive into the sun
       meteor: { value: -1 },    // -1 idle, else 0..1 life of the scripted last-lap fireball
       meteorAz: { value: 0 },   // world azimuth the fireball is centred on (player's heading at trigger)
+      bolt: { value: 0 },       // 0..1 the lightning CHANNEL itself — much shorter-lived than flash
+      boltAz: { value: 0 },     // world azimuth the strike is centred on (biased into the player's view)
+      boltSeed: { value: 0 },   // per-strike shape seed — no two bolts the same
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -566,11 +628,21 @@ function buildSky(S) {
     `,
     fragmentShader: /* glsl */ `
       uniform float time, sunSize, sunStripes, starLevel, cloudAmp, cloudPuff, progress, flash, planet, aurora, auroraFlare, sunFlare, meteor, meteorAz;
+      uniform float bolt, boltAz, boltSeed;
       uniform vec3 zenith, upper, band, horizon, hot, sunCore, sunStripe, cloud;
       uniform vec3 sunAzimuth;
       varying vec3 vDir;
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+      // Triangle wave in [-1,1]. TRIANGLE, not sine: a lightning channel is
+      // straight runs meeting at hard kinks, and a sum of sines is a wiggle.
+      float tri(float x) { return abs(fract(x) - 0.5) * 4.0 - 1.0; }
+      // Horizontal wander of a bolt channel at elevation h, three scales deep.
+      float boltJag(float h, float s) {
+        return 0.030 * tri(h * 5.5 + s)
+             + 0.013 * tri(h * 14.0 + s * 1.7)
+             + 0.005 * tri(h * 33.0 + s * 2.3);
       }
       void main() {
         vec3 d = normalize(vDir);
@@ -767,8 +839,49 @@ function buildSky(S) {
         col = mix(col, cloud, clamp(c1 + c2 + c3 * step(0.4, cloudAmp), 0.0, 1.0) * cloudAmp);
         // Time-of-day mood drift: the world deepens as the race progresses.
         col *= mix(1.0, 0.78, progress);
-        // Lightning flash (city storms): a brief cool brightening of the sky.
-        col += vec3(0.55, 0.62, 0.85) * flash * smoothstep(-0.15, 0.5, y);
+        // LIGHTNING (city storms). A strike is TWO things: a forked CHANNEL in
+        // the sky, and a WASH across the dome that outlives it. This used to be
+        // the wash alone, which is why the storm read as the sky blinking
+        // rather than as lightning happening somewhere. The channel is drawn
+        // here rather than as geometry for the same reason the meteor is: the
+        // dome is renderOrder -1 with no depth write, so the skyline occludes
+        // the bolt for free and correctly, at zero draws.
+        if (flash > 0.0) {
+          float azRel = atan(d.x, d.z) - boltAz;
+          azRel = mod(azRel + 3.14159265, 6.28318530) - 3.14159265; // wrap [-pi,pi]
+          if (bolt > 0.0) {
+            float top = 0.55, bot = 0.03, span = 0.52;
+            // Main channel: fades in out of the cloud base, runs down behind
+            // the towers, thinning as it goes.
+            float live = smoothstep(top, top - 0.07, y) * step(bot, y);
+            float t = clamp((top - y) / span, 0.0, 1.0);
+            float w = mix(0.0080, 0.0016, t);
+            // 1.0 - smoothstep(0, w, dx), never smoothstep(w, 0, dx): GLSL
+            // leaves edge0 >= edge1 UNDEFINED, and this project has already
+            // been bitten once by a construct two drivers disagreed about.
+            float dx = abs(azRel - boltJag(y, boltSeed));
+            float core = (1.0 - smoothstep(0.0, w, dx)) * live;
+            float halo = (1.0 - smoothstep(0.0, w * 9.0, dx)) * live;
+            // One fork, peeling off at 40% and dying well short of the ground.
+            float fy = top - span * 0.40, fbot = fy - span * 0.32;
+            float fLive = step(fbot, y) * step(y, fy);
+            float ftt = clamp((fy - y) / (span * 0.32), 0.0, 1.0);
+            float fw = mix(0.0042, 0.0006, ftt);
+            float fdx = abs(azRel - (boltJag(fy, boltSeed)
+                       + (fy - y) * (hash(vec2(boltSeed, 5.0)) - 0.5)
+                       + boltJag(y, boltSeed + 17.0) * 0.45));
+            core += (1.0 - smoothstep(0.0, fw, fdx)) * fLive;
+            halo += (1.0 - smoothstep(0.0, fw * 8.0, fdx)) * fLive * 0.7;
+            col += vec3(0.78, 0.87, 1.0) * halo * bolt * 0.50;
+            col += vec3(1.0, 1.0, 1.0) * core * bolt * 2.8;  // core sits well over the bloom threshold
+          }
+          // The wash, biased toward the strike. A dome lit evenly reads as a
+          // fade; lit brightest where the bolt was, it reads as lightning.
+          // (Named aim, not near: near/far are close enough to driver-reserved
+          // territory that it is not worth finding out the hard way.)
+          float aim = 1.0 - smoothstep(0.0, 1.5, abs(azRel));
+          col += vec3(0.55, 0.62, 0.85) * flash * smoothstep(-0.15, 0.5, y) * (0.40 + 0.75 * aim);
+        }
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -4617,19 +4730,26 @@ function wrapTo(v, c, R) {
 function buildMotes(rng, spline, theme) {
   const rain = theme.ambient.mode === 'rain';
   const snow = theme.ambient.mode === 'snow';
-  // SNOW is camera-local: the old build scattered 200 flakes along the WHOLE
+  // SNOW and RAIN are camera-local: the old build scattered them along the WHOLE
   // lap, so on a 4km circuit you drove through roughly six of them and the
   // weather may as well not have existed. These live in a box that follows the
-  // camera and wrap around it, so the same one draw call buys real snowfall.
-  const N = rain ? 170 : snow ? 850 : 140;
-  const BOX = 44, VR = 11, V_MID = 5; // half-extents of the snow box, and its centre above the camera
+  // camera and wrap around it, so the same one draw call buys real weather.
+  //
+  // The snow got that fix; the rain did not, and the measurement was blunt —
+  // 170 streaks over Grid Lock's 3455m left 4 inside 30m and 9 inside 60m, and
+  // a press frame caught exactly ONE of them. Same box treatment, same one
+  // draw call, and the city finally reads as wet. Rain gets a wider box than
+  // snow because you are crossing it at 70 m/s, not standing in it.
+  const N = rain ? 1000 : snow ? 850 : 140;
+  const BOX = 44, VR = 11, V_MID = 5;   // half-extents of the snow box, and its centre above the camera
+  const RBOX = 58, RVR = 18, RV_MID = 6; // the rain box: wider, and taller than the gantries
   const geom = rain
-    ? new THREE.BoxGeometry(0.045, 1.6, 0.045)
+    ? new THREE.BoxGeometry(0.05, 1.9, 0.05)
     : snow ? new THREE.BoxGeometry(0.13, 0.13, 0.13)
       : new THREE.BoxGeometry(0.17, 0.17, 0.17);
   const mesh = new THREE.InstancedMesh(geom, new THREE.MeshBasicMaterial({
     color: theme.ambient.color, transparent: true,
-    opacity: rain ? 0.3 : snow ? 0.55 : 0.45,
+    opacity: rain ? 0.34 : snow ? 0.55 : 0.45,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: true,
   }), N);
   mesh.frustumCulled = false;
@@ -4637,15 +4757,19 @@ function buildMotes(rng, spline, theme) {
   const bases = [];
   spline.frameAt(0, f);
   for (let i = 0; i < N; i++) {
-    if (snow) {
+    if (snow || rain) {
       // Seeded anywhere in the box; the wrap makes the start position moot.
+      const B = rain ? RBOX : BOX, V = rain ? RVR : VR;
       bases.push({
-        x: f.pos.x + (rng() * 2 - 1) * BOX,
-        y: f.pos.y + (rng() * 2 - 1) * VR,
-        z: f.pos.z + (rng() * 2 - 1) * BOX,
+        x: f.pos.x + (rng() * 2 - 1) * B,
+        y: f.pos.y + (rng() * 2 - 1) * V,
+        z: f.pos.z + (rng() * 2 - 1) * B,
         ph: rng() * 100,
         sp: 0.5 + rng(),
-        sz: 0.6 + rng() * 1.1,      // thick flakes and fine ones in the same fall
+        // snow: thick flakes and fine ones in the same fall.
+        // rain: streak LENGTH only — scaling a drop uniformly fattens it into a
+        // mote, and the whole point of the geometry is that it is a streak.
+        sz: rain ? 0.7 + rng() * 1.5 : 0.6 + rng() * 1.1,
       });
       continue;
     }
@@ -4667,12 +4791,28 @@ function buildMotes(rng, spline, theme) {
     // their motion. Never below a handful, or "snowing" turns into "not".
     setDensity(f) { mesh.count = Math.max(12, Math.round(N * f)); },
     update(t, cam) {
-      for (let i = 0; i < N; i++) {
+      // Step only what is DRAWN: past mesh.count the matrices are never read,
+      // so a thinned tier stops paying for them on the CPU too.
+      const n = mesh.count;
+      for (let i = 0; i < n; i++) {
         const b = bases[i];
         let x = b.x, y = b.y, z = b.z;
         if (rain) {
-          y = b.y + 9 - ((t * 26 * b.sp + b.ph) % 18);
-        } else if (snow) {
+          // Driving rain: fast fall with a steady wind slant, both wrapped into
+          // the camera box so the fall is continuous however far you have gone.
+          x = b.x + t * 4.5 * b.sp;
+          y = b.y - t * 30 * b.sp;
+          if (cam) {
+            x = wrapTo(x, cam.x, RBOX);
+            z = wrapTo(z, cam.z, RBOX);
+            y = wrapTo(y, cam.y + RV_MID, RVR);
+          }
+          m.makeScale(1, b.sz, 1);   // length varies, thickness must not
+          m.setPosition(x, y, z);
+          mesh.setMatrixAt(i, m);
+          continue;
+        }
+        if (snow) {
           // Slow tumbling fall with a lateral waft — unhurried, thick flakes.
           x = b.x + Math.sin(t * 0.7 * b.sp + b.ph) * 1.6;
           z = b.z + Math.cos(t * 0.5 * b.sp + b.ph * 1.3) * 1.3;

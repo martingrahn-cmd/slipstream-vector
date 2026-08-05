@@ -195,6 +195,17 @@ fixed.)
     position so gusts sweep. Zero draws, zero triangles, one uniform a frame
     for the whole world. Amplitude is per archetype (palm ≫ spruce ≫ cactus)
     times `theme.wind`. Uniforms are exposed on `material.userData.wind`.
+  - `buildMotes` is the weather. Snow AND rain live in a box that follows the
+    camera and wrap around it (`wrapTo`); anything seeded along the whole lap
+    is invisible on a 2–4km circuit, which is how the rain shipped for months
+    at 9 streaks within 60m of the camera. One instanced draw either way.
+  - The **storm** (city worlds) is `scenery.storm` — `{flash, bolt, strikes,
+    mag, dist, az, seed}`. The sky shader draws the forked channel and the
+    bearing-biased wash; `main.js` reads the same object to lerp the fog colour
+    pale and to fire `audio.thunder(dist, mag, pan)` off the `strikes` COUNTER
+    (a counter, not a flag, so a consumer can neither miss a strike nor handle
+    it twice). Strike rate is per SECOND against a dt derived inside `update()`
+    — it used to be per frame, which made the weather track your frame rate.
   - `buildGround` is a radially graded disc **displaced at build time** by
     `terrain.js`'s height function — one CPU implementation, sampled by the
     mesh AND by `groundAt()`, which every scatterer plants against. Deliberately

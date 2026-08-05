@@ -243,6 +243,61 @@ motion. STILL OPEN: the near cliff faces (horizonMask ridge walls and rockCut)
 read as flat pale slabs — the "paper" complaint from the press review stands
 and is the next frost work item.
 
+### 2.6d Neon Sprawl races in a storm now (2026-08-05) — DONE
+Martin asked what was left on the city circuits and whether it thundered or
+rained there. It did both, and both were half-built. All three city tracks
+share the `city` theme, so this lands on Orbital Ring, Skyline Rush and Grid
+Lock at once, and on nothing else.
+
+**The rain was there and it was invisible.** `buildMotes` seeded rain's 170
+streaks along the WHOLE lap — the exact bug the SNOW was fixed for, described
+in a comment in that same function, never applied to the rain. Measured on Grid
+Lock (3455m): **4 streaks within 30m of the camera, 9 within 60m**, and a press
+frame with exactly ONE in it. It now uses the same camera-local wrap box, at
+1000 streaks in a 58m box: **171 within 30m, 789 within 60m, nearest 4m** —
+and still **one draw call**, because the count is instanced and thinning it is
+a live `count` write. Streaks scale in LENGTH only; scaling a drop uniformly
+fattens it into a mote and the geometry is a streak for a reason.
+
+**The lightning was a dome-wide blink with no bolt and no sound.** Three
+changes, all of them in the "make it read" direction:
+- **A forked channel** is drawn in the sky fragment shader, using the meteor's
+  idiom: the dome is `renderOrder -1` with no depth write, so the skyline
+  occludes the bolt for free and correctly, at **zero draws**. Triangle waves,
+  not sines — a lightning channel is straight runs meeting at hard kinks, and a
+  sum of sines only ever gives you a wiggle. One fork peels off at 40% and dies
+  short of the ground. Every strike gets a fresh shape seed.
+- **The world answers.** The dome wash is now biased toward the strike's
+  bearing (a dome lit evenly reads as a fade, not as a bolt going off over
+  there), and `main.js` lerps the **fog colour** pale for the duration —
+  everything at distance is fogged, so that lights the whole skyline, the
+  towers and the far road at once, again for zero draws. Deliberately NOT
+  routed through `juice`: a weapon-hit flash is gameplay language and the
+  weather must not borrow it.
+- **Thunder.** Two ElevenLabs clips (`thunder-far` 5s, `thunder-near` 4s) fired
+  at the sound's own travel time — `dist / 343`, up to four seconds — with a
+  distance low-pass, because air eats the top end long before the bottom. You
+  see the bolt and the boom lands later; that gap is most of what makes it read
+  as weather. `_playClip` grew `delay` and `lp` options for it. Full synth
+  fallback if the clips are missing, same as every other one-shot.
+
+**The strike rate was per FRAME.** `Math.random() < 0.004` inside `update()`
+meant the storm was twice as busy at 120fps as at 60 — the weather quietly
+tracked your frame rate. It is now a per-second rate against a clamped derived
+dt (`update()` only ever receives absolute time). Measured by stepping
+`scenery.update` by hand over 300 simulated seconds at each rate: **0.180
+strikes/s at 60fps, 0.187/s at 120fps** (54 and 56 strikes) — the same storm,
+which is the whole point. Mean gap 5.4s.
+
+Magnitude and distance are ONE roll, not two: the bright strikes ARE the close
+ones. They were independent at first, which let a dim little bolt land 200m
+away while a blinder went off a mile out. The first cut then drew magnitude as
+a product of two uniforms and measured **0 close strikes in 110** — the near
+crack would have been roughly one a race with the variance to miss whole races,
+i.e. the dramatic half of the effect on a coin flip. A squared uniform gives
+mean magnitude 0.333, mean distance 1001m (2.9s of thunder delay) and **14.3%
+close strikes** over 200k samples — 3-4 a race.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no
