@@ -52,9 +52,33 @@ identical. The **contrast** is not, and contrast is what makes a thing read.
 So the rule is honoured in the letter and broken in the effect. Half the
 gameplay language inverts polarity depending on which world you loaded.
 
-**The fix is not to tint the neon per world** — that would break the rule
-properly. It is to bring the **ground** down on desert and frost, which is
-where the city already is.
+**Why it happens is arithmetic, not styling.** The two constants are not equal
+in value to begin with (`config.js:231-232`):
+
+| | hex | sRGB luma |
+|---|---|---|
+| `EDGE_L` cyan | `0x00f0ff` | **0.745** |
+| `EDGE_R` magenta | `0xff2ec8` | **0.398** |
+
+A 0.35 gap. Magenta at 0.40 is therefore darker than *any* ground above 0.40 —
+which is desert (0.70) and frost (0.61), and is not city (0.13). Nothing
+per-world is required to explain it; the language is asymmetric at the source
+and the worlds simply fall on either side of the line.
+
+**And the neon cannot be fixed per world even if we wanted to.** The strip
+builder never receives the theme — `buildEdgeStrips(spline)` takes the spline
+only, where every other builder in `trackMesh.js` takes `(spline, theme)` — and
+the material is opaque, unlit, unfogged, `fog: false`, with a fragment shader
+that writes `vColor` and nothing else. The strip core is constant by
+construction, which is exactly what the rule wants. What little world variation
+the measurements show comes from downstream: the per-world grade saturation,
+and the additive glow ribbon, which adds onto whatever the world drew behind it
+and so lifts less, proportionally, over a bright ground.
+
+**The fix is therefore the ground, and only the ground.** Bring desert and
+frost down toward where the city already sits. Tinting the neon per world would
+require giving the strip builder a theme dependency it deliberately does not
+have.
 
 ## 3. Finding B — frost is the only world that is both pale and colourless
 
