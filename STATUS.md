@@ -243,7 +243,17 @@ motion. STILL OPEN: the near cliff faces (horizonMask ridge walls and rockCut)
 read as flat pale slabs — the "paper" complaint from the press review stands
 and is the next frost work item.
 
-### 2.6d Neon Sprawl races in a storm now (2026-08-05) — DONE
+### 2.6d Neon Sprawl races in a storm now (2026-08-05) — DONE, one thing unpriced
+**Still owed: `node tools/audit-overdraw.mjs 6,7,8` on real hardware.** The rain
+went from 170 additive streaks to 1000 and nothing else about it changed — one
+instanced draw, camera-local so it cannot grow with lap length. That is a pure
+FILL change and fill is the ceiling, so it wants the measuring stick before
+anyone claims it is free. It could not be run here: this container has only a
+software rasterizer and a single 480x270 sample did not finish in 15 minutes,
+where the tool is a 2-3 minute job on a real GPU. Do not quote a number for
+this until it has been run — §5a of `FIDELITY.md` records that guessing at the
+additive layer has already been wrong in both directions.
+
 Martin asked what was left on the city circuits and whether it thundered or
 rained there. It did both, and both were half-built. All three city tracks
 share the `city` theme, so this lands on Orbital Ring, Skyline Rush and Grid
