@@ -352,7 +352,12 @@ export const THEMES = {
     // as landforms, not lumps. The flat corridor by the road is carved by
     // construction (terrain.js FLAT_TO/RAMP_TO), so the racing line loses
     // nothing — audit-terrain must still read 0.000 on all three.
-    terrain: { amp: 30, freq: 0.0040, octaves: 3, ridge: 0.55 },
+    // Four octaves at gain 0.66 instead of three at 0.48: the same 30m of
+    // height spread across ~250/117/55/26m wavelengths instead of piled into
+    // one 250m swell. This is the "böljande landskap" knob — raising `amp`
+    // again would only make the single swell taller, which is the mistake
+    // f8cab68 already made once. See ART.md §10.
+    terrain: { amp: 30, freq: 0.0040, octaves: 4, ridge: 0.55, gain: 0.66 },
     wind: 0.7,            // cold, heavy air — the spruce barely shrugs
     scrubCount: 0,
     flora: 'pines',

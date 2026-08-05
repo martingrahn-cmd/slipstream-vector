@@ -2182,6 +2182,39 @@ function buildMesas(rng, spline, groundY, theme) {
     // islands read as "what is that green thing supposed to be".
     if (!towers && !islands) bakeStrata(bakedMesa, rng, groundY, Math.max(3, scale * ys * 0.16), theme.mesaRim, theme.ground);
     geoms.push(bakedMesa);
+    // COMPANION FORMS. A single large mass reads as one boulder — Martin's word
+    // for the frost hills was that they look like "en stor sten" — because
+    // nothing beside them says how big they are. Real rock country is a few big
+    // forms with smaller ones gathered at their feet, and that hierarchy is
+    // exactly what ART.md Finding E says is missing everywhere in this game:
+    // quantity without hierarchy. Two or three companions at a sixth to a third
+    // of the parent, scattered round its skirt, give the big form a scale to be
+    // big against and break its silhouette at the same time.
+    //
+    // They merge into the same buffer as the parent, so this is ZERO extra
+    // draws and ~20k triangles across a whole circuit — the cheap axis, exactly
+    // where the graphics budget says to spend.
+    if (!towers && !islands && scale > 30) {
+      const nComp = 2 + Math.floor(rng() * 2);
+      for (let c = 0; c < nComp; c++) {
+        const cMake = archetypes[Math.floor(rng() * archetypes.length)][0];
+        const cScale = scale * (0.14 + rng() * 0.24);
+        const cAng = rng() * Math.PI * 2;
+        const cRad = scale * (0.85 + rng() * 0.75);
+        const cx2 = px + Math.cos(cAng) * cRad;
+        const cz2 = pz + Math.sin(cAng) * cRad;
+        // A companion is small enough to sneak inside the parent's own track
+        // clearance, so it has to clear the road on its own footprint.
+        if (!clearOfTrack(spline, cx2, cz2, cScale * 1.4)) continue;
+        const cg = cMake(rng);
+        cg.scale(cScale, cScale * (0.6 + rng() * 0.6), cScale);
+        cg.rotateY(rng() * Math.PI * 2);
+        const cBox = new THREE.Box3().setFromBufferAttribute(cg.getAttribute('position'));
+        cg.translate(cx2, groundAt(groundY, cx2, cz2) - cBox.min.y - 0.4, cz2);
+        geoms.push(bakeFlatColors(cg, rng() < 0.5 ? theme.mesaLit : theme.mesaShadow,
+          { shadow: theme.mesaShadow }));
+      }
+    }
     if (islands) {
       // Remember the island so the flora scatterer can plant ON it. Palms used
       // to be scattered off the racing line like desert cacti, which on a world

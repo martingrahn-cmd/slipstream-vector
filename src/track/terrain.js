@@ -23,7 +23,13 @@
 // hard ceiling from the nearest road sample's own height.
 
 const FLAT_TO = 26;    // metres from the road edge that stay dead flat
-const RAMP_TO = 95;    // ...and where the terrain reaches full amplitude
+const RAMP_TO = 72;    // ...and where the terrain reaches full amplitude
+// FLAT_TO is the racing line's protection and does not move. RAMP_TO is only
+// how fast the world comes back after it, and at 95 the ramp used most of the
+// visible near field just getting started — the terrain was there and you had
+// to be looking a long way off to see any of it. 72 brings the relief into the
+// band the chase camera actually frames. audit-terrain still reads 0.000m on
+// all twelve, which is the only thing that constrains this number.
 const ROAD_GAP = 3.5;  // terrain must stay this far below the road surface
 const CELL = 64;       // spline-sample lookup grid
 
@@ -49,6 +55,7 @@ export function buildTerrain(spline, groundY, theme) {
   const freq = cfg.freq ?? 0.0042;      // ~240m base wavelength
   const octaves = cfg.octaves ?? 3;
   const ridge = cfg.ridge ?? 0;         // 0 = rolling dunes, 1 = sharp drifts
+  const gain = cfg.gain ?? 0.48;        // octave amplitude falloff — see fbm()
 
   // ---- spline sample lookup grid -----------------------------------------
   // Every carve query needs the nearest piece of road. Scanning all ~1000
@@ -107,6 +114,14 @@ export function buildTerrain(spline, groundY, theme) {
   }
 
   // ---- the height function ------------------------------------------------
+  // `gain` is how fast the octaves lose amplitude, and it decides whether the
+  // world reads as ROLLING or as one big swell with a texture on it. At the
+  // original 0.48 the first octave carries 58% of the height: on frost that is
+  // 17.5m of a 30m budget in a single ~250m wave, and Martin's word for the
+  // result was that the hill "ser ut som en stor sten". At 0.66 the same budget
+  // spreads 12.6 / 8.3 / 5.5 / 3.6m across ~250 / 117 / 55 / 26m wavelengths,
+  // which is country rather than one shape. Per theme, defaulting to the old
+  // value, so every world that does not ask for it is bit-identical.
   function fbm(x, z) {
     let sum = 0, a = 1, norm = 0, f = freq;
     for (let o = 0; o < octaves; o++) {
@@ -114,7 +129,7 @@ export function buildTerrain(spline, groundY, theme) {
       if (ridge > 0) n = 1 - Math.abs(n * 2 - 1) * ridge - (1 - ridge) * (1 - n);
       sum += n * a;
       norm += a;
-      a *= 0.48;
+      a *= gain;
       f *= 2.13;   // not exactly 2 — avoids the octaves lining up into a grid
     }
     return sum / norm;

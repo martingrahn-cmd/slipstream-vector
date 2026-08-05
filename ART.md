@@ -515,7 +515,7 @@ the last rib of a lap and the first of the next are 5.5m apart and not 3km.
 Logic tested over a full lap including the seam: six ribs, once each, and a
 1500m warp fires nothing instead of a burst.
 
-### NOT DONE — "vill ha ojämn mark, böljande landskap"
+### Done — "vill ha ojämn mark, böljande landskap"
 
 Martin's words about the frost hills: *"ser ut som en stor sten"*, and about the
 grey blocks: *"inte så spännande"*. This is the real remaining art item and it
@@ -534,6 +534,31 @@ So "rolling landscape" is not one change. It is: a second, shorter terrain
 octave so the mid-distance actually undulates; breaking the big rock forms into
 grouped masses with a size hierarchy (Finding E's 5/10/20m tiers); and probably
 letting `RAMP_TO` come in closer so the undulation starts nearer the road
-without touching the racing line's flat corridor. That is a day's work with
-verification, not an afternoon, and it wants a machine that renders a frame in
-16ms rather than 10 minutes.
+without touching the racing line's flat corridor. All three landed:
+
+**A second and shorter terrain octave.** The octaves were already there; the
+amplitude falloff was eating them. At the old `gain` of 0.48 the first octave
+carried 58% of the height — on frost, 17.5m of a 30m budget in a single ~250m
+wave, which is one swell with a texture on it, not country. `gain` is now a
+per-theme knob (default 0.48, so every other world is bit-identical) and frost
+runs 4 octaves at 0.66: the same 30m spread **12.6 / 8.3 / 5.5 / 3.6m across
+~250 / 117 / 55 / 26m**. Note what this is NOT: raising `amp` again, which is
+the mistake `f8cab68` already made — a taller single swell is still one shape.
+
+**`RAMP_TO` 95 -> 72.** `FLAT_TO` does not move; it is the racing line's
+protection. `RAMP_TO` is only how fast the world comes back afterwards, and at
+95 the ramp spent most of the visible near field merely getting started. The
+relief now arrives inside the band the chase camera actually frames.
+
+**Companion forms.** Any non-tower mass above scale 30 now gets 2-3 smaller
+forms at 0.14-0.38 of its size scattered round its skirt, each clearing the
+road on its own footprint. This is Finding E applied for the first time: a big
+form reads as big only when something small stands next to it, and a lone
+smooth mass reads as a boulder however large you make it. They merge into the
+parent's buffer — **zero extra draws**, roughly 20k triangles across a circuit,
+which is the cheap axis the graphics budget points at.
+
+Gates after: `audit-terrain` 0.000m on all twelve, `audit-laps` clear, console
+clean. What is NOT established is the aesthetic outcome at speed — one frame
+costs ~10 minutes in this container, so whether it now reads as rolling country
+is Martin's call on a real machine.
