@@ -14,6 +14,7 @@ export class AudioEngine {
     this.stateScale = 0.3; // menu idle vs racing
     this.scrapeLevel = 0;
     this.lastBump = 0;
+    this._lastArch = 0;   // rate floor for the arch-rib thump (they come fast)
 
     // Rival voice-over: load the manifest of generated clips (if present). No
     // manifest / no clip -> the feed just uses the comms chirp, as before.
@@ -760,6 +761,36 @@ export class AudioEngine {
     src.connect(f); f.connect(g); g.connect(this.sfx);
     src.start(t0);
     src.stop(t0 + dur + 0.05);
+  }
+
+  // Passing under an arch rib — the "tjuff" of a gantry going over the canopy.
+  // Ribs sit 5.5m apart, so this fires ~14 times a second at racing speed and
+  // has to stay SHORT or it turns into a buzz: 90ms of band-passed air with a
+  // little low body under it. Brightness and pitch ride speed, so a fast run
+  // through a rib section reads as a rhythm speeding up rather than as a row
+  // of identical clicks. Purely procedural on purpose — a baked clip repeated
+  // fourteen times a second announces itself as a loop.
+  archPass(speedNorm = 0.5) {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    if (t0 - this._lastArch < 0.045) return;   // hard floor, so nothing ever stacks into mush
+    this._lastArch = t0;
+    const sn = Math.max(0, Math.min(1, speedNorm));
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(380 + 950 * sn, t0);
+    f.frequency.exponentialRampToValueAtTime(170 + 280 * sn, t0 + 0.09);
+    f.Q.value = 1.5;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.045 + 0.065 * sn, t0);
+    g.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.10);
+    src.connect(f); f.connect(g); g.connect(this.sfx);
+    src.start(t0);
+    src.stop(t0 + 0.12);
+    // A touch of body so it reads as a THUMP and not just a hiss.
+    this.blip(115 + 55 * sn, 0.05, { type: 'sine', gain: 0.03 + 0.025 * sn, slideTo: 68 });
   }
 
   lapChime() {

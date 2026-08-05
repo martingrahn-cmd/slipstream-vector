@@ -69,6 +69,7 @@ const _FLASH_FOG = new THREE.Color(0xdfe8ff);
 const _fwdV = new THREE.Vector3();
 let _lastStrike = -1;
 let _fogWashed = false;
+let _lastArchS = 0;   // ship.s at the previous frame, for counting arch ribs passed
 
 const camera = new THREE.PerspectiveCamera(T.FOV_BASE, innerWidth / innerHeight, 0.1, 2200);
 scene.add(camera); // speed lines live in camera space
@@ -367,6 +368,7 @@ function buildWorld(idx) {
   scene.fog.color.setHex(theme.fog);
   _fogBase.setHex(theme.fog);   // the storm washes the fog off this, per frame
   _lastStrike = -1;             // a strike from the previous track must not fire here
+  _lastArchS = 0;               // and no phantom rib thumps from the last circuit's layout
   postfx.applyTheme(theme); // per-world grade + vignette tint
   trails.reset();
 
@@ -1933,6 +1935,25 @@ function tick(now) {
   // draws. The thunder is fired ONCE per strike off the counter, and arrives
   // late by its own travel time. Deliberately NOT routed through juice: a
   // weapon-hit flash is gameplay language and the weather must not borrow it.
+  // Arch ribs: a thump as each one passes over the canopy. Counted off the
+  // ship's arc length rather than off a trigger volume, so it cannot be missed
+  // at speed — and the count is done AROUND THE LOOP, because the last rib on
+  // a lap and the first on the next are separated by the seam, not by 3km.
+  if (scenery.archS && (state === 'race' || state === 'countdown') && !paused) {
+    const L = spline.length;
+    let travelled = ship.s - _lastArchS;
+    if (travelled < 0) travelled += L;          // wrapped past the line this frame
+    if (travelled > 0 && travelled < L * 0.5) { // a warp or a re-grid is not a drive-through
+      let fired = 0;
+      for (const a of scenery.archS) {
+        let rel = a - _lastArchS;
+        if (rel < 0) rel += L;
+        if (rel > 0 && rel <= travelled && fired < 3) { audio.archPass(sn); fired++; }
+      }
+    }
+    _lastArchS = ship.s;
+  }
+
   const _storm = scenery.storm;
   if (_storm) {
     // Only touch the fog while a strike is lit, plus the one frame that settles

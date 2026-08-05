@@ -298,6 +298,19 @@ let OCCLUDERS = [];
 function addOccluder(x, z, radius, strength = 1) {
   if (radius >= 12) OCCLUDERS.push({ x, z, r: radius, s: strength });
 }
+// Is (x, z) clear of every large form registered so far? The registry exists
+// for contact shading, but it is also the only list of "something big already
+// stands here" the scatterers have — and before this, none of them consulted
+// it, so vegetation could be planted inside a boulder. Only meaningful for
+// builders that run AFTER the big forms; buildFlora does.
+function clearOfOccluders(x, z, margin = 0) {
+  for (const o of OCCLUDERS) {
+    const dx = x - o.x, dz = z - o.z;
+    const r = o.r + margin;
+    if (dx * dx + dz * dz < r * r) return false;
+  }
+  return true;
+}
 
 function windify(material, geom, amp) {
   geom.computeBoundingBox();
@@ -495,6 +508,7 @@ export function buildScenery(spline, scene, theme) {
     group,
     sky: sky.mesh,
     storm,
+    archS: arches ? arches.archS : null,   // rib arc-lengths, for the pass-under thump
     // Quality tier hooks. Motes are the additive mass; the life families are
     // the "busier world" the FULL tier pays for. Both thin live via
     // InstancedMesh.count, so neither needs the field rebuilt.
@@ -766,9 +780,19 @@ function buildSky(S) {
           for (int i = 0; i < 3; i++) {
             float fi = float(i);
             // A meandering hem: three harmonics, not one wave.
-            float fold = sin(aAz * (2.1 + fi * 0.9) + time * (0.10 + fi * 0.030) + fi * 2.3)
-                       + 0.55 * sin(aAz * (4.6 + fi * 1.3) - time * (0.07 + fi * 0.020))
-                       + 0.30 * sin(aAz * (9.1 + fi * 2.0) + time * 0.05 + fi);
+            // EVERY azimuth multiplier here MUST be an integer. aAz is
+            // atan(d.x, d.z), which jumps from +pi to -pi at one bearing, and
+            // sin(k * aAz) only survives that jump when k is a whole number —
+            // otherwise the curtain has a visible vertical SEAM at that
+            // bearing, which is exactly what Martin photographed. The old
+            // values were 2.1/3.0/3.9, 4.6/5.9/7.2 and 9.1/11.1/13.1: eight of
+            // the nine were fractional. The RAY terms below were already
+            // integer (46, 3, 97) — the rule was known and applied there and
+            // never carried across to the fold. Same family as the cloud-band
+            // seam in CLAUDE.md: atan is not periodic.
+            float fold = sin(aAz * (2.0 + fi) + time * (0.10 + fi * 0.030) + fi * 2.3)
+                       + 0.55 * sin(aAz * (5.0 + fi) - time * (0.07 + fi * 0.020))
+                       + 0.30 * sin(aAz * (9.0 + fi * 2.0) + time * 0.05 + fi);
             float base = (0.12 + fi * 0.17) + 0.055 * fold;
             float hgt = 0.26 + fi * 0.10;
             float t = (y - base) / hgt;              // 0 at the hem, 1 at the top
@@ -2524,7 +2548,10 @@ function buildArches(spline, theme) {
   group.add(ribMesh, lipMesh);
   group.userData.archS = positions.slice();
   group.matrixAutoUpdate = false;
-  return { group, update: (t) => { lipMat.opacity = 0.5 + 0.18 * Math.sin(t * 2.2); } };
+  // archS is also what main.js listens to for the pass-under thump — the ribs
+  // are 5.5m apart, so at racing speed that is ~14 a second and reads as a
+  // rhythm rather than as separate events.
+  return { group, archS: positions.slice(), update: (t) => { lipMat.opacity = 0.5 + 0.18 * Math.sin(t * 2.2); } };
 }
 
 // ----------------------------------------------------------- start gantry
@@ -3250,8 +3277,19 @@ function buildFlora(rng, spline, groundY, theme, islands = null) {
       const rl = Math.hypot(rx, rz) || 1;
       x = f.pos.x + (rx / rl) * side * dist;
       z = f.pos.z + (rz / rl) * side * dist;
-      if (attempt === 7 || clearOfTrack(spline, x, z, 3)) break;
+      // Clear of the ROAD and of the big forms. It used to test the road only,
+      // which is how Martin found a spruce growing out of the side of a
+      // boulder: nothing ever asked whether the spot was already occupied by a
+      // rock. OCCLUDERS is the footprint registry the contact shading already
+      // maintains, and it holds exactly the large forms (radius >= 12), so the
+      // test costs one pass over a short list and needs no new bookkeeping.
+      if (attempt === 7 || (clearOfTrack(spline, x, z, 3) && clearOfOccluders(x, z, 2.5))) break;
     }
+    // The eighth attempt used to break through regardless, which meant the
+    // rejection was a preference and not a rule. If a spot still has a boulder
+    // in it after eight tries, drop the instance instead — one missing spruce
+    // out of 170 is invisible; one growing out of a rock is what got noticed.
+    if (!clearOfOccluders(x, z, 2.5)) { sc.setScalar(0); m.compose(p, q, sc); mesh.setMatrixAt(i, m); continue; }
     const size = 1.6 + rng() * 2.2;
     p.set(x, groundAt(groundY, x, z), z);
     q.setFromAxisAngle(Y, rng() * Math.PI * 2);

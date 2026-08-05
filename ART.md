@@ -470,3 +470,70 @@ software rasteriser). And the §8 polarity target: the magenta probe is not
 robust to the ground changing underneath it, so the "magenta lighter than the
 ground" claim is **unmeasured**, not met. Both want Martin's eye and a machine
 with a GPU.
+
+---
+
+## 10. Hardware feedback round (2026-08-05, Martin on a real GPU)
+
+Four things, from three frames on Frostfall Ridge. Two were bugs with exact
+causes; one is a feature; one is the biggest remaining art item and is NOT done.
+
+### Fixed — the aurora had a seam
+
+`aAz = atan(d.x, d.z)` jumps from +pi to -pi at one bearing, and `sin(k * aAz)`
+only survives that jump when **k is a whole number**. The curtain's three fold
+harmonics were `2.1/3.0/3.9`, `4.6/5.9/7.2` and `9.1/11.1/13.1` — eight of the
+nine fractional. `fold` drives both the hem height and the brightness gate, so
+the whole curtain stepped at that bearing.
+
+Proven rather than eyeballed: `|fold(+pi) - fold(-pi)|` measured **1.48 / 0.51 /
+1.43** across the three curtains before, and **~1e-15** after.
+
+Worth noting for the next person: the RAY terms in the same shader already used
+46, 3 and 97 — all integers. The rule was known, applied there, and never
+carried across to the fold. Same family as the cloud-band seam already in
+`CLAUDE.md`.
+
+### Fixed — a spruce growing out of a boulder
+
+`buildFlora` tested `clearOfTrack` and nothing else, so it never asked whether a
+spot was already occupied. It now also tests `clearOfOccluders` against the
+footprint registry the contact shading already maintains (large forms, radius
+>= 12), and — the part that makes it a rule rather than a preference — an
+instance that still has a boulder in it after eight attempts is **dropped**
+instead of placed. One missing spruce in 170 is invisible; one in a rock is
+what got photographed.
+
+### Added — the ribs make a sound
+
+Arch ribs sit 5.5m apart, so at racing speed you pass ~14 a second. `archPass`
+is 90ms of band-passed air with a little low body under it, pitch and brightness
+riding speed, purely procedural — a baked clip fourteen times a second
+announces itself as a loop. Counted off the ship's arc length rather than a
+trigger volume so it cannot be missed at speed, and counted AROUND THE LOOP so
+the last rib of a lap and the first of the next are 5.5m apart and not 3km.
+Logic tested over a full lap including the seam: six ribs, once each, and a
+1500m warp fires nothing instead of a burst.
+
+### NOT DONE — "vill ha ojämn mark, böljande landskap"
+
+Martin's words about the frost hills: *"ser ut som en stor sten"*, and about the
+grey blocks: *"inte så spännande"*. This is the real remaining art item and it
+is Findings C and E together, now confirmed from the cockpit rather than
+inferred from a crop:
+
+- The big forms are `mesaStyle: 'rocks'` at `mesaMax: 175` — single smooth
+  faceted masses. They read as boulders because that is what they are: one
+  blob each, no strata, no silhouette hierarchy, no smaller forms gathered
+  around them to give them scale.
+- The GROUND between them does not undulate, and cannot within 26m of the road
+  (`FLAT_TO`, Finding C). Beyond that it does, but at `freq 0.0040` — a ~250m
+  wavelength, which reads as one broad swell rather than as rolling country.
+
+So "rolling landscape" is not one change. It is: a second, shorter terrain
+octave so the mid-distance actually undulates; breaking the big rock forms into
+grouped masses with a size hierarchy (Finding E's 5/10/20m tiers); and probably
+letting `RAMP_TO` come in closer so the undulation starts nearer the road
+without touching the racing line's flat corridor. That is a day's work with
+verification, not an afternoon, and it wants a machine that renders a frame in
+16ms rather than 10 minutes.
