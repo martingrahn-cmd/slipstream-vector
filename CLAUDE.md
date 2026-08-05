@@ -119,6 +119,13 @@ fixed.)
 - **Audit:** `node tools/audit-pads.mjs [tracks]` — weapon-pad pickup
   distribution and what a whole pack gets off one pad. The standing answer to
   "does the field share a weapon?" (it does not; see `STATUS.md` §2.5).
+- **QA gate:** `node tools/audit-laps.mjs` — lap counting and the loop seam. No
+  deps, no browser, 50ms, because `shipPhysics.js` has zero three.js imports on
+  purpose. Its invariant is the one the standings rest on: **progress never
+  decreases**. A lap that fails to count drops `progressOf` (`lap * length + s`)
+  by a whole lap permanently and makes the race unfinishable — that shipped
+  once, gated behind a `v > 1` term that lost the lap for anyone crossing the
+  line at a crawl.
 - **QA gate:** `node tools/audit-terrain.mjs` guards the ground: it reports
   terrain INTRUSION near the road (how high the ground gets beside the racing
   line), not absolute clearance — the flat plane already sits exactly 1.15m

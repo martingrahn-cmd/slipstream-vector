@@ -59,6 +59,22 @@ Measured after landing (`node tools/audit-terrain.mjs`): 0.000m of terrain
 intrusion near the road on all twelve circuits, with 21m of relief on the
 desert, 13m on frost, 8m on the coast and 3.5m in the city.
 
+**Updated 2026-08-03 (`f8cab68`).** Frost was raised from amp 17 to 30 and freq
+0.0048 to 0.0040 (~250m wavelength) because Martin said the snow tracks were
+basically flat. He was right: frost was running well under the desert's 26, so
+what relief existed sat far away, low, and camouflaged white-on-white. Relief
+near the road on the three frost circuits went **12.8m -> 22.8m**, and
+intrusion stayed 0.000m on all twelve. The figures in the paragraph above are
+the ORIGINAL landing measurement; frost now reads 22.8m, not 13m.
+
+**And a limit worth knowing before reaching for `amp` again** (`ART.md` §4):
+`FLAT_TO = 26` means the first 26m either side of the road is dead flat by
+construction, so `amp` cannot change anything in the band you actually look at
+from the cockpit. Any ground effect that keys off the vertex height — the
+snow's cold hollows do — is therefore a CONSTANT in that band, not a gradient.
+That is why raising the amplitude did not change how the snow feels, and why
+the next move there is a world-XZ-keyed term rather than more relief.
+
 ## The design (as written before building)
 
 One height function, sampled by everything.

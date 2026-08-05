@@ -139,9 +139,13 @@ screenshot rather than more theorising about this one.
   nobody recorded. The 4K case is still open, and it still needs the M4.
 
 ### 2.4 Small and unglamorous
-- **Press kit is stale.** The 36 shots predate the ground relief, the aurora
-  rewrite and the grandstands. Regenerate with
-  `node tools/press-shots.mjs --jpeg` (output is gitignored on purpose).
+- **Press kit is stale, and getting staler.** The 36 shots predate the ground
+  relief, the aurora rewrite and the grandstands — and now also the whole city
+  pass (skyline, wall lighting, window grids, three sign types, street lamps),
+  the frost hills, and the city storm (driving rain, forked lightning, the fog
+  wash). Regenerate with `node tools/press-shots.mjs --jpeg` (output is
+  gitignored on purpose). Worth doing AFTER `ART.md` §7 steps 1-2, not before:
+  the frost palette is about to change every frost frame.
 - **More lengthwise road slicing on stunts.** `SLICE_STEP` is uniform, but loops
   and corkscrews are where faceting shows and where the camera lingers.
   Costs geometry, which is the axis with headroom. `FIDELITY.md` §4.4.
@@ -239,9 +243,28 @@ The snow pass is IN: moon glitter (distance-faded twinkle cells) and cold
 hollows (relief tinted toward the shadow blue) in the dune shader's uSnow mode,
 scrub blotches off on snow. Verified by before/after press pairs on all three
 frost tracks — reads as sparkle and tonal variation in stills, twinkles in
-motion. STILL OPEN: the near cliff faces (horizonMask ridge walls and rockCut)
-read as flat pale slabs — the "paper" complaint from the press review stands
-and is the next frost work item.
+motion.
+
+**Hills landed too** (2026-08-03, `f8cab68`): frost terrain amp 17 -> 30, freq
+0.0048 -> 0.0040, after Martin said the snow tracks were basically flat.
+Measured relief near the road 12.8m -> 22.8m on all three, intrusion still
+0.000m on all twelve. `TERRAIN.md` carries the record.
+
+**STILL OPEN, but the diagnosis changed (2026-08-05, `ART.md` §3 B4).** The
+near cliff faces (horizonMask ridge walls and rockCut) still read as flat pale
+slabs — the "paper" complaint stands. But it is **not primarily geometry**, and
+it is **not a separate problem from Martin's "grådaskig" snow**. Both are the
+frost palette: `scenery.js:385` passes `theme.warm` and `theme.ground` straight
+into `bakeFlatColors` as the LIT and SHADOW tints of every default-shaded prop
+in the world, and on frost those are `0xdfe9ff` (chroma 0.125, and *bluer* than
+the base) and `0xc7d4e8` (chroma 0.129). Both ends of every prop's shading are
+the same near-neutral blue, so no face on any cliff has a temperature
+difference from any other. Frost carries 0.16 chroma against 0.39-0.57 in every
+other world, and its grade saturation is 0.96 — the only world under 1.0.
+
+So the next frost work item is **the palette, not the geometry**: ~8 hex values
+plus one grade number, no new code, and it fixes the cliffs and the snow in one
+stroke. `ART.md` §7 step 1 has the order and §8 the falsifiable targets.
 
 ### 2.6d Neon Sprawl races in a storm now (2026-08-05) — DONE, one thing unpriced
 **Still owed: `node tools/audit-overdraw.mjs 6,7,8` on real hardware.** The rain
@@ -307,6 +330,32 @@ crack would have been roughly one a race with the variance to miss whole races,
 i.e. the dramatic half of the effect on a coin flip. A squared uniform gives
 mean magnitude 0.333, mean distance 1001m (2.9s of thunder delay) and **14.3%
 close strikes** over 200k samples — 3-4 a race.
+
+### 2.6e Four bugs found and fixed (2026-08-05) — kept as the record
+Found by reading, not by play. Kept here for the same reason §2.1 is: the
+diagnosis is worth more than the fix.
+
+- **A lap went missing below 1 m/s.** The lap test was gated on
+  `v > 1 && prevS > 0.8L && s < 0.2L`. Cross the line slower — brake to walking
+  pace, or take a wall hit at the line while a weapon disable holds the
+  throttle shut — and `s` wrapped while `lap` did not. `race.progressOf` is
+  `lap * length + s`, so progress fell by a WHOLE LAP and never recovered: you
+  show up last and `lap` can no longer reach `totalLaps + 1`, so **the race
+  cannot be finished**. Measured on a 3000m track: progress 5980 -> 3001. A lap
+  IS a wrap of `s`, so the test is now just `s < prevS`. Guarded by
+  `tools/audit-laps.mjs`.
+- **Contact went soft after every retry.** `race.interact` stamps a per-pair
+  cooldown with `this.clock`; `grid()` restarts the clock but never cleared the
+  map, so every pair that shunted in the previous race carried a future-dated
+  stamp into the next one and could not register a hard hit until the clock
+  passed it. `buildWorld` makes a fresh `Race` on a track change, so only
+  RETRY was affected — which is why it survived.
+- **A dead event in the fixed step.** `shipPhysics` emitted `weaponPad` on
+  every crossing for every ship and nothing in the repo listened; the
+  WeaponSystem polls the latch instead. Removed — it was also a trap, since
+  wiring a listener would have armed a second weapon on top of the poll.
+- **`setMoteDensity` clamped only downward**, so a factor above 1 would read
+  past the instance buffer. Latent — every tier passes 1.
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so

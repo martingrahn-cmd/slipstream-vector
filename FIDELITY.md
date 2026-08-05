@@ -188,6 +188,15 @@ Ranked by visible gain per unit of work.
 
 ## 5a. The additive layer, measured (2026-07-29)
 
+> **The CITY numbers below are superseded and NOT re-measured (2026-08-05).**
+> The rain went from 170 additive streaks to 1000 when the city storm landed —
+> same single instanced draw, but a pure FILL change, and fill is the ceiling.
+> `node tools/audit-overdraw.mjs 6,7,8` on real hardware is owed before anyone
+> quotes a city figure from this table. It could not be run in the container
+> the change was made in: software rasteriser, and a single 480x270 sample did
+> not finish in 15 minutes against the 2-3 it takes on a GPU. Desert, coast and
+> frost are untouched by that change and still stand. See `STATUS.md` §2.6d.
+
 `node tools/audit-overdraw.mjs 0,5,8,11 low,medium,full 3`, one track per world,
 three regimes each (clean racing / scraping a wall for sparks / a firefight),
 counted at 1280x720. **1.000 would mean one extra full-screen layer of blended
