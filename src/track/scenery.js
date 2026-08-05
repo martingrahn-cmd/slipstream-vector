@@ -4789,7 +4789,9 @@ function buildMotes(rng, spline, theme) {
     // Quality tier: InstancedMesh.count is a live draw ceiling, so thinning the
     // weather costs nothing and needs no rebuild — the flakes that remain keep
     // their motion. Never below a handful, or "snowing" turns into "not".
-    setDensity(f) { mesh.count = Math.max(12, Math.round(N * f)); },
+    // Clamped at BOTH ends: count above N reads past the instance buffer (and
+    // past `bases`), which is a silent out-of-bounds rather than an error.
+    setDensity(f) { mesh.count = Math.max(12, Math.min(N, Math.round(N * f))); },
     update(t, cam) {
       // Step only what is DRAWN: past mesh.count the matrices are never read,
       // so a thinned tier stops paying for them on the CPU too.

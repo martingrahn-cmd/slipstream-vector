@@ -66,6 +66,13 @@ export class Race {
       r.boostEnv = 0;
     });
     this.clock = 0;
+    // The pair cooldown is stamped with THIS clock, and the clock restarts
+    // here. Left uncleared, every pair that shunted in the previous race
+    // carried a future-dated stamp into the next one and could not register a
+    // hard hit until the clock passed it — i.e. most of a retry, with contact
+    // silently degraded to bumper-riding. buildWorld makes a fresh Race on a
+    // track change, so this only ever bit RETRY, which is why it survived.
+    if (this._pairCool) this._pairCool.clear();
   }
 
   // Slipstream: set each ship's draftTarget from the nearest ship just ahead,

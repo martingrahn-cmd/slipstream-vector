@@ -282,12 +282,23 @@ export class ShipPhysics {
       const ds = sdist(this.s, pad.s, tr.length);
       if (Math.abs(ds) < 3.5 && Math.abs(this.d - pad.d) < 2.4) { onWPad = pad.id; break; }
     }
-    if (onWPad >= 0 && onWPad !== this.activeWeaponPad) this.events.emit('weaponPad', { pad: onWPad });
+    // No event here on purpose: WeaponSystem.stepFixed polls this latch and
+    // does the roll itself. There WAS an emit('weaponPad'), fired for every
+    // ship on every crossing, that nothing anywhere listened to — dead work in
+    // the fixed step, and a live trap, because wiring a listener to it later
+    // would arm a second weapon on top of the poll.
     this.activeWeaponPad = onWPad;
 
     // ---- lap timing ----
+    // A lap IS a wrap of s, and nothing else. This used to be gated on
+    // `v > 1 && prevS > 0.8L && s < 0.2L`, which lost a whole lap for anyone
+    // who crossed the line slower than 1 m/s: s wrapped, lap did not, and
+    // race.progressOf (lap * L + s) fell by a full lap permanently — you
+    // showed up last and the race could no longer be finished. s only ever
+    // advances (dsdt >= 0, and the jump-shortfall teleport is forward past the
+    // gap), so s < prevS is exactly the crossing, at any speed including none.
     this.lapTime += dt;
-    if (this.v > 1 && prevS > tr.length * 0.8 && this.s < tr.length * 0.2) {
+    if (this.s < prevS) {
       this.lap += 1;
       if (this.lap > 1) {
         this.lastLap = this.lapTime;
