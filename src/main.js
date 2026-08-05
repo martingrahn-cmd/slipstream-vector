@@ -1581,6 +1581,7 @@ function startCountdown() {
   const introDur = document.body.classList.contains('reduced-motion') ? 0 : 2.8;
   rig.playIntro(ship, introDur);
   race.grid();
+  _lastArchS = 0;   // a re-grid must not leave a stale camera arc length behind
   if (weapons) weapons.reset();
   banter.reset();
   audio.disableHum(false); // never inherit a stuck paralysis buzz into a new race
@@ -1935,13 +1936,22 @@ function tick(now) {
   // draws. The thunder is fired ONCE per strike off the counter, and arrives
   // late by its own travel time. Deliberately NOT routed through juice: a
   // weapon-hit flash is gameplay language and the weather must not borrow it.
-  // Arch ribs: a thump as each one passes over the canopy. Counted off the
-  // ship's arc length rather than off a trigger volume, so it cannot be missed
-  // at speed — and the count is done AROUND THE LOOP, because the last rib on
-  // a lap and the first on the next are separated by the seam, not by 3km.
+  // Arch ribs: a thump as each one passes over the canopy. Counted off arc
+  // length rather than a trigger volume so it cannot be missed at speed, and
+  // counted AROUND THE LOOP, because the last rib of a lap and the first of the
+  // next are 5.5m apart and not 3km.
+  //
+  // Triggered on the CAMERA's arc length, not the ship's. The first cut used
+  // ship.s and Martin heard it as desynced — measured, the ship was 0.1-2.4m
+  // past the rib when it fired (frame quantisation, ~20ms, fine) but the chase
+  // camera sits T.CAM_BACK_REST..FAST behind, 9.55m at speed, so the ring did
+  // not sweep past the VIEWPOINT until ~170ms later. A sixth of a second is
+  // far outside the ~50ms window where a sound and a sight read as one event.
+  // Your eye is at the camera, so that is what the rib has to pass.
   if (scenery.archS && (state === 'race' || state === 'countdown') && !paused) {
     const L = spline.length;
-    let travelled = ship.s - _lastArchS;
+    const camS = ((ship.s - rig.gap) % L + L) % L;
+    let travelled = camS - _lastArchS;
     if (travelled < 0) travelled += L;          // wrapped past the line this frame
     if (travelled > 0 && travelled < L * 0.5) { // a warp or a re-grid is not a drive-through
       let fired = 0;
@@ -1951,7 +1961,7 @@ function tick(now) {
         if (rel > 0 && rel <= travelled && fired < 3) { audio.archPass(sn); fired++; }
       }
     }
-    _lastArchS = ship.s;
+    _lastArchS = camS;
   }
 
   const _storm = scenery.storm;

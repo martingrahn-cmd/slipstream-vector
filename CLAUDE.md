@@ -30,6 +30,14 @@ beta"). Martin writes in Swedish — **reply in Swedish**.
   simulation — including every weapon — steps there (`WeaponSystem.stepFixed`).
   Sim randomness uses the seeded `mulberry32` RNG; `Math.random()` /
   `performance.now()` are allowed **only** in the render path.
+- **A feel event that syncs to something you SEE must fire on the CAMERA's arc
+  length, not the ship's.** The chase camera sits `ship.sTotal - rig.gap`
+  behind, and `gap` runs 7.0m at rest to 9.5m at speed, plus up to 5.2m more
+  from the acceleration lunge and boost — 14.7m worst case, which is **213ms**
+  at racing speed. The arch-rib thump shipped keyed on `ship.s` and Martin
+  heard it immediately: the sound landed a sixth of a second before the ring
+  swept past his viewpoint, and worst exactly when he was going fastest.
+  Anything above ~50ms reads as two events instead of one.
 - Physics consumes scalar track queries only; visuals never write physics;
   all feel events route through `fx/juice.js`; every constant lives in
   `config.js` (one flat `TUNING` object).

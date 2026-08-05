@@ -776,6 +776,23 @@ export class AudioEngine {
     if (t0 - this._lastArch < 0.045) return;   // hard floor, so nothing ever stacks into mush
     this._lastArch = t0;
     const sn = Math.max(0, Math.min(1, speedNorm));
+    // TRANSIENT FIRST — 18ms of bright noise, and it is the whole reason this
+    // reads as a "tjuff" rather than a soft whoof. The ear times a sound by its
+    // ATTACK EDGE, so a low band-passed swell localises late even when it is
+    // scheduled to the millisecond. The click is what makes it land on the ring.
+    const tick = this.ctx.createBufferSource();
+    tick.buffer = this.noiseBuf;
+    const tf = this.ctx.createBiquadFilter();
+    tf.type = 'highpass';
+    tf.frequency.value = 2400;
+    tf.Q.value = 0.7;
+    const tg = this.ctx.createGain();
+    tg.gain.setValueAtTime(0.045 + 0.05 * sn, t0);
+    tg.gain.exponentialRampToValueAtTime(0.0004, t0 + 0.018);
+    tick.connect(tf); tf.connect(tg); tg.connect(this.sfx);
+    tick.start(t0, (t0 * 3.7) % 0.5);
+    tick.stop(t0 + 0.03);
+    // ...then the body of air behind it.
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const f = this.ctx.createBiquadFilter();
@@ -787,7 +804,9 @@ export class AudioEngine {
     g.gain.setValueAtTime(0.045 + 0.065 * sn, t0);
     g.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.10);
     src.connect(f); f.connect(g); g.connect(this.sfx);
-    src.start(t0);
+    // Read from a moving offset into the noise buffer. Fourteen of these a
+    // second from the same sample start is a machine gun, not a tunnel.
+    src.start(t0, (t0 * 11.3) % 0.5);
     src.stop(t0 + 0.12);
     // A touch of body so it reads as a THUMP and not just a hiss.
     this.blip(115 + 55 * sn, 0.05, { type: 'sine', gain: 0.03 + 0.025 * sn, slideTo: 68 });
