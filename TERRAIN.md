@@ -75,6 +75,21 @@ snow's cold hollows do — is therefore a CONSTANT in that band, not a gradient.
 That is why raising the amplitude did not change how the snow feels, and why
 the next move there is a world-XZ-keyed term rather than more relief.
 
+**Solved 2026-08-05, and `amp` was the wrong lever both times.** Martin from
+the cockpit: the hills *"ser ut som en stor sten"*. The height was there; the
+DISTRIBUTION was wrong. `fbm` loses amplitude by `gain` per octave, and at the
+original 0.48 the first octave carries 58% of the budget — 17.5m of frost's 30
+in one ~250m wave, which is a single swell with a texture on it however tall
+you make it. `gain` is now a per-theme knob (default 0.48, so every world that
+does not ask is bit-identical) and frost runs **4 octaves at 0.66**: the same
+30m spread 12.6 / 8.3 / 5.5 / 3.6m across ~250 / 117 / 55 / 26m. `RAMP_TO`
+also came in from 95 to 72 so the relief arrives inside the band the chase
+camera actually frames; `FLAT_TO` did not move and must not.
+
+Confirmed on hardware: *"böljande marken är klar"*. **The lesson to carry:
+relief is a budget, and the octave gain is how it gets spent. If a landscape
+reads as one shape, look at the distribution before the amplitude.**
+
 ## The design (as written before building)
 
 One height function, sampled by everything.

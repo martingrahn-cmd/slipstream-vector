@@ -559,6 +559,14 @@ parent's buffer — **zero extra draws**, roughly 20k triangles across a circuit
 which is the cheap axis the graphics budget points at.
 
 Gates after: `audit-terrain` 0.000m on all twelve, `audit-laps` clear, console
-clean. What is NOT established is the aesthetic outcome at speed — one frame
-costs ~10 minutes in this container, so whether it now reads as rolling country
-is Martin's call on a real machine.
+clean.
+
+**CONFIRMED ON HARDWARE (Martin, 2026-08-05): "böljande marken är klar".**
+Closed. Worth keeping the reason it worked, because the obvious lever was the
+wrong one twice running: `f8cab68` raised `amp` 17 -> 30 and changed nothing,
+and raising it again would have changed nothing again. Terrain relief is not
+one number. **Height is a budget and the octave gain is how it gets spent** —
+at 0.48 the first octave took 58% of it and the world got one big swell with a
+texture on it. The same 30m at gain 0.66 across four octaves is country. If a
+landscape ever reads as a single shape again, look at the distribution before
+the amplitude.

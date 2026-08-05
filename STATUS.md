@@ -250,6 +250,17 @@ motion.
 Measured relief near the road 12.8m -> 22.8m on all three, intrusion still
 0.000m on all twelve. `TERRAIN.md` carries the record.
 
+**And it still was not rolling — that took a different lever entirely.**
+Martin, from the cockpit: the hills *"ser ut som en stor sten"*. Raising `amp`
+had not helped because relief is not one number: the octave gain decides how
+the height budget is spent, and at 0.48 the first octave took 58% of it, so
+frost had 17.5m of its 30 in a single ~250m wave. Four octaves at gain 0.66
+spread the same 30m across ~250/117/55/26m. Plus `RAMP_TO` 95 -> 72 so the
+relief arrives inside the band the chase camera frames, and companion forms
+round every large mass so a big rock has something small beside it to be big
+against. **CONFIRMED ON HARDWARE 2026-08-05 — "böljande marken är klar".**
+`ART.md` §10 and `TERRAIN.md` carry the record.
+
 **STILL OPEN, but the diagnosis changed (2026-08-05, `ART.md` §3 B4).** The
 near cliff faces (horizonMask ridge walls and rockCut) still read as flat pale
 slabs — the "paper" complaint stands. But it is **not primarily geometry**, and
