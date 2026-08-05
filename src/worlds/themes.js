@@ -263,7 +263,12 @@ export const THEMES = {
     id: 'frost',
     name: 'FROSTFALL RIDGE',
     music: 'frost',
-    grade: { contrast: 1.07, saturation: 0.96 },   // cold dusk — crisp, slightly drained
+    // TEMPERATURE PASS (Martin: "snön känns lite för grådaskig"). He was right
+    // and it measured: frost carried 0.16 chroma against 0.39-0.57 in every
+    // other world, and this grade was the ONLY one in the game below 1.0 —
+    // the least colourful world was also the only one being desaturated.
+    // See ART.md §3 for the full diagnosis.
+    grade: { contrast: 1.07, saturation: 1.10 },   // cold night — crisp, and no longer drained
     bloom: { threshold: 0.78, strength: 0.58, shafts: 0.30 },  // dusk + aurora: generous halo, a moon casts softly
     adGlow: 0.0,
     sky: {
@@ -284,17 +289,33 @@ export const THEMES = {
       event: 'aurora',    // the northern lights — build all race, own the zenith
     },
     fog: 0x2a3a5e,        // cold blue haze
-    ground: 0xc7d4e8,     // moonlit snowpack
-    groundB: 0xa7b9d6,    // wind-drift bands (sastrugi read via the dune shader)
+    // The world runs on a TEMPERATURE SPLIT: everything in shadow is a
+    // saturated blue, everything in light is warm-side of neutral. It used to
+    // run on one hue at eight lightnesses — `ground` sat at 216 degrees and
+    // `warm`, the highlight, at 221, i.e. the light was BLUER than the shadow
+    // it was supposed to oppose. A five-degree split is not a split, and that
+    // is what "grådaskig" was.
+    //
+    // `ground` and `warm` are not just the snow: scenery.js:385 hands them to
+    // setBakeTheme as the SHADOW and LIT tints of every default-shaded prop in
+    // the world. So this pass also lights every rock, spruce, pole, sculpture,
+    // hut and cliff face — which is why STATUS 2.6c's "paper" cliffs were
+    // never really a geometry problem. Judge this change on props too.
+    ground: 0x7189bf,     // moonlit snowpack — AND the shadow tint of every prop
+    groundB: 0xaabee0,    // wind-scoured crests: the drift bands now carry 0.113
+                          // of luma range against the old 0.059, so the near
+                          // field has tone instead of one fill
     snow: true,           // dune shader's snow mode: moon glitter + cold hollows
-    warm: 0xdfe9ff,       // moonlight 'warm' highlight — actually the coldest light
-    sand: 0xdde8f6,
-    mesaLit: 0xb2c4e0,    // snowbound peaks, lit side
-    mesaShadow: 0x44548e, // deep blue shadow — the synthwave tell, frozen
-    mesaRim: 0xeef4ff,    // ice-glare rims
-    warmCrown: 0xffffff,
+    warm: 0xffecd2,       // moonlight highlight — warm-side of neutral ON PURPOSE.
+                          // AND the lit tint of every prop: this is the pole the
+                          // blue is measured against
+    sand: 0xc8daf2,       // wind-drift humps beside the road (roadside 'poles')
+    mesaLit: 0x9fb4d8,    // snowbound peaks, lit side
+    mesaShadow: 0x36478a, // deep blue shadow — the synthwave tell, frozen
+    mesaRim: 0xdcecff,    // ice-glare rims — the third light: cold sky bounce,
+                          // deliberately NOT warm so it does not fight the lit side
     mountainFar: 0x33487e,
-    rock: 0x8ca4c6,       // ice boulders
+    rock: 0x6f86ad,       // ice boulders
     trackBase: 0x1a1640,  // the ROAD stays dark so the neon edges read
     trackBand: 0x2a2258,
     mesaStyle: 'rocks',

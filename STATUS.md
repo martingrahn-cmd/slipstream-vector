@@ -262,9 +262,22 @@ the same near-neutral blue, so no face on any cliff has a temperature
 difference from any other. Frost carries 0.16 chroma against 0.39-0.57 in every
 other world, and its grade saturation is 0.96 — the only world under 1.0.
 
-So the next frost work item is **the palette, not the geometry**: ~8 hex values
-plus one grade number, no new code, and it fixes the cliffs and the snow in one
-stroke. `ART.md` §7 step 1 has the order and §8 the falsifiable targets.
+**Both shipped 2026-08-05** (`ART.md` §9). The palette now runs a temperature
+split — `ground` 216° -> 222° blue at chroma 0.306, `warm` 221° -> **35°**, so
+the highlight finally opposes the shadow instead of being bluer than it — plus
+`grade.saturation` 0.96 -> 1.10. Measured at identical framing on Moonlit Mile:
+snow chroma **0.161 -> 0.271**, tonal spread **0.15 -> 0.27**, luma 0.59 ->
+0.51. Two of three `ART.md` §8 targets met; chroma fell 0.03 short of 0.30 and
+that is recorded rather than rounded away.
+
+The aurora also lights the ground now, on the sky curtains' own amplitude curve
+— green excess swings **-0.029 -> +0.090** at full strength, one uniform, zero
+draws.
+
+Because `ground` and `warm` are `setBakeTheme`'s shadow and lit tints, this
+relit every prop in the world in the same stroke, cliff faces included.
+**Unconfirmed on hardware** — the "paper" complaint should be re-judged by
+Martin's eye before it is called closed.
 
 ### 2.6d Neon Sprawl races in a storm now (2026-08-05) — DONE, one thing unpriced
 **Still owed: `node tools/audit-overdraw.mjs 6,7,8` on real hardware.** The rain

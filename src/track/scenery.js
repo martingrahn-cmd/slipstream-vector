@@ -486,6 +486,7 @@ export function buildScenery(spline, scene, theme) {
   // inside update(), i.e. per FRAME, so the storm was twice as busy at 120fps
   // as at 60 — the weather quietly tracked your frame rate.
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
+  const auroraSky = !!(theme.sky && theme.sky.event === 'aurora');
   const STRIKE_HZ = 0.24;          // mean strikes per second — about one per 4s
   const storm = { flash: 0, bolt: 0, strikes: 0, mag: 0, dist: 0, az: 0, seed: 0 };
   const _fwd = new THREE.Vector3();
@@ -568,6 +569,14 @@ export function buildScenery(spline, scene, theme) {
       if (ground.mat) {
         ground.mat.uniforms.time.value = t;
         if (ground.mat.uniforms.uCam) ground.mat.uniforms.uCam.value.copy(cameraPos);
+        // Aurora bounce follows the sky curtains' OWN amplitude expression
+        // (scenery.js, the aurora branch): (0.4 + 0.5*progress) * (1 + 1.4*flare).
+        // Same curve on purpose — the ground has to brighten with the sky or
+        // the two read as unrelated effects that happen to share a world.
+        if (ground.mat.uniforms.uAurora) {
+          ground.mat.uniforms.uAurora.value = auroraSky
+            ? (0.4 + 0.5 * raceProgress) * (1 + 1.4 * auroraFlare) : 0;
+        }
       }
       if (lights) lights.update(t);
       if (landmarks && landmarks.update) landmarks.update(t, cameraPos);
@@ -990,6 +999,16 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           uSnow: { value: theme.snow ? 1 : 0 },
           uCam: { value: new THREE.Vector3() },
           uShadow: { value: new THREE.Color(theme.mesaShadow ?? 0x44548e) },
+          // Aurora bounce. The scene has NO LIGHTS — every material is
+          // MeshBasicMaterial with colours baked at build time — so the
+          // northern lights were a sky effect that built all race, owned the
+          // zenith and contributed exactly nothing to the snow underneath.
+          // In life that reflected light is the whole reason the scene is
+          // beautiful. Driven per frame from the same race progress and flare
+          // the sky curtains use, so sky and ground brighten together.
+          uAurora: { value: 0 },
+          uAuroraCol: { value: new THREE.Color(0x2ffa85) }, // the curtains' own green
+
         },
       ]),
       vertexShader: /* glsl */ `
@@ -1009,10 +1028,10 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         }
       `,
       fragmentShader: /* glsl */ `
-        uniform vec3 colA, colB, uWarm, uShadow;
+        uniform vec3 colA, colB, uWarm, uShadow, uAuroraCol;
         uniform vec2 uSunDir, uCenter;
         uniform vec3 uCam;
-        uniform float time, uSnow;
+        uniform float time, uSnow, uAurora;
         varying vec2 vXZ;
         varying float vOcc;
         varying float vY;
@@ -1059,6 +1078,15 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           float crest = smoothstep(0.72, 0.98, band);
           float sunSide = clamp(0.5 + 0.5 * dot(normalize(vXZ - uCenter), uSunDir), 0.0, 1.0);
           col = mix(col, uWarm, crest * sunSide * sunSide * 0.30);
+          // AURORA BOUNCE: the sky's own light finally landing on the ground.
+          // Mixed, not added, so it tints rather than blows out — snow under an
+          // aurora goes green, it does not go white. Crests take more than
+          // hollows because the light arrives from above, which also means this
+          // reads as FORM: it is the one term here that is brighter where the
+          // cold pools are darker, so the two together open the tonal range
+          // instead of sliding it. Rides the same curve as the sky curtains.
+          float aur = uAurora * uSnow;
+          col = mix(col, uAuroraCol, aur * (0.35 + 0.65 * crest) * 0.22);
           // Contact shading: baked into the disc's own vertices, so a mesa or a
           // grandstand sits IN the ground instead of on top of it.
           col *= vOcc;
@@ -2940,7 +2968,7 @@ function buildRoadside(rng, spline, groundY, theme, islands = null) {
     const drift = new THREE.IcosahedronGeometry(0.38, 0);
     drift.scale(1.6, 0.45, 1);
     drift.translate(0.1, 0.12, 0.05);
-    parts.push(bakeFlatColors(drift, 0xdde8f6, { rim: false }));
+    parts.push(bakeFlatColors(drift, theme.sand ?? 0xdde8f6, { rim: false }));
   } else { // 'street'
     const block = new THREE.BoxGeometry(1.7, 0.5, 0.42);         // jersey barrier
     block.translate(0, 0.25, 0);

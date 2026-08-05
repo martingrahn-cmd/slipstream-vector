@@ -1,6 +1,7 @@
 # ART.md — what the picture is doing wrong, and in what order to fix it
 
-Written 2026-08-05. **This is a plan. Nothing in it has shipped.**
+Written 2026-08-05. **§7 steps 1 and 2 have since shipped — see §9. Steps 3-6
+have not.**
 
 It exists because "the snow feels drab" is a true observation that three
 different technical explanations would each fit, and picking the wrong one
@@ -321,3 +322,97 @@ Targets, so success is falsifiable:
   already manage
 - magenta edge **lighter than the ground on every world**, which is the only
   statement of Finding A that matters
+
+---
+
+## 9. What shipped (2026-08-05)
+
+### Step 1 — the frost temperature split
+
+Palette only, plus one grade number. No new code.
+
+| field | was | now | what changed |
+|---|---|---|---|
+| `ground` | `0xc7d4e8` | `0x7189bf` | luma 0.83 -> 0.53, chroma 0.129 -> **0.306** |
+| `groundB` | `0xa7b9d6` | `0xaabee0` | band range 0.059 -> **0.113**, nearly double |
+| `warm` | `0xdfe9ff` | `0xffecd2` | hue **221° -> 35°** |
+| `mesaShadow` | `0x44548e` | `0x36478a` | chroma 0.290 -> 0.329 |
+| `mesaLit` | `0xb2c4e0` | `0x9fb4d8` | chroma 0.180 -> 0.224 |
+| `mesaRim` | `0xeef4ff` | `0xdcecff` | chroma 0.067 -> 0.137 |
+| `rock` | `0x8ca4c6` | `0x6f86ad` | chroma 0.227 -> 0.243 |
+| `sand` | `0xdde8f6` | `0xc8daf2` | was dead on frost; now drives the drift humps |
+| `grade.saturation` | `0.96` | `1.10` | no longer the only world under 1.0 |
+
+The number that matters is not in any single row. `ground` sat at 216° and
+`warm` — the *highlight* — at 221°: a five-degree split, i.e. the light was
+bluer than the shadow it was meant to oppose. It is now **222° against 35°**.
+That is the whole of "grådaskig".
+
+`warmCrown` was deleted (no consumer anywhere), and `scenery.js`'s frost drift
+hump now reads `theme.sand` instead of hardcoding the same literal.
+
+**Measured, identical framing, Moonlit Mile at s=430, FULL:**
+
+| | before | after | §8 target | |
+|---|---|---|---|---|
+| chroma | 0.161 | **0.271** | 0.30+ | short by 0.03 |
+| tonal spread | 0.15 | **0.27** | 0.15+ | met, and then some |
+| luma p50 | 0.59 | **0.51** | down | met |
+
+Two of three targets met. Chroma landed at 0.271 against a stated 0.30 — a 68%
+rise, but the target was missed and saying so is the point of having set it.
+The remaining lever is the light band: `groundB` is deliberately a pale
+wind-scoured crest colour, and mixing toward it costs chroma. Pushing it is a
+tuning pass against Martin's eye on real hardware, not a blind edit here.
+
+Because `ground` and `warm` ARE `setBakeTheme`'s shadow and lit tints (§3 B4),
+this also relit every prop in the world — rocks, spruces, poles, sculptures,
+huts and the cliff faces of `STATUS.md` §2.6c — in the same stroke.
+
+### Step 2 — the aurora lights the snow
+
+The frost sky already grows an aurora over the race. The ground now rides the
+**same amplitude expression** the sky curtains use — `(0.4 + 0.5*progress) *
+(1 + 1.4*flare)` — as a bounded mix toward the curtains' own green, biased
+toward crests because the light arrives from above:
+
+```glsl
+float aur = uAurora * uSnow;
+col = mix(col, uAuroraCol, aur * (0.35 + 0.65 * crest) * 0.22);
+```
+
+Mixed rather than added, so it tints instead of blowing out — snow under an
+aurora goes green, it does not go white. One uniform, **zero draws**, gated on
+`uSnow` so no other world pays for it. It also opens the tonal range rather
+than sliding it, because it is the one term that is brightest where the cold
+pools are darkest.
+
+It grows through a race: ~0.09 of mix at the start, ~0.20 by the last lap.
+
+**Measured A/B, identical camera, `uAurora` forced 0 then 0.9:**
+
+| | luma | chroma | green excess |
+|---|---|---|---|
+| off | 0.502 | 0.275 | **-0.029** |
+| on | 0.602 | 0.227 | **+0.090** |
+
+Green excess is `(G - (R+B)/2)`, the aurora's own tell. It swings **0.119**,
+from blue-leaning to distinctly green-lit: the snow is being lit by the sky.
+
+Two honest costs in that table. The mix **raises luma by 0.10** at full
+amplitude, which partly gives back the value drop step 1 bought — step 4, when
+it comes, has to budget for the last lap and not just the first. And **chroma
+falls 0.275 -> 0.227**, because a blue surface mixed toward a green light
+passes through teal, and `max-min` undersells a teal. Both states are far above
+the 0.161 the world started at, and a green snowfield at the climax of the
+AURORA CUP is the right picture — but the metric moves the wrong way and that
+is worth knowing before anyone reads §8 as a scoreboard.
+
+Verified in-engine: `uAurora` 0.9 at progress 1, `colA #7189bf`, `warm
+#ffecd2`, `saturation 1.10`, console **clean** — no shader errors on any world.
+
+### Still open from this document
+
+Steps 3-6 — near-band variation that is not keyed on terrain height, the
+desert/frost ground values, the world-wide light drift before bloom, and
+middle-ground mass. And the chroma target above, by 0.03.
