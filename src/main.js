@@ -1924,6 +1924,12 @@ function tick(now) {
     : 0;
   updateSunGate(realDt); // sun-gate bloom + scripted last-lap meteor (desert)
   scenery.update(now / 1000, camera.position, raceProgress, _sunFlare, _meteorT, _meteorAz, _auroraFlare, camera.quaternion);
+  // Dusk falls on the WORLD, not only on the sky. Matched to the sky's own
+  // drift so the two move together instead of the ground drifting brighter
+  // relative to the backdrop as the race goes on. Scene-side and therefore
+  // before bloom, which is what makes the neon step forward rather than dim
+  // along with everything else — see scenery.js's DIM_MATS note.
+  if (scenery.setDim) scenery.setDim(1 - T.DUSK_DRIFT * raceProgress);
 
   // Fog breathes with speed; boost closes the world into a tunnel.
   if (!debugCam) {

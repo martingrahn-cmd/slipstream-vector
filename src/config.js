@@ -184,6 +184,11 @@ export const TUNING = {
   FOG_FAR: 700,
   FOG_SPEED_PULL: 80,     // far -= this * speedNorm
   FOG_BOOST_PULL: 180,    // far -= this * boostFactor (tunnel on boost)
+  // Dusk over a race: the LIT world darkens by this fraction from lights-out to
+  // the flag. Matched to the sky shader's own 0.22 so the two move together.
+  // Applied scene-side (before bloom) so the neon steps forward instead of
+  // dimming with everything else — src/track/scenery.js setDim().
+  DUSK_DRIFT: 0.20,
 
   // ---- Post ----
   VIGNETTE_BASE: 0.25,

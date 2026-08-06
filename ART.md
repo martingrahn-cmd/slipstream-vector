@@ -1,7 +1,8 @@
 # ART.md — what the picture is doing wrong, and in what order to fix it
 
-Written 2026-08-05. **§7 steps 1, 2 and 4-on-desert have shipped; step 3 is in
-but did not beat its own numbers; steps 5-6 have not started. See §9.**
+Written 2026-08-05. **All six §7 steps have shipped. Step 3 is the one that did
+not beat its own numbers and is still open to judgement; everything else is
+confirmed. See §9-§11.**
 
 It exists because "the snow feels drab" is a true observation that three
 different technical explanations would each fit, and picking the wrong one
@@ -570,3 +571,60 @@ at 0.48 the first octave took 58% of it and the world got one big swell with a
 texture on it. The same 30m at gain 0.66 across four octaves is country. If a
 landscape ever reads as a single shape again, look at the distribution before
 the amplitude.
+
+
+---
+
+## 11. Steps 5 and 6 (2026-08-05)
+
+### Step 5 — dusk falls on the world, not only on the sky
+
+Finding D was that `col *= mix(1.0, 0.78, progress)` lived only in the sky, so
+over a race the backdrop dropped 22% while the ground stayed put and ended up
+*relatively brighter* than it started — the opposite of dusk.
+
+`scenery.setDim(f)` now scales every LIT material in the world, driven from
+`raceProgress` at `TUNING.DUSK_DRIFT = 0.20` to match the sky's own 0.22.
+
+Two things make it work, and both were decided by the pass order
+(`Render -> Bloom -> Juice -> Output`):
+
+- **It is scene-side, not a grade uniform.** Before bloom, so dimming the ground
+  shrinks what the ground contributes to the bright pass while the additive
+  layer keeps its own brightness. After bloom it would have turned the whole
+  picture down, glow included, and bought nothing.
+- **Emitters are excluded by construction, not by a list.** The traversal skips
+  anything additively blended, and that is the same set as "things that make
+  their own light" — lamps, signs, glow ribbons, the neon. Dusk dims what is
+  LIT and never what emits.
+
+Measured on Sunset Circuit, one fixed camera, `raceProgress` pinned 0 then 1:
+
+| | ground | neon | neon / ground |
+|---|---|---|---|
+| lap 1 | 0.661 | 0.468 | **0.71** |
+| last lap | 0.554 | 0.519 | **0.94** |
+
+Ground down 16.2%; the neon does not follow. **The ratio moves 0.71 -> 0.94**,
+which is the gameplay language stepping forward exactly as Finding D predicted
+— and it also repairs a good part of Finding A for free over the back half of
+every race, without touching a single edge colour.
+
+The road is deliberately NOT dimmed: it is already near-black, and darkening it
+would cost the neon the contrast this change is buying.
+
+### Step 6 — the rocks get a hierarchy
+
+`buildRocks` drew every rock from `0.5 + rng() * 1.9` — one size, effectively —
+and placed each at `rng() * spline.length`, a uniform smear with no empty
+stretches. That is Finding E's "quantity without hierarchy" in two lines.
+
+Now: size is `0.45 + 5.2 * rng()**3`, so most rocks stay small and a few are
+genuinely 4-5m; big ones stand further out (`+ size * 1.6`) so a boulder never
+lands on the verge as a wall; and placement clusters around anchors roughly one
+per 14 rocks, with a quarter left loose. The clean stretches between clusters
+are not wasted — they are what lets a cluster read as one.
+
+Companion forms (§10) already did this for the large masses. This is the same
+idea one scale down, and the two together are what "a few big, some medium,
+many small" actually means.

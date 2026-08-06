@@ -500,6 +500,37 @@ export function buildScenery(spline, scene, theme) {
   // as at 60 — the weather quietly tracked your frame rate.
   const stormy = theme.ambient && theme.ambient.mode === 'rain';
   const auroraSky = !!(theme.sky && theme.sky.event === 'aurora');
+
+  // ---- light drift (ART.md Finding D) --------------------------------------
+  // The sky already deepens over a race — its own `col *= mix(1.0, 0.78,
+  // progress)`. NOTHING else did, so by the last lap the ground was RELATIVELY
+  // brighter against the sky than at the start, which is the opposite of dusk
+  // falling and why the mood drift never landed.
+  //
+  // This is applied in the SCENE, not in the grade, and that is the entire
+  // point. The pass order is Render -> Bloom -> Juice -> Output, so a
+  // scene-side dim shrinks what the ground contributes to the bright pass while
+  // every additive thing keeps its own brightness: contrast RISES and the neon
+  // STEPS FORWARD as the world goes down. The same dim in the grade sits after
+  // bloom and would simply turn the whole picture down, glow included, which
+  // buys nothing.
+  //
+  // Emitters are excluded by construction rather than by a list: anything
+  // additively blended is skipped, and that is the same set as "things that
+  // make their own light" — lamps, signs, glow ribbons, the neon. Dusk dims
+  // what is LIT, never what emits.
+  const DIM_MATS = [];
+  {
+    const seen = new Set();
+    group.traverse((o) => {
+      const m = o.material;
+      if (!m || Array.isArray(m) || seen.has(m)) return;
+      seen.add(m);
+      if (m.blending === THREE.AdditiveBlending) return;
+      if (m.uniforms && m.uniforms.uDim) DIM_MATS.push({ u: m.uniforms.uDim });
+      else if (m.color) DIM_MATS.push({ c: m.color, base: m.color.clone() });
+    });
+  }
   const STRIKE_HZ = 0.24;          // mean strikes per second — about one per 4s
   const storm = { flash: 0, bolt: 0, strikes: 0, mag: 0, dist: 0, az: 0, seed: 0 };
   const _fwd = new THREE.Vector3();
@@ -512,6 +543,15 @@ export function buildScenery(spline, scene, theme) {
     // Quality tier hooks. Motes are the additive mass; the life families are
     // the "busier world" the FULL tier pays for. Both thin live via
     // InstancedMesh.count, so neither needs the field rebuilt.
+    // 1 = full daylight-of-this-world, lower = later in the race. Driven from
+    // raceProgress in main.js; see the DIM_MATS comment above for why this is
+    // scene-side and what it deliberately leaves alone.
+    setDim(f) {
+      for (const d of DIM_MATS) {
+        if (d.u) d.u.value = f;
+        else d.c.copy(d.base).multiplyScalar(f);
+      }
+    },
     setMoteDensity(f) { if (motes && motes.setDensity) motes.setDensity(f); },
     setLifeDensity(f) {
       for (const e of lifeMeshes) e.m.count = Math.max(1, Math.round(e.base * f));
@@ -1032,6 +1072,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // the sky curtains use, so sky and ground brighten together.
           uAurora: { value: 0 },
           uAuroraCol: { value: new THREE.Color(0x2ffa85) }, // the curtains' own green
+          uDim: { value: 1 },   // race-progress light drift — see setDim()
 
         },
       ]),
@@ -1055,7 +1096,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
         uniform vec3 colA, colB, uWarm, uShadow, uAuroraCol;
         uniform vec2 uSunDir, uCenter;
         uniform vec3 uCam;
-        uniform float time, uSnow, uAurora;
+        uniform float time, uSnow, uAurora, uDim;
         varying vec2 vXZ;
         varying float vOcc;
         varying float vY;
@@ -1144,6 +1185,7 @@ function buildGround(groundY, cx, cz, theme, terrain) {
           // Contact shading: baked into the disc's own vertices, so a mesa or a
           // grandstand sits IN the ground instead of on top of it.
           col *= vOcc;
+          col *= uDim;   // race-progress light drift, in the SCENE and before bloom
           gl_FragColor = vec4(col, 1.0);
           #include <fog_fragment>
         }
@@ -2720,14 +2762,34 @@ function buildRocks(rng, spline, groundY, theme, islands = null) {
   const e = new THREE.Euler();
   const p = new THREE.Vector3();
   const sc = new THREE.Vector3();
+  // ROCK FIELDS CLUSTER, and they have a SIZE HIERARCHY. Both were missing and
+  // both are why the scatter read as litter rather than as ground (ART.md
+  // Finding E: quantity without hierarchy). Every rock used to be 0.5-2.4m from
+  // a flat distribution — one size, effectively — and placed at
+  // `rng() * spline.length`, a uniform smear with no empty stretches. Nature
+  // does the opposite: stony patches with clean ground between them, and a few
+  // big forms among many small ones. The clean stretches are not wasted space;
+  // they are what lets a cluster read AS a cluster.
+  const nAnchors = Math.max(4, Math.round(count / 14));
+  const anchors = [];
+  for (let a = 0; a < nAnchors; a++) anchors.push(rng() * spline.length);
   for (let i = 0; i < count; i++) {
-    const s = rng() * spline.length;
+    // A quarter stay loose so the field is not only clumps.
+    const s = rng() < 0.25
+      ? rng() * spline.length
+      : (anchors[Math.floor(rng() * nAnchors)]
+         + (rng() + rng() + rng() - 1.5) * 60 + spline.length * 2) % spline.length;
     spline.frameAt(s, f);
     const side = rng() < 0.5 ? -1 : 1;
-    const dist = f.width + 5 + rng() * 24;
+    // Cubed: most rocks stay small, a few are genuinely big. 0.45-5.6m against
+    // the old 0.5-2.4m, at a similar mean, so the field gains a top end rather
+    // than simply growing.
+    const size = 0.45 + 5.2 * rng() ** 3;
+    // Big ones stand further out — a 5m boulder on the verge is a wall, and it
+    // also gives the near band something to have depth against.
+    const dist = f.width + 5 + size * 1.6 + rng() * 24;
     const rx = f.R.x, rz = f.R.z;
     const rl = Math.hypot(rx, rz) || 1;
-    const size = 0.5 + rng() * 1.9;
     let rpx = f.pos.x + (rx / rl) * side * dist, rpz = f.pos.z + (rz / rl) * side * dist;
     if (onIslands) {
       // Straddle the waterline: some sitting on the sand, most half-sunk in the
