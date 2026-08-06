@@ -37,7 +37,11 @@ beta"). Martin writes in Swedish — **reply in Swedish**.
   at racing speed. The arch-rib thump shipped keyed on `ship.s` and Martin
   heard it immediately: the sound landed a sixth of a second before the ring
   swept past his viewpoint, and worst exactly when he was going fastest.
-  Anything above ~50ms reads as two events instead of one.
+  Anything above ~50ms reads as two events instead of one. **And the trigger is
+  not the ear**: the browser's output chain adds ~10ms wired, 20-80ms over a
+  monitor's HDMI speakers, 150-300ms on Bluetooth — lead the trigger by
+  `audio.outputLat()` (what the context reports; Safari reports nothing, so it
+  is a floor, not a promise).
 - Physics consumes scalar track queries only; visuals never write physics;
   all feel events route through `fx/juice.js`; every constant lives in
   `config.js` (one flat `TUNING` object).

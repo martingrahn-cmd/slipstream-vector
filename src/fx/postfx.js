@@ -211,7 +211,18 @@ const ShaftShader = {
       vec3 acc = vec3(0.0);
       float w = 1.0, total = 0.0;
       for (int i = 0; i < SAMPLES; i++) {
-        acc += texture2D(tDiffuse, uv).rgb * w;
+        // Weight each TAP by ITS distance to the sun, not just the destination
+        // pixel's. The bright pass carries every neon strip and lane dash in
+        // the frame, and the fade above only asks where the smear LANDS — so a
+        // white dash mid-frame still seeded a 0.30 UV pale streak of itself
+        // pointing at the sun (visible on the desert at 0 km/h, which is what
+        // rules out the speed smear). Real shafts are light LEAVING the sun:
+        // only taps that actually reach the sun's neighbourhood may add light.
+        // Normalisation stays on w alone, so a march that never gets near the
+        // sun sums to black instead of renormalising itself back up.
+        float sd = length(uv - uSun);
+        float sw = 1.0 - smoothstep(0.12, 0.42, sd);
+        acc += texture2D(tDiffuse, uv).rgb * (w * sw);
         total += w;
         uv -= march;
         w *= uDecay;

@@ -433,6 +433,44 @@ of the screen; rocks went from 2.4m to 5.6m; city rain went 170 → 1000
 instances. `tools/audit-overdraw.mjs` on real hardware is what settles it (and
 see FIDELITY.md §5a — that debt is already owed).
 
+### 2.6g Hardware round two (2026-08-06): the streaks, the tjuff, and 47 fps
+Three reports from the M4 after the ADAPTIVE fix went live, two fixed, one OPEN.
+
+- **The slanted streaks toward the lower left are the sun shafts — again.**
+  `af4b576` (July 28) killed the "ribbed chain behind the ship" by capping the
+  march and fading by the DESTINATION pixel's distance from the sun. Not
+  enough: the shaft input is the bloom bright pass, which carries every lane
+  dash and neon strip in the frame, so a white dash mid-frame still seeded a
+  0.30-UV pale streak of itself pointing at the sun. Martin's screenshot at
+  1 km/h is the same diagnostic that convicted shafts the first time — the
+  speed smear is zero at standstill. Fixed at the SOURCE side: each tap is now
+  weighted by ITS OWN distance to the sun (`1 - smoothstep(0.12, 0.42, sd)`),
+  so only light actually near the sun casts rays. Rays near the sun are
+  untouched; a dash far from it contributes nothing, so it cannot streak.
+- **The tjuff had one more leg to travel: the listener's audio chain.** The
+  arch thump was verified 6-40ms against the CAMERA — but that is when the
+  sound is HANDED TO THE BROWSER, not when it reaches an ear. Wired output
+  adds ~10ms; a monitor's HDMI speakers 20-80ms; **Bluetooth 150-300ms**,
+  which is bigger than the camera desync the trigger was rebuilt to fix. The
+  context reports what it knows (`ctx.outputLatency + baseLatency`, exposed as
+  `audio.outputLat()`), and the trigger now leads the camera cursor by the
+  distance covered in that time. Wired, the lead is under a metre — inside
+  the window already verified. Caveat: Safari does not report outputLatency,
+  so a Safari + Bluetooth player is still late and nothing in JS can know by
+  how much. If it still misses for Martin, ask what he listens through — the
+  answer decides whether the next move is a manual AV-offset slider.
+- **OPEN — 47-49 fps at MEDIUM on the desert is anomalous and now honest.**
+  The fps readout divided frames by a sum of sim-CLAMPED dts, so every hitch
+  counted as 50ms no matter how long it was — the readout flattered exactly
+  the machines that were struggling (same clamp, same lesson as ADAPTIVE).
+  Fixed: it accumulates raw time now. But the number itself is the mystery:
+  MEDIUM measured a locked 60 on an M4 in July, and nothing in the recent
+  merges prices out at 20% of a frame. The discriminating test, in OPTIONS:
+  **LOW for one lap.** LOW ≈ 60 → the cost is in the post/fill side and the
+  recent suspects (shafts, heat, bloom at MEDIUM) get priced on hardware.
+  LOW ≈ 48 → it is not the renderer at all — CPU, browser, or machine — and
+  the `[gfx]` console lines plus honest fps are the evidence to collect.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

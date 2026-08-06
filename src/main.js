@@ -1961,9 +1961,18 @@ function tick(now) {
   // not sweep past the VIEWPOINT until ~170ms later. A sixth of a second is
   // far outside the ~50ms window where a sound and a sight read as one event.
   // Your eye is at the camera, so that is what the rib has to pass.
+  // ...and even that is not the last leg. The trigger hands the sound to the
+  // browser, and the browser's OUTPUT CHAIN has its own delay before anything
+  // reaches an ear: ~10ms wired, 20-80ms through a monitor's HDMI speakers,
+  // 150-300ms on Bluetooth — the last one alone is bigger than the camera
+  // desync this block exists to fix. The context reports what it knows
+  // (audio.outputLat()), so lead the cursor by the distance the ship covers in
+  // that time and the thump lands as the ring passes the eye REGARDLESS of
+  // what the player listens through. Wired, the lead is under a metre.
   if (scenery.archS && (state === 'race' || state === 'countdown') && !paused) {
     const L = spline.length;
-    const camS = ((ship.s - rig.gap) % L + L) % L;
+    const lead = Math.max(0, ship.v) * audio.outputLat();
+    const camS = ((ship.s - rig.gap + lead) % L + L) % L;
     let travelled = camS - _lastArchS;
     if (travelled < 0) travelled += L;          // wrapped past the line this frame
     if (travelled > 0 && travelled < L * 0.5) { // a warp or a re-grid is not a drive-through
@@ -2062,8 +2071,12 @@ function tick(now) {
   }
 
   // Stats readout, 2x/s. autoReset is off so the composer's passes accumulate.
+  // Accumulate RAW time, not the sim-clamped realDt: dividing frames by a sum
+  // of clamped dts counts every hitch as 50ms however long it really was, so
+  // the readout flattered exactly the machines that were struggling — same
+  // clamp, same lesson as the ADAPTIVE bug.
   frames++;
-  statT += realDt;
+  statT += rawDt;
   if (statT >= 0.5) {
     // The tier rides the perf line permanently. A momentary "GRAPHICS: X" toast
     // here was useless: this readout rewrites itself twice a second, so the

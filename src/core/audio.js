@@ -770,6 +770,18 @@ export class AudioEngine {
   // through a rib section reads as a rhythm speeding up rather than as a row
   // of identical clicks. Purely procedural on purpose — a baked clip repeated
   // fourteen times a second announces itself as a loop.
+  // How long a sound scheduled NOW takes to reach the listener's ears, in
+  // seconds. baseLatency is the processing quantum (~5-10ms); outputLatency is
+  // the whole device chain after it, and it is what makes Bluetooth audible as
+  // Bluetooth: 150-300ms against a wired output's ~10. Safari does not report
+  // outputLatency at all, so this is a floor, not a promise. Capped, because a
+  // route change can briefly report garbage.
+  outputLat() {
+    const c = this.ctx;
+    if (!c) return 0;
+    return Math.min(0.45, (c.outputLatency || 0) + (c.baseLatency || 0));
+  }
+
   archPass(speedNorm = 0.5) {
     if (!this.ctx) return;
     const t0 = this.ctx.currentTime;
