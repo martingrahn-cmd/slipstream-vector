@@ -76,6 +76,9 @@ build step.
   bar). **Currently 0 tracks failing.**
 - `tools/audit-terrain.mjs` — measures terrain *intrusion* beside the racing
   line. **Currently 0.000 m on all 12.**
+- `tools/audit-adaptive.mjs` — the ADAPTIVE quality controller against synthetic
+  frame-time traces. **Currently all clear.** Invariant: a tier drop must be
+  evidence about steady-state rendering speed, not about one bad moment. §2.6f.
 - `tools/audit-overdraw.mjs` — exact fragment count of the additive layer, per
   track and per tier. **Measured 2026-07-29: ~0.05 of one screen fill, worst
   frame 0.175** — the transparent effects are not a cost. `FIDELITY.md` §5a.
@@ -380,6 +383,55 @@ diagnosis is worth more than the fix.
   wiring a listener would have armed a second weapon on top of the poll.
 - **`setMoteDensity` clamped only downward**, so a factor above 1 would read
   past the instance buffer. Latent — every tier passes 1.
+
+### 2.6f ADAPTIVE was measuring the weather, not the machine (2026-08-06) — FIXED
+Reported from an M4 Mac mini, 24GB, which had never run below FULL: *"NU KÄKADE
+DET PRESTANDA, GICK NER TILL LOW"*. Nothing in the renderer had got slower — the
+build that was actually live was a day old, since the Pages deploy for the tier
+above it had timed out. The controller was the bug, in two places, and both were
+lines that could never execute:
+
+- **The frame time it judged on was clamped.** `tick()` computes
+  `realDt = Math.min((now - last) / 1000, 0.05)`, correctly, so a hitch cannot
+  fling the ship down the road — and that clamped value was handed straight to
+  `adaptive.sample()`. Its own hitch guard is `if (dtMs > 250) return null`,
+  written to throw exactly those frames away, and against a 50ms clamp it was
+  unreachable. Every stall of every length arrived as a clean 50ms, and a run of
+  them reads as a machine sitting at a rock-steady 20fps. Six seconds of
+  ordinary browser jank cost both rungs.
+- **The ceiling could never rise.** The probe that re-opens a tier sat below
+  `if (!allowClimb) return null`, and the call site always passes
+  `allowClimb=false` — climbs are deliberately parked and cashed at the next
+  race start so the picture never changes mid-corner. So once the ceiling fell
+  there was no path back short of opening OPTIONS. That had been true for the
+  whole life of the mode.
+
+Fixed: the controller is fed `rawDt`; the EMA is updated *after* the hold check
+(it was above it, so the render-target reallocation and shader recompile that a
+tier change CAUSES were fed into the average that judged the next one); a drop
+needs 0.75s of sustained sub-threshold reading rather than one EMA crossing; a
+hitch STREAK of 20 still converts into evidence, so a genuine 3fps machine can
+drop; the ceiling no longer falls on a tier's FIRST failure, because six bad
+seconds and a machine that truly cannot render the tier look identical from in
+there and only one of them repeats; the reopen probe scales 20s → 60s → closed
+with the failure count, so a machine that genuinely cannot hold FULL stops
+climbing back into it after three attempts; and a new circuit clears the
+evidence, since a city night in the rain says nothing about a daylight desert.
+
+Guarded by `tools/audit-adaptive.mjs`, which reproduces the shipped drop path
+verbatim so the regression is demonstrated rather than asserted: the old code
+lands on LOW after a jank burst and is still there after a clean race, the new
+code holds FULL or recovers in one. Verified in-browser too — the module the
+page actually loads gives the same three answers. `__game.adaptive` now exposes
+the controller (`fails`, `ceiling`) so "why is it on LOW" is answerable, and a
+tier change logs `[gfx] ADAPTIVE FULL → MEDIUM (measured 41.2 fps)`.
+
+**Still unmeasured:** whether anything in the last two merges is genuinely
+heavier. The prime suspects are all on the fill axis — the ground shader gained
+sastrugi, an aurora bounce and `uDim`, all per-fragment on a disc covering most
+of the screen; rocks went from 2.4m to 5.6m; city rain went 170 → 1000
+instances. `tools/audit-overdraw.mjs` on real hardware is what settles it (and
+see FIDELITY.md §5a — that debt is already owed).
 
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so

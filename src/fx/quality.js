@@ -172,7 +172,11 @@ export class Adaptive {
     this.ceiling = maxIdx;  // highest tier still believed reachable
     this.hold = 2.5;        // seconds before the first decision (let things warm up)
     this.goodT = 0;         // seconds spent comfortably above target
+    this.badT = 0;          // seconds spent below the drop threshold, unbroken
+    this.hitches = 0;       // consecutive frames too long to be steady state
     this.pending = null;    // a climb earned mid-race, waiting for the flag
+    this.judged = 0;        // the fps reading the last decision was made on
+    this.fails = new Array(maxIdx + 1).fill(0);  // times each tier failed to hold
   }
 
   // Cash in a climb earned during a race. Called at the next race start.
@@ -195,22 +199,55 @@ export class Adaptive {
   // Only ever feed this frames from an actual race. The menu is a different
   // workload — attract camera, podium canvas, DOM effects — and judging the
   // race by it is how a player who picked ADAPTIVE ended up starting at LOW.
+  // MUST be fed the RAW frame time. The caller's `realDt` is clamped for the
+  // simulation's sake and that clamp made this method's own hitch guard
+  // unreachable — see the note at the call site in main.js.
   sample(dtMs, allowClimb = true) {
-    if (!(dtMs > 0) || dtMs > 250) return null;
-    this.ema += (dtMs - this.ema) * 0.06;
+    if (!(dtMs > 0)) return null;
+    // One long frame is a HITCH — a shader compiling, a world building, a tab
+    // returning from the background — and it says nothing about how fast this
+    // machine renders. Reject it outright. But TWENTY in a row is not a hitch:
+    // that is five unbroken seconds of nothing but stalls, and a machine
+    // genuinely rendering at 3fps has to be allowed to drop, so past the streak
+    // the frames start counting (at the cap, not at their real length).
+    if (dtMs > 250) {
+      if (++this.hitches < 20) return null;
+      dtMs = 250;
+    } else this.hitches = 0;
     const dt = dtMs / 1000;
+    // The hold exists to ignore the frames immediately AFTER a tier change: the
+    // render targets reallocate and the bloom shaders recompile, which is
+    // hundreds of milliseconds of jank caused BY the decision rather than
+    // evidence for the next one. Updating the EMA above this line fed exactly
+    // those frames into the average, so `ema = 1000/60` below never got the
+    // clean slate its comment promises and one drop cascaded into two.
     if (this.hold > 0) { this.hold -= dt; return null; }
+    this.ema += (dtMs - this.ema) * 0.06;
 
     const fps = 1000 / this.ema;
     if (fps < this.target - 12 && this.idx > 0) {
-      // Struggling. Step down and remember that this tier did not hold.
-      this.idx--;
-      this.ceiling = this.idx;
+      // Struggling — but only act on it if it PERSISTS. A tier the machine was
+      // holding a second ago is not disproved by one burst of jank the average
+      // has yet to shake off, and a drop is expensive to undo (see the ceiling).
+      this.badT += dt;
+      if (this.badT < 0.75) return null;
+      // Step down and remember that this tier did not hold.
+      this.judged = fps;
+      const from = this.idx--;
+      // The CEILING is what makes a drop expensive to undo — it is a promise
+      // not to retry this tier — so do not pay it for a tier's FIRST failure.
+      // From in here, six bad seconds of browser jank and a machine that
+      // genuinely cannot render the tier look exactly alike, and only one of
+      // them happens twice. Dropping is still instant either way; what the
+      // second failure buys is the belief that it was not a fluke.
+      if (++this.fails[from] >= 2) this.ceiling = this.idx;
       this.goodT = 0;
+      this.badT = 0;
       this.hold = 2.0;
       this.ema = 1000 / 60; // re-measure from scratch at the new tier
       return this.idx;
     }
+    this.badT = 0;
     // Climb on "comfortably AT target", not "target plus headroom". The obvious
     // version — require target + 8 — is broken on any vsync-capped display:
     // a 60Hz panel physically cannot report 66fps, so a machine that dipped
@@ -219,28 +256,53 @@ export class Adaptive {
     // a tier that fails once is not retried until the 45s probe.
     if (fps > this.target - 2) {
       this.goodT += dt;
-      if (this.idx < this.ceiling && this.goodT > 12 && !allowClimb) {
-        this.pending = this.idx + 1;  // earned it; cash it in at the next start
+      // Judge the ceiling against what we will actually be RUNNING next race,
+      // not against what is on screen now: a climb that is already parked is a
+      // decision taken, so a long clean race can earn a second rung behind it
+      // instead of the ceiling stalling on a tier we have already left.
+      const at = this.pending ?? this.idx;
+      // How hard it is to reopen a tier scales with how often it has already
+      // failed HERE, and the third failure closes it for this circuit. Without
+      // that, a machine which genuinely cannot hold FULL climbs back into it
+      // every couple of races and drops again in the first corner, forever.
+      // Three attempts is the budget: one free (the ceiling does not even move
+      // on a first failure), one cheap, one expensive, then the evidence is in.
+      const f = this.fails[this.ceiling + 1] || 0;
+      const probe = f >= 3 ? Infinity : f >= 2 ? 60 : 20;
+      if (at === this.ceiling && this.ceiling < this.maxIdx && this.goodT > probe) {
+        // Sitting at the ceiling with room to spare. The machine may have freed
+        // up (a browser tab closed, a laptop off battery saver), so raise the
+        // ceiling and let the climb retry it. Without this a single early
+        // stutter would pin the player at LOW for the rest of the session.
+        //
+        // This MUST stay above the `!allowClimb` return below. It used to sit
+        // under it, and since the caller always passes allowClimb=false (climbs
+        // are parked, never applied mid-race), the ceiling could never rise
+        // once it had fallen — for the whole life of the mode. One bad minute
+        // pinned the rest of the session at LOW with no way back short of
+        // opening OPTIONS. Raising the ceiling changes nothing you can see; it
+        // only restores the belief that a tier is worth retrying, so it is safe
+        // mid-race in a way an actual climb is not.
+        //
+        // The probe was also 45s, which on top of the 12s climb and the parked
+        // cash-in meant two full races of unbroken frames per rung.
+        this.ceiling++;
         this.goodT = 0;
         return null;
       }
-      if (!allowClimb) return null;
-      if (this.idx < this.ceiling && this.goodT > 12) {
+      if (at < this.ceiling && this.goodT > 12) {
         // Twelve unbroken seconds of headroom below a ceiling we already trust.
+        if (!allowClimb) {
+          this.pending = at + 1;      // earned it; cash it in at the next start
+          this.goodT = 0;
+          return null;
+        }
+        this.judged = fps;
         this.idx++;
         this.goodT = 0;
         this.hold = 3.0;
         this.ema = 1000 / 60;
         return this.idx;
-      }
-      if (this.idx === this.ceiling && this.ceiling < this.maxIdx && this.goodT > 45) {
-        // Sitting at the ceiling with room to spare for three quarters of a
-        // minute. The machine may have freed up (a browser tab closed, a laptop
-        // off battery saver), so raise the ceiling and let the climb retry it.
-        // Without this a single early stutter would pin the player at LOW for
-        // the rest of the session.
-        this.ceiling++;
-        this.goodT = 0;
       }
     } else if (fps < this.target) {
       this.goodT = 0;
@@ -254,6 +316,24 @@ export class Adaptive {
     this.ema = 1000 / 60;
     this.hold = 2.5;
     this.goodT = 0;
+    this.badT = 0;
+    this.hitches = 0;
     this.pending = null;
+  }
+
+  // A different circuit is a different workload, and the evidence that pinned
+  // the ceiling was gathered somewhere else — a city night in the rain says
+  // nothing about a daylight desert. Restore the belief that the top tier is
+  // reachable and let the normal climb prove it. The current tier does NOT
+  // jump: the controller earns its way back up, it is not handed the ceiling.
+  newWorkload() {
+    // reset() clears `pending`, and a world can be rebuilt between earning a
+    // climb and the race start that cashes it. Keep it: it was earned on frames
+    // that were real, and the worst case is one race spent a rung too high.
+    const p = this.pending;
+    this.ceiling = this.maxIdx;
+    this.fails.fill(0);
+    this.reset(this.idx);
+    this.pending = p;
   }
 }

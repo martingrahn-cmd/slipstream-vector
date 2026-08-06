@@ -86,6 +86,23 @@ pixels — an order of magnitude cheaper than the resolution they were being
 blamed for. The tiers were wrong about this for weeks and it kept the game
 uglier than it needed to be for everyone.
 
+**And before blaming the renderer at all, check whether ADAPTIVE actually
+measured the machine.** "It dropped to LOW" is a report about the CONTROLLER
+first and the frame rate second. `tick()` computes
+`realDt = Math.min((now - last) / 1000, 0.05)` — clamped so a hitch cannot fling
+the ship 40m down the road — and that clamped value was what got fed to
+`adaptive.sample()`. The controller's own hitch guard is `if (dtMs > 250) return
+null`, written precisely to throw those frames away, and against a 50ms clamp it
+could never once fire. **Every stall arrived as a clean, believable 20fps**, and
+a run of them is indistinguishable from a machine that simply cannot render the
+tier. A second dead line sat under it: the ceiling-raise probe was below
+`if (!allowClimb) return null`, and the caller always passes `allowClimb=false`
+(climbs are parked and cashed at the next race start), so once the ceiling fell
+it could never rise again. Between them an M4 Mac mini that had never dropped a
+frame spent a session at LOW with nothing in the renderer having got slower.
+**The lesson to carry: a number clamped for one consumer is not evidence for
+another.** If a guard has never fired, ask what the caller is actually passing.
+
 `FIDELITY.md` is the measured survey of what still limits the picture. The one
 finding still open there: FULL renders BELOW native on a 4K panel, because the
 pixel cap was set for 4x MSAA and never moved when MSAA became 2x. (The LOW
@@ -134,6 +151,14 @@ fixed.)
   by a whole lap permanently and makes the race unfinishable — that shipped
   once, gated behind a `v > 1` term that lost the lap for anyone crossing the
   line at a crawl.
+- **QA gate:** `node tools/audit-adaptive.mjs` — the ADAPTIVE quality
+  controller, same shape as audit-laps (no deps, no browser; `fx/quality.js` is
+  pure arithmetic over frame times). Its invariant: **a tier drop must be
+  evidence about steady-state rendering speed.** ADAPTIVE is the default mode,
+  so for most players it is the only thing choosing what the game looks like,
+  and a wrong drop is expensive — it used to lower the ceiling too, so one bad
+  moment pinned the session. See the frame-time note below for the bug it was
+  written against.
 - **QA gate:** `node tools/audit-terrain.mjs` guards the ground: it reports
   terrain INTRUSION near the road (how high the ground gets beside the racing
   line), not absolute clearance — the flat plane already sits exactly 1.15m

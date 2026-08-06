@@ -369,6 +369,9 @@ function buildWorld(idx) {
   _fogBase.setHex(theme.fog);   // the storm washes the fog off this, per frame
   _lastStrike = -1;             // a strike from the previous track must not fire here
   _lastArchS = 0;               // and no phantom rib thumps from the last circuit's layout
+  // A new circuit is a new workload: give ADAPTIVE back its belief in the top
+  // tier so a bad minute on one track cannot pin the whole session.
+  if (qualityMode === ADAPTIVE) adaptive.newWorkload();
   postfx.applyTheme(theme); // per-world grade + vignette tint
   trails.reset();
 
@@ -1723,7 +1726,11 @@ let statT = 0, frames = 0;
 
 function tick(now) {
   requestAnimationFrame(tick);
-  const realDt = Math.min((now - last) / 1000, 0.05);
+  // rawDt is the truth about the frame; realDt is the truth the SIMULATION is
+  // allowed to see. The clamp exists so a hitch cannot fling the ship 40m down
+  // the road — but anything judging the machine's speed needs the raw number.
+  const rawDt = (now - last) / 1000;
+  const realDt = Math.min(rawDt, 0.05);
   last = now;
 
   input.update(realDt);
@@ -2032,9 +2039,26 @@ function tick(now) {
   // canvas, DOM blur — and letting it vote is how a player who had just picked
   // ADAPTIVE in OPTIONS found themselves starting the race at LOW. Climbs
   // earned here are parked and applied at the next race start (see startRace).
+  //
+  // Feed it rawDt, NOT realDt. This line said `realDt` for as long as ADAPTIVE
+  // has existed and that single word was the whole bug: realDt is clamped to
+  // 50ms for the simulation, so the controller's own hitch guard (`dtMs > 250`,
+  // written precisely to throw these frames away) could never once fire. Every
+  // stall of any length — a shader compiling, a world building, the browser
+  // doing something else for a second — arrived as a clean, believable 50ms,
+  // and a run of them reads exactly like a machine sitting at a steady 20fps.
+  // Two rungs down, ceiling pinned, and an M4 that had never dropped a frame
+  // was racing at LOW with nothing in the renderer having got slower.
   if (qualityMode === ADAPTIVE && state === 'race' && !paused) {
-    const want = adaptive.sample(realDt * 1000, false);
-    if (want !== null && want !== tierIdx) applyTier(want);
+    const want = adaptive.sample(rawDt * 1000, false);
+    if (want !== null && want !== tierIdx) {
+      // Leave a trace. A tier change is the most visible thing the game does
+      // without being asked, and "why did it go to LOW" was previously
+      // unanswerable from the outside.
+      console.log(`[gfx] ADAPTIVE ${GFX[tierIdx].name} → ${GFX[want].name} `
+        + `(measured ${adaptive.judged.toFixed(1)} fps)`);
+      applyTier(want);
+    }
   }
 
   // Stats readout, 2x/s. autoReset is off so the composer's passes accumulate.
@@ -2667,6 +2691,10 @@ window.__game = {
   menu,
   menuKey: applyMenuKey,
   setQuality: (m) => setQualityMode(m),
+  // The ADAPTIVE controller itself. "Why is it on LOW" was previously
+  // unanswerable from the console: `fails` says which tiers were tried and
+  // found wanting, `ceiling` says what it still believes is reachable.
+  adaptive,
   qualityState: () => ({
     mode: qualityMode, tier: GFX[tierIdx].name,
     pr: renderer.getPixelRatio(), samples: postfx.samples,
