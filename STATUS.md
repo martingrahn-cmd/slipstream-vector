@@ -471,6 +471,40 @@ Three reports from the M4 after the ADAPTIVE fix went live, two fixed, one OPEN.
   LOW ≈ 48 → it is not the renderer at all — CPU, browser, or machine — and
   the `[gfx]` console lines plus honest fps are the evidence to collect.
 
+### 2.6h "Det är sekunder" — the tjuff was not late, the RINGS were silent (2026-08-06)
+Martin, after the outputLat fix: same wrong-by-seconds sound on TWO devices.
+Seconds ruled out every latency theory at once — the output chain is 0.3s at
+its Bluetooth worst, the camera gap 213ms — and two devices ruled out the
+hardware. Nothing in the code can schedule a desert sound seconds late; Web
+Audio is sample-accurate. So the sound was ON TIME. The pairing was wrong.
+
+The game is full of structures you fly THROUGH, and only one class of them
+had a voice. `buildHoloRings` puts a glowing cyan hoop — the most obviously
+"drive-through" object in the game — every 200m of straight on EVERY track,
+silent. The start gantry: silent. Sign gantries (city, every ≥300m): silent.
+Bridge decks: silent. Only the arch ribs thumped, and they begin 205m after
+the start line (`LAUNCH_CLEAR`). Measured on Sunset Circuit: ring at s=0,
+ring at s=200, first rib at s=205. The ear pairs a thump with the nearest
+plausible structure, so every silent ring "borrowed" the next rib section's
+sound — 200m at racing speed is exactly the reported few seconds, identical
+on every machine because it is geometry, not latency.
+
+Fix: `scenery.thumpS` — every pass-under's arc length with its kind — and
+`audio.archPass(sn, kind)` gives each class its own voice: holo ring = thin
+electric swish (mass-less, no low end), rib = the tjuff, span (gantry/sign
+gantry/bridge) = heavier whoomp with a low sine under it. The start gantry
+whoomps at the line every lap. Structures can stack (Orbital Ring anchors a
+ring, a sign gantry and a bridge at one s), so the list sorts heaviest-first
+at equal s — the 45ms rate floor keeps the first of a cluster, and that
+should be the span, not the hologram. Verified in-browser: Sunset Circuit
+33 pass-unders (10 rings / 22 ribs / 1 span), Orbital Ring 64 (11/40/13),
+zero console errors.
+
+The lesson for the next feel event: **when a sound seems mistimed, first ask
+what the player thinks it is timed TO.** The trigger fired exactly when
+designed, at the thing the designer knew about; the player was looking at a
+thing the sound system had never heard of.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

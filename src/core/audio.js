@@ -782,46 +782,62 @@ export class AudioEngine {
     return Math.min(0.45, (c.outputLatency || 0) + (c.baseLatency || 0));
   }
 
-  archPass(speedNorm = 0.5) {
+  // kind 0 = holo ring (mass-less: an electric swish, no low end)
+  // kind 1 = arch rib   (the tjuff: bright attack + a short body of air)
+  // kind 2 = span       (start gantry / sign gantry / bridge deck: real MASS —
+  //                      slower air, more level, a low sine under it)
+  // One voice per class of thing you pass under, because the ear pairs a thump
+  // with the nearest plausible structure: when only the ribs spoke, every
+  // silent ring and gantry "borrowed" the next rib section's sound and the
+  // whole layer read as seconds out of sync.
+  archPass(speedNorm = 0.5, kind = 1) {
     if (!this.ctx) return;
     const t0 = this.ctx.currentTime;
     if (t0 - this._lastArch < 0.045) return;   // hard floor, so nothing ever stacks into mush
     this._lastArch = t0;
     const sn = Math.max(0, Math.min(1, speedNorm));
-    // TRANSIENT FIRST — 18ms of bright noise, and it is the whole reason this
-    // reads as a "tjuff" rather than a soft whoof. The ear times a sound by its
-    // ATTACK EDGE, so a low band-passed swell localises late even when it is
-    // scheduled to the millisecond. The click is what makes it land on the ring.
+    const holo = kind === 0, span = kind === 2;
+    // TRANSIENT FIRST — a few ms of bright noise, and it is the whole reason
+    // this reads as a "tjuff" rather than a soft whoof. The ear times a sound
+    // by its ATTACK EDGE, so a low band-passed swell localises late even when
+    // it is scheduled to the millisecond. The click lands it on the ring.
     const tick = this.ctx.createBufferSource();
     tick.buffer = this.noiseBuf;
     const tf = this.ctx.createBiquadFilter();
     tf.type = 'highpass';
-    tf.frequency.value = 2400;
+    tf.frequency.value = holo ? 3400 : span ? 1300 : 2400;
     tf.Q.value = 0.7;
     const tg = this.ctx.createGain();
-    tg.gain.setValueAtTime(0.045 + 0.05 * sn, t0);
-    tg.gain.exponentialRampToValueAtTime(0.0004, t0 + 0.018);
+    tg.gain.setValueAtTime((holo ? 0.030 : span ? 0.070 : 0.045) + (holo ? 0.030 : 0.05) * sn, t0);
+    tg.gain.exponentialRampToValueAtTime(0.0004, t0 + (holo ? 0.014 : 0.018));
     tick.connect(tf); tf.connect(tg); tg.connect(this.sfx);
     tick.start(t0, (t0 * 3.7) % 0.5);
     tick.stop(t0 + 0.03);
-    // ...then the body of air behind it.
+    // ...then the body of air behind it. A hologram has no air to push, so its
+    // body is a thin high shimmer; a span pushes a lot, slower and lower.
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const f = this.ctx.createBiquadFilter();
     f.type = 'bandpass';
-    f.frequency.setValueAtTime(380 + 950 * sn, t0);
-    f.frequency.exponentialRampToValueAtTime(170 + 280 * sn, t0 + 0.09);
-    f.Q.value = 1.5;
+    const b0 = holo ? 1600 + 900 * sn : span ? 250 + 430 * sn : 380 + 950 * sn;
+    const b1 = holo ? 900 + 500 * sn : span ? 120 + 160 * sn : 170 + 280 * sn;
+    const bodyT = holo ? 0.05 : span ? 0.13 : 0.09;
+    f.frequency.setValueAtTime(b0, t0);
+    f.frequency.exponentialRampToValueAtTime(b1, t0 + bodyT);
+    f.Q.value = holo ? 3.0 : 1.5;
     const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.045 + 0.065 * sn, t0);
-    g.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.10);
+    g.gain.setValueAtTime((holo ? 0.022 : span ? 0.075 : 0.045) + (holo ? 0.028 : 0.065) * sn, t0);
+    g.gain.exponentialRampToValueAtTime(0.0005, t0 + bodyT + 0.01);
     src.connect(f); f.connect(g); g.connect(this.sfx);
     // Read from a moving offset into the noise buffer. Fourteen of these a
     // second from the same sample start is a machine gun, not a tunnel.
     src.start(t0, (t0 * 11.3) % 0.5);
-    src.stop(t0 + 0.12);
-    // A touch of body so it reads as a THUMP and not just a hiss.
-    this.blip(115 + 55 * sn, 0.05, { type: 'sine', gain: 0.03 + 0.025 * sn, slideTo: 68 });
+    src.stop(t0 + bodyT + 0.03);
+    // A touch of body so it reads as a THUMP and not just a hiss — except the
+    // hologram, which gets a synthetic zing instead of weight.
+    if (holo) this.blip(2100 + 500 * sn, 0.04, { type: 'triangle', gain: 0.018 + 0.02 * sn, slideTo: 1400 });
+    else if (span) this.blip(95 + 40 * sn, 0.11, { type: 'sine', gain: 0.075 + 0.045 * sn, slideTo: 52 });
+    else this.blip(115 + 55 * sn, 0.05, { type: 'sine', gain: 0.03 + 0.025 * sn, slideTo: 68 });
   }
 
   lapChime() {

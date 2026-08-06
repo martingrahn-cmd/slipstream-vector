@@ -447,7 +447,8 @@ export function buildScenery(spline, scene, theme) {
   const canyon = theme.canyon ? buildCanyon(rng, spline, groundY, theme) : null;
   if (canyon) group.add(canyon.group);
   if (theme.sprawl) group.add(buildSprawl(rng, spline, groundY, theme));
-  if (theme.overheads) group.add(buildOverheads(spline));
+  const overheads = theme.overheads ? buildOverheads(spline) : null;
+  if (overheads) group.add(overheads.group);
   const traffic = theme.traffic ? buildTraffic(rng, spline, groundY, cx, cz) : null;
   if (traffic) group.add(traffic.mesh);
   if (theme.city) group.add(buildCity(rng, groundY, cx, cz, CITY_ANG, theme, spline));
@@ -535,11 +536,30 @@ export function buildScenery(spline, scene, theme) {
   const storm = { flash: 0, bolt: 0, strikes: 0, mag: 0, dist: 0, az: 0, seed: 0 };
   const _fwd = new THREE.Vector3();
   let strikeT = 9, strikeLife = 0, lastT = -1;
+
+  // EVERY structure the road passes under, with what kind of thing it is:
+  // k=0 holo ring, k=1 arch rib, k=2 span (start gantry / sign gantry / bridge
+  // deck). One list, because the pass-under sound must cover ALL of them: when
+  // only the ribs spoke, the silent rings and gantries borrowed the next rib
+  // section's thump by ear and the whole layer read as seconds out of sync —
+  // RING_SPACING is 200m, which at racing speed is exactly "a few seconds
+  // after the thing I just flew through".
+  const thumpS = [{ s: 0, k: 2 }];   // the start gantry — a whoomp at the line, every lap
+  if (rings.ringS) for (const s of rings.ringS) thumpS.push({ s, k: 0 });
+  if (arches) for (const s of arches.archS) thumpS.push({ s, k: 1 });
+  if (overheads) for (const s of overheads.overS) thumpS.push({ s, k: 2 });
+  if (bridges && bridges.crossS) for (const s of bridges.crossS) thumpS.push({ s, k: 2 });
+  // Heaviest first at equal s: structures can stack (Orbital Ring has a ring,
+  // a sign gantry and a bridge all anchored at s=60), and the 45ms rate floor
+  // in audio.archPass keeps only the FIRST of a cluster — that should be the
+  // span's whoomp, not the hologram's whisper.
+  thumpS.sort((a, b) => a.s - b.s || b.k - a.k);
+
   return {
     group,
     sky: sky.mesh,
     storm,
-    archS: arches ? arches.archS : null,   // rib arc-lengths, for the pass-under thump
+    thumpS,   // pass-under arc lengths + kinds, for the thump trigger in main.js
     // Quality tier hooks. Motes are the additive mass; the life families are
     // the "busier world" the FULL tier pays for. Both thin live via
     // InstancedMesh.count, so neither needs the field rebuilt.
@@ -2551,7 +2571,7 @@ function buildHoloRings(spline) {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  return { mesh, update: (t) => { mat.opacity = 0.4 + 0.12 * Math.sin(t * 3); } };
+  return { mesh, ringS: positions.slice(), update: (t) => { mat.opacity = 0.4 + 0.12 * Math.sin(t * 3); } };
 }
 
 // Ribbed arches over LONG flat straights — vertical enclosure plus a light/dark
@@ -2623,7 +2643,7 @@ function buildArches(spline, theme) {
   group.add(ribMesh, lipMesh);
   group.userData.archS = positions.slice();
   group.matrixAutoUpdate = false;
-  // archS is also what main.js listens to for the pass-under thump — the ribs
+  // archS also feeds the scenery-level thumpS list (k=1) — the ribs
   // are 5.5m apart, so at racing speed that is ~14 a second and reads as a
   // rhythm rather than as separate events.
   return { group, archS: positions.slice(), update: (t) => { lipMat.opacity = 0.5 + 0.18 * Math.sin(t * 2.2); } };
@@ -3808,12 +3828,14 @@ function buildTraffic(rng, spline, groundY, cx, cz) {
 function buildOverheads(spline) {
   const f = makeFrame();
   const opa = [], glo = [];
+  const overS = [];   // arc length of every placed gantry, for the pass-under thump
   const cl = new THREE.Color(TUNING.COL.EDGE_L), cr = new THREE.Color(TUNING.COL.EDGE_R);
   let lastS = -300, idx = 0;
   for (let s = 60; s < spline.length; s += 10) {
     spline.frameAt(s, f);
     if (Math.abs(f.kappa) > 0.004 || Math.abs(f.slope) > 0.25 || s - lastS < 300) continue;
     lastS = s;
+    overS.push(s);
     const W = f.width;
     const basis = new THREE.Matrix4().makeBasis(f.R, new THREE.Vector3(0, 1, 0),
       f.T.clone().negate().setY(0).normalize());
@@ -3840,7 +3862,7 @@ function buildOverheads(spline) {
     g.add(glowMesh);
   }
   g.traverse((o) => { o.frustumCulled = false; o.matrixAutoUpdate = false; });
-  return g;
+  return { group: g, overS };
 }
 
 // ---------------------------------------------------------------- bridges
@@ -3881,6 +3903,7 @@ function buildBridges(rng, spline, groundY, theme) {
 
   const opa = [], glo = [];
   const lanes = [];
+  const crossS = [];   // where each deck crosses the road, for the pass-under thump
   const cl = new THREE.Color(TUNING.COL.EDGE_L), cr = new THREE.Color(TUNING.COL.EDGE_R);
   const LEN = 270;
   let bi = 0;
@@ -3893,6 +3916,7 @@ function buildBridges(rng, spline, groundY, theme) {
     const cxp = f.pos.x, czp = f.pos.z;
     if (!deckClear(cxp, czp, dirX, dirZ, y, LEN)) continue;
     bi++;
+    crossS.push(s);   // the deck is centred on this track point — a pass-under
     const place = (geom, alongOff, yOff, sideOff) => {
       geom.rotateY(-ang);
       geom.translate(
@@ -3968,6 +3992,7 @@ function buildBridges(rng, spline, groundY, theme) {
   const one = new THREE.Vector3(1, 1, 1);
   return {
     group: g,
+    crossS,
     update(t) {
       for (let i = 0; i < N; i++) {
         const c = cars[i];

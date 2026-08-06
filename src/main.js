@@ -1949,10 +1949,16 @@ function tick(now) {
   // draws. The thunder is fired ONCE per strike off the counter, and arrives
   // late by its own travel time. Deliberately NOT routed through juice: a
   // weapon-hit flash is gameplay language and the weather must not borrow it.
-  // Arch ribs: a thump as each one passes over the canopy. Counted off arc
-  // length rather than a trigger volume so it cannot be missed at speed, and
-  // counted AROUND THE LOOP, because the last rib of a lap and the first of the
-  // next are 5.5m apart and not 3km.
+  // Pass-unders: a sound as each structure crosses over the canopy — holo
+  // rings, arch ribs, the start gantry, sign gantries, bridge decks, each with
+  // its own voice (audio.archPass kinds). ALL of them, because the ear pairs a
+  // thump with the nearest plausible structure: when only the ribs spoke, the
+  // silent rings — one every 200m, i.e. every few seconds at racing speed —
+  // borrowed the next rib section's sound and Martin heard the whole layer as
+  // "seconds off", identically on two machines. Counted off arc length rather
+  // than a trigger volume so nothing is missed at speed, and counted AROUND
+  // THE LOOP, because the last rib of a lap and the first of the next are
+  // 5.5m apart and not 3km.
   //
   // Triggered on the CAMERA's arc length, not the ship's. The first cut used
   // ship.s and Martin heard it as desynced — measured, the ship was 0.1-2.4m
@@ -1969,7 +1975,7 @@ function tick(now) {
   // (audio.outputLat()), so lead the cursor by the distance the ship covers in
   // that time and the thump lands as the ring passes the eye REGARDLESS of
   // what the player listens through. Wired, the lead is under a metre.
-  if (scenery.archS && (state === 'race' || state === 'countdown') && !paused) {
+  if (scenery.thumpS && (state === 'race' || state === 'countdown') && !paused) {
     const L = spline.length;
     const lead = Math.max(0, ship.v) * audio.outputLat();
     const camS = ((ship.s - rig.gap + lead) % L + L) % L;
@@ -1977,10 +1983,10 @@ function tick(now) {
     if (travelled < 0) travelled += L;          // wrapped past the line this frame
     if (travelled > 0 && travelled < L * 0.5) { // a warp or a re-grid is not a drive-through
       let fired = 0;
-      for (const a of scenery.archS) {
-        let rel = a - _lastArchS;
+      for (const t of scenery.thumpS) {
+        let rel = t.s - _lastArchS;
         if (rel < 0) rel += L;
-        if (rel > 0 && rel <= travelled && fired < 3) { audio.archPass(sn); fired++; }
+        if (rel > 0 && rel <= travelled && fired < 3) { audio.archPass(sn, t.k); fired++; }
       }
     }
     _lastArchS = camS;
