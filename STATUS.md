@@ -505,6 +505,31 @@ what the player thinks it is timed TO.** The trigger fired exactly when
 designed, at the thing the designer knew about; the player was looking at a
 thing the sound system had never heard of.
 
+### 2.6i A rock on the road, and the swish gets a voice worth hearing (2026-08-06)
+- **"Nu kommer det in någon sten på banan."** `buildRocks` placed against its
+  OWN spline section and never tested the rest of the centreline — and the
+  loop crosses over itself, so a spot a safe 20m from section A can sit dead
+  on section B. The stands have footprint-tested the whole centreline since
+  they landed, for exactly this reason; the rocks got away without it only
+  while they were 2.4m litter. Step 6 made them 5.6m and clustered, and the
+  odds caught up. Fixed with the same `clearOfTrack` bar the companions use —
+  the local formula's minimum (5m + 1.6x size beyond the edge) enforced
+  against EVERY section, drop after eight failed tries. Measured in-page on
+  all twelve circuits: desert and frost worst case is now 5.3m+ of clearance;
+  the city has no rocks. The WATER worlds still show rocks inside the road
+  corridor in XZ — deliberately exempt: those are the island-reef path, and
+  the road there runs on stilts above them (vertical separation an XZ test
+  cannot see). If a reef rock ever pokes through a low deck, that is its own
+  report and needs a height-aware test, not this one.
+- **The holo swish was authored too quiet to survive the mix** — about half
+  the rib tjuff's level, against an engine, wind and music that all live in
+  its band. Raised ~1.7x and lengthened 50→65ms. The lesson from the LOW-tier
+  grade applies to audio too: a layer you cannot perceive is not subtle, it
+  is absent.
+- Testing note: GitHub Pages serves with `max-age=600` — up to TEN MINUTES of
+  stale modules after a deploy. A "still broken" report inside that window may
+  be running the previous build; hard-reload before concluding anything.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

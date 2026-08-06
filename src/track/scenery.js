@@ -2794,23 +2794,43 @@ function buildRocks(rng, spline, groundY, theme, islands = null) {
   const anchors = [];
   for (let a = 0; a < nAnchors; a++) anchors.push(rng() * spline.length);
   for (let i = 0; i < count; i++) {
-    // A quarter stay loose so the field is not only clumps.
-    const s = rng() < 0.25
-      ? rng() * spline.length
-      : (anchors[Math.floor(rng() * nAnchors)]
-         + (rng() + rng() + rng() - 1.5) * 60 + spline.length * 2) % spline.length;
-    spline.frameAt(s, f);
-    const side = rng() < 0.5 ? -1 : 1;
-    // Cubed: most rocks stay small, a few are genuinely big. 0.45-5.6m against
-    // the old 0.5-2.4m, at a similar mean, so the field gains a top end rather
-    // than simply growing.
-    const size = 0.45 + 5.2 * rng() ** 3;
-    // Big ones stand further out — a 5m boulder on the verge is a wall, and it
-    // also gives the near band something to have depth against.
-    const dist = f.width + 5 + size * 1.6 + rng() * 24;
-    const rx = f.R.x, rz = f.R.z;
-    const rl = Math.hypot(rx, rz) || 1;
-    let rpx = f.pos.x + (rx / rl) * side * dist, rpz = f.pos.z + (rz / rl) * side * dist;
+    // Placement is AGAINST ITS OWN SECTION, but the loop crosses over itself,
+    // so a spot a safe 20m from section A can sit dead on section B where the
+    // road comes back around. The stands have footprint-tested the WHOLE
+    // centreline since they landed for exactly this reason; the rocks got away
+    // without it only while they were 2.4m litter. At 5.6m and clustered, one
+    // landed on the road ("nu kommer det in någon sten på banan"). Same bar as
+    // the local formula's minimum — 5m plus 1.6x the size beyond the edge —
+    // enforced against EVERY section; a rock that cannot find clear ground in
+    // eight tries is dropped, like the flora.
+    let size = 0, rpx = 0, rpz = 0, placed = false;
+    for (let attempt = 0; attempt < 8 && !placed; attempt++) {
+      // A quarter stay loose so the field is not only clumps.
+      const s = rng() < 0.25
+        ? rng() * spline.length
+        : (anchors[Math.floor(rng() * nAnchors)]
+           + (rng() + rng() + rng() - 1.5) * 60 + spline.length * 2) % spline.length;
+      spline.frameAt(s, f);
+      const side = rng() < 0.5 ? -1 : 1;
+      // Cubed: most rocks stay small, a few are genuinely big. 0.45-5.6m against
+      // the old 0.5-2.4m, at a similar mean, so the field gains a top end rather
+      // than simply growing.
+      size = 0.45 + 5.2 * rng() ** 3;
+      // Big ones stand further out — a 5m boulder on the verge is a wall, and it
+      // also gives the near band something to have depth against.
+      const dist = f.width + 5 + size * 1.6 + rng() * 24;
+      const rx = f.R.x, rz = f.R.z;
+      const rl = Math.hypot(rx, rz) || 1;
+      rpx = f.pos.x + (rx / rl) * side * dist;
+      rpz = f.pos.z + (rz / rl) * side * dist;
+      placed = onIslands || clearOfTrack(spline, rpx, rpz, size * 1.6 + 5);
+    }
+    if (!placed) {
+      sc.setScalar(0);
+      m.compose(p.set(0, groundY - 60, 0), q.identity(), sc);
+      mesh.setMatrixAt(i, m);
+      continue;
+    }
     if (onIslands) {
       // Straddle the waterline: some sitting on the sand, most half-sunk in the
       // shallows just off the beach. A rock breaking the surface reads as reef;
