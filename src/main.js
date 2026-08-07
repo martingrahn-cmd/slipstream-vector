@@ -1031,49 +1031,25 @@ const _f = makeFrame();
 const _v = new THREE.Vector3();
 const _vel = new THREE.Vector3();
 
-// Near-miss "whoosh": a wall/pylon or a rival flying close past at speed sends a
-// doppler swish (panned, in audio) + a faint camera tug (via juice). Pure feel,
-// detected read-only over sim state — no physics touched.
+// Near-miss "whoosh": a rival flying close past at speed sends a doppler swish
+// (panned, in audio) + a faint camera tug (via juice). Pure feel, detected
+// read-only over sim state — no physics touched.
 //
-// Both branches trigger on an EVENT, not a state. The first cut fired on the
-// state itself, debounced only by cooldowns, and the cooldowns turned into
-// metronomes: hold a line inside the wall band through a sweeper and it
-// whooshed every 0.55s with nothing passing; run side-by-side with a rival —
-// or with one parked in the blind spot behind — and it whooshed every 0.9s
-// at zero closing speed. The swish is band-passed noise, same family as the
-// holo-ring pass-under, so the ear filed every one of them under "arch sound
-// with no arch". Now the wall fires once on ENTERING the skim band, and a
-// rival fires once when it actually draws level (the along-track gap changes
-// sign inside the window) — the cooldowns remain only as jitter backstops.
-const _nmF = makeFrame();
-let _nmWallCd = 0;
-let _nmWallIn = false;          // inside the skim band last frame (edge trigger)
+// There is deliberately NO wall-proximity whoosh any more. It fired on being
+// near the edge — a state with no visible cause, built from the same
+// band-passed noise as the holo-ring swish — and after every placement bug in
+// the pass-under layer was found and fixed, IT was the ghost sound Martin was
+// still hearing: "ljudet som låter när man kommer för nära kanten, inte
+// skrapar i, bara flyger för nära." Two rounds of edge-triggering and
+// hysteresis made it rarer, but a sound anchored to nothing you can see
+// violates the same rule the camera-cursor trigger exists to uphold. He
+// called the removal. The rival whoosh stays: a ship sweeping past IS the
+// visible cause, and it fires only as one actually draws level.
 const _nmRivalCd = new Map();
 const _nmRivalDs = new Map();   // rival -> last signed along-track gap (pass detection)
 function updateNearMiss(realDt) {
-  _nmWallCd = Math.max(0, _nmWallCd - realDt);
   for (const [r, cd] of _nmRivalCd) { const n = cd - realDt; if (n <= 0) _nmRivalCd.delete(r); else _nmRivalCd.set(r, n); }
-  const sn = ship.speedNorm;
-  const fast = sn >= T.NEARMISS_MIN_SN;
-  const spd = fast ? (sn - T.NEARMISS_MIN_SN) / (1 - T.NEARMISS_MIN_SN) : 0; // 0..1 above the floor
-  // Trackside skim: tucked close to the edge (pylons/walls whipping past) but
-  // NOT actually scraping — that's the "phew" as you thread a pinch at speed.
-  // Band MEMBERSHIP is pure geometry and is tracked EVERY frame: the first
-  // edge-trigger cut cleared it on speed dips and excluded scrape frames, so a
-  // dip-and-recover or a scrape RELEASE inside the band read as fresh entries
-  // and the whoosh drummed at cooldown rate again. Speed, scraping and airtime
-  // gate only the FIRE. Exit takes the wider WALL_EXIT gap, so steering jitter
-  // on the 1.1m line cannot re-enter every half second.
-  spline.frameAt(ship.s, _nmF);
-  const gap = (_nmF.width - T.WALL_MARGIN) - Math.abs(ship.d);
-  const wasIn = _nmWallIn;
-  _nmWallIn = gap >= 0 && gap < (wasIn ? T.NEARMISS_WALL_EXIT : T.NEARMISS_WALL_GAP);
-  if (_nmWallIn && !wasIn && fast && !ship.scraping && !ship.jumping && _nmWallCd === 0) {
-    juice.emit('nearMiss', { side: Math.sign(ship.d) || 1, intensity: 0.35 + 0.65 * spd });
-    _nmWallCd = T.NEARMISS_WALL_CD;
-    if (_thumpLog) console.log(`[whoosh] WALL gap=${gap.toFixed(2)} d=${ship.d.toFixed(1)} s=${Math.round(ship.s)}`);
-  }
-  // A rival flying past close but clear of contact (interact handles the touch).
+  const fast = ship.speedNorm >= T.NEARMISS_MIN_SN;
   // The ds map updates every frame regardless of speed, so a pass is judged
   // against LAST frame, never against a stale gap from before a slow phase.
   if (state !== 'race' || !race || !race.racers) return;
@@ -1622,7 +1598,7 @@ function startCountdown() {
   rig.playIntro(ship, introDur);
   race.grid();
   _lastArchS = null;   // a re-grid must not leave a stale camera arc length behind
-  _nmRivalCd.clear(); _nmRivalDs.clear(); _nmWallIn = false; // stale rivals must not carry a pass over
+  _nmRivalCd.clear(); _nmRivalDs.clear(); // stale rivals must not carry a pass over
   if (weapons) weapons.reset();
   banter.reset();
   audio.disableHum(false); // never inherit a stuck paralysis buzz into a new race

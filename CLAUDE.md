@@ -126,9 +126,10 @@ fixed.)
   tier change logs `[gfx] ... (measured N fps, frame p50/p95)` — healthy p50
   under a spiky p95 means the machine was WARMING (pipeline compiles), not
   slow — and every pass-under sound logs `[thump] RING|RIBBA|SPANN s= cam=`
-  (the same opt-in flag also logs `[whoosh] WALL|RIVAL` for the near-miss
+  (the same opt-in flag also logs `[whoosh] RIVAL` for the rival near-miss
   swish, because the two are the same family of sound by ear and the console
-  is what tells them apart).
+  is what tells them apart; a WALL variant existed and was the "spökljud" of
+  the 2.6l-2.6n saga — a sound with no visible cause — removed for good).
   **`warp` steps physics, AI and contact — NOT the weapon system** (that is only
   stepped in the render loop, `main.js:1765`), and **NOT any visual effect**:
   sparks, trails, shipVisual and the shock/fireball pools all update in the

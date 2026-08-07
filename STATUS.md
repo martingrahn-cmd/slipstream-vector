@@ -717,6 +717,31 @@ with no pad on screen, and a crest landing thuds with no visible impact —
 both deliberate, both worth knowing about when the next "ljud utan orsak"
 report arrives.
 
+### 2.6n Martin closes the case: the ghost was the wall whoosh, and it is gone (2026-08-07)
+"tror att det är ljudet som låter när man kommer för nära kanten, inte
+skrapar i, bara fluger för nära." — exactly the wall-proximity near-miss
+whoosh. It matched his original report point for point: same band-passed
+noise family as the holo swish (the ear cannot tell them apart), no visible
+cause (nothing passes — you are just near the edge), it drummed at cooldown
+rate before 2.6m's hysteresis ("ljudet köar"), and hearing it seconds from
+any real arch read as "för tidigt/för sent". Every placement bug found in
+2.6k-2.6m was real and stayed fixed — but THIS was the sound he kept
+hearing.
+
+Two rounds of event-triggering and hysteresis made it rarer; they could not
+give it a visible anchor, because there is none. A sound anchored to
+nothing you can see violates the same rule the camera-cursor trigger exists
+to uphold, so on Martin's call the wall whoosh is REMOVED, not tuned. The
+rival whoosh stays — a ship sweeping past IS the visible cause — and the
+scrape/wallHit sounds still cover actual contact.
+
+The sound-design lesson, filed next to 2.6h's timing lesson: **before
+asking when a sound should fire, ask what the player will SEE when it
+does.** A state ("near the edge") is not a referent; an event with a
+visible subject is. Every phantom in this saga — median ribs, silent
+flyovers, self-pair murmurs, the wall whoosh — was one sound whose referent
+the player could not find.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no
