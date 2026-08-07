@@ -27,10 +27,10 @@ TRACKS.forEach((td, ti) => {
   total += list.length;
   console.log(`\n${String(ti).padStart(2)} ${td.name}  (${Math.round(sp.length)}m)  ${list.length} crossing${list.length === 1 ? '' : 's'}`);
   for (const c of list) {
-    const lvl = Math.max(TUNING.PASSUNDER_MIN_LVL, Math.min(1,
+    const lvl = Math.max(0, Math.min(1,
       (TUNING.PASSUNDER_MAX_H - c.clearance) / (TUNING.PASSUNDER_MAX_H - TUNING.PASSUNDER_FULL_H)));
     console.log(`   under s=${String(Math.round(c.s)).padStart(5)}  over s=${String(Math.round(c.sOver)).padStart(5)}`
-      + `  clearance=${c.clearance.toFixed(1).padStart(5)}m  lvl=${lvl.toFixed(2)}`);
+      + `  clearance=${c.clearance.toFixed(1).padStart(5)}m  lvl=${lvl.toFixed(2)}${lvl > 0.05 ? '' : '  (silent)'}`);
   }
 });
-console.log(`\n${total} crossings total — every one now carries a k=2 whoomp in thumpS.`);
+console.log(`\n${total} crossings total — each with lvl > 0.05 carries a k=2 whoomp in thumpS.`);

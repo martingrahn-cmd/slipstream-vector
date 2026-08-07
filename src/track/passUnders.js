@@ -1,12 +1,18 @@
 // Road-over-road pass-under detection: everywhere the circuit crosses OVER
-// itself — flyover decks, a loop's upper arcs, a corkscrew's roll — the lower
-// lane drives under the biggest overhead structure in the game. These spots
-// fed no sound for as long as the pass-under layer existed: thumpS only knew
-// about scenery (rings, ribs, gantries, bridges), so an 8.7m flyover deck was
-// silent while a holo ring 200m away swished, and the ear paired the swish
-// with the deck — "the sound is seconds off". Measured across the roster:
-// 31 silent crossings on 11 of 12 tracks, nearest sounding structure up to
-// 264m (4.4s) away.
+// itself — flyover decks, a corkscrew's roll — the lower lane drives under
+// the biggest overhead structure in the game. These spots fed no sound for as
+// long as the pass-under layer existed: thumpS only knew about scenery
+// (rings, ribs, gantries, bridges), so an 8.7m flyover deck was silent while
+// a holo ring 200m away swished, and the ear paired the swish with the deck —
+// "the sound is seconds off". Nearest sounding structure measured up to 264m
+// (4.4s) away.
+//
+// MIN_DS earns its size the hard way: at 40m this paired the LOOP'S OWN
+// RIBBON with itself 40m ahead (a default loop climbs ~37m in its steepest
+// 40m of arc, and the twist drift left the pair 16cm inside the width test),
+// which shipped as mid-loop murmur thumps with no crossing anywhere near.
+// Every "crossing" above ~25m clearance on the roster was that artifact, so
+// the height ceiling doubles as the artifact guard.
 //
 // Pure arithmetic over the spline's sample arrays — no three.js — so the
 // same implementation runs in the game (scenery build) and in Node

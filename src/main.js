@@ -741,6 +741,7 @@ function updateMenu() {
   setHTML('opt-music', volBar(audio.musicVolume));
   setHTML('opt-sfx', volBar(audio.sfxVolume));
   setHTML('opt-voice', volBar(audio.voiceVolume));
+  setTxt('opt-avoffset', audio.avOffsetMs ? `+${audio.avOffsetMs} MS` : 'AUTO');
   let dzi = DEADZONES.indexOf(input.deadzone); if (dzi < 0) dzi = 1;
   setTxt('opt-dz', DZ_LABEL[dzi]);
   setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
@@ -1053,21 +1054,28 @@ function updateNearMiss(realDt) {
   _nmWallCd = Math.max(0, _nmWallCd - realDt);
   for (const [r, cd] of _nmRivalCd) { const n = cd - realDt; if (n <= 0) _nmRivalCd.delete(r); else _nmRivalCd.set(r, n); }
   const sn = ship.speedNorm;
-  if (sn < T.NEARMISS_MIN_SN) { _nmWallIn = false; return; }
-  const spd = (sn - T.NEARMISS_MIN_SN) / (1 - T.NEARMISS_MIN_SN); // 0..1 above the floor
+  const fast = sn >= T.NEARMISS_MIN_SN;
+  const spd = fast ? (sn - T.NEARMISS_MIN_SN) / (1 - T.NEARMISS_MIN_SN) : 0; // 0..1 above the floor
   // Trackside skim: tucked close to the edge (pylons/walls whipping past) but
   // NOT actually scraping — that's the "phew" as you thread a pinch at speed.
-  // No wall exists over a jump gap, so airtime never skims one.
+  // Band MEMBERSHIP is pure geometry and is tracked EVERY frame: the first
+  // edge-trigger cut cleared it on speed dips and excluded scrape frames, so a
+  // dip-and-recover or a scrape RELEASE inside the band read as fresh entries
+  // and the whoosh drummed at cooldown rate again. Speed, scraping and airtime
+  // gate only the FIRE. Exit takes the wider WALL_EXIT gap, so steering jitter
+  // on the 1.1m line cannot re-enter every half second.
   spline.frameAt(ship.s, _nmF);
   const gap = (_nmF.width - T.WALL_MARGIN) - Math.abs(ship.d);
-  const inBand = !ship.scraping && !ship.jumping && gap >= 0 && gap < T.NEARMISS_WALL_GAP;
-  if (inBand && !_nmWallIn && _nmWallCd === 0) {
+  const wasIn = _nmWallIn;
+  _nmWallIn = gap >= 0 && gap < (wasIn ? T.NEARMISS_WALL_EXIT : T.NEARMISS_WALL_GAP);
+  if (_nmWallIn && !wasIn && fast && !ship.scraping && !ship.jumping && _nmWallCd === 0) {
     juice.emit('nearMiss', { side: Math.sign(ship.d) || 1, intensity: 0.35 + 0.65 * spd });
     _nmWallCd = T.NEARMISS_WALL_CD;
     if (_thumpLog) console.log(`[whoosh] WALL gap=${gap.toFixed(2)} d=${ship.d.toFixed(1)} s=${Math.round(ship.s)}`);
   }
-  _nmWallIn = inBand;
   // A rival flying past close but clear of contact (interact handles the touch).
+  // The ds map updates every frame regardless of speed, so a pass is judged
+  // against LAST frame, never against a stale gap from before a slow phase.
   if (state !== 'race' || !race || !race.racers) return;
   const L = spline.length;
   for (const r of race.racers) {
@@ -1076,7 +1084,7 @@ function updateNearMiss(realDt) {
     let ds = (((rp.s - ship.s) % L) + L) % L; if (ds > L / 2) ds -= L;
     const prev = _nmRivalDs.get(r);
     _nmRivalDs.set(r, ds);
-    if (prev === undefined || _nmRivalCd.has(r)) continue;
+    if (prev === undefined || _nmRivalCd.has(r) || !fast) continue;
     // The pass itself: both frames inside the window (a wrap glitch half a lap
     // away flips sign too) and the gap crossing zero — the noses drawing level.
     if (Math.abs(ds) > T.NEARMISS_RIVAL_DS || Math.abs(prev) > T.NEARMISS_RIVAL_DS) continue;
@@ -1677,7 +1685,13 @@ juice.on('lap', ({ lap, time }) => {
   }
   if (time > 20 && time < prev) {
     localStorage.setItem(bestKey(), time.toFixed(3)); // overall headline (legacy key)
-    if (lap > 1) { // not the rolling-start opening lap
+    // Celebrate only when there was a record to BEAT. With empty storage every
+    // first lap is vacuously "a record", and in a private window storage is
+    // empty EVERY session — banner + silver jingle at the first line crossing
+    // of every test run, stacked on the gantry whoomp and lap chime, was one
+    // whole layer of the "spökljud" report. The first-ever time stores
+    // silently; the celebration starts meaning something from lap two.
+    if (lap > 1 && Number.isFinite(prev)) { // not the rolling-start opener, not a vacuous first
       achievements.banner('NEW LAP RECORD', `${trackDef.name} · ${fmt(time)}`, '#7df9ff', '⏱️');
       achievements.unlock('record');
       const heldRecords = TRACKS.filter((t) => Number.isFinite(bestLap(t.id))).length;
@@ -2192,6 +2206,12 @@ function editRow(row, dir) {
     audio.setSfxVolume(audio.sfxVolume + dir);
   } else if (row === 'voice') {
     audio.setVoiceVolume(audio.voiceVolume + dir);
+  } else if (row === 'avoffset') {
+    // Manual sound lead for output chains the browser cannot report (Safari
+    // reports no outputLatency; TVs/receivers add 50-300ms on any browser).
+    // If pass-under sounds land late on your setup, raise until they sit on
+    // the structure as it passes.
+    audio.setAvOffset(audio.avOffsetMs + dir * 25);
   } else if (row === 'deadzone') {
     let i = DEADZONES.indexOf(input.deadzone); if (i < 0) i = 1;
     input.setDeadzone(DEADZONES[Math.max(0, Math.min(DEADZONES.length - 1, i + dir))]);
@@ -2487,6 +2507,10 @@ function handleKeys() {
     juice.hitstopT = 0;
     juice.trauma = 0;
     rig.reset(ship);
+    // The rig snap shortens gap by up to ~7.7m in one frame — a forward camera
+    // teleport, and the thump cursor would fire everything in that window at
+    // the exact moment the player is reorienting. Resync instead.
+    _lastArchS = null;
   }
   if (input.consume('KeyM')) debugCam = !debugCam;
 }

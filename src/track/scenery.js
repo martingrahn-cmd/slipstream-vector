@@ -553,15 +553,16 @@ export function buildScenery(spline, scene, theme) {
   if (bridges && bridges.crossS) for (const s of bridges.crossS) thumpS.push({ s, k: 2 });
   if (rockCut) for (const s of rockCut.archS) thumpS.push({ s, k: 2 });
   // The ROAD is the biggest overhead structure in the game and it was the one
-  // with no voice: flyover decks and loop arcs cross over the lane on 11 of
-  // 12 circuits (31 crossings measured), every one silent, nearest sounding
-  // structure up to 264m / 4.4s away — which is exactly the "swosh seconds
-  // from any arch" report. Level fades with clearance: a 9m deck gets the
-  // full span whoomp, a 40m loop arc a distant murmur.
+  // with no voice: flyover decks cross over the lane on most circuits, every
+  // one silent, nearest sounding structure up to 264m / 4.4s away — which is
+  // exactly the "swosh seconds from any arch" report. Level fades with
+  // clearance: a 9m deck gets the full span whoomp, a 20m one plays softer,
+  // and the fade reaches zero at the ceiling (no floor — a floor turned the
+  // fade into an on/off cliff and held artifacts audible).
   for (const c of findPassUnders(spline)) {
-    const lvl = Math.max(TUNING.PASSUNDER_MIN_LVL, Math.min(1,
+    const lvl = Math.max(0, Math.min(1,
       (TUNING.PASSUNDER_MAX_H - c.clearance) / (TUNING.PASSUNDER_MAX_H - TUNING.PASSUNDER_FULL_H)));
-    thumpS.push({ s: c.s, k: 2, lvl });
+    if (lvl > 0.05) thumpS.push({ s: c.s, k: 2, lvl });
   }
   // Heaviest first at equal s: structures can stack (Orbital Ring has a ring,
   // a sign gantry and a bridge all anchored at s=60), and the 45ms rate floor

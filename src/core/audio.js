@@ -10,6 +10,9 @@ export class AudioEngine {
     const old = localStorage.getItem('sv-volume');
     this.musicVolume = clampVol(parseInt(localStorage.getItem('sv-music') ?? old ?? '8', 10));
     this.sfxVolume = clampVol(parseInt(localStorage.getItem('sv-sfx') ?? old ?? '8', 10));
+    // Manual AV offset (ms) — leads every synced one-shot beyond what the
+    // context reports. See outputLat() for why this exists.
+    this.avOffsetMs = Math.max(0, Math.min(300, parseInt(localStorage.getItem('sv-avoffset') ?? '0', 10) || 0));
     this.voiceVolume = clampVol(parseInt(localStorage.getItem('sv-voice') ?? '8', 10));
     this.stateScale = 0.3; // menu idle vs racing
     this.scrapeLevel = 0;
@@ -779,7 +782,17 @@ export class AudioEngine {
   outputLat() {
     const c = this.ctx;
     if (!c) return 0;
-    return Math.min(0.45, (c.outputLatency || 0) + (c.baseLatency || 0));
+    // avOffset is the player's manual correction for everything the browser
+    // cannot see: Safari reports NO outputLatency at all, and a TV/receiver
+    // chain adds 50-300ms the API never knows about on any browser. Without
+    // it, every pass-under lands late by the whole chain on those setups —
+    // the ring's zing audibly detaches from the ring.
+    return Math.min(0.45, (c.outputLatency || 0) + (c.baseLatency || 0)) + this.avOffsetMs / 1000;
+  }
+
+  setAvOffset(ms) {
+    this.avOffsetMs = Math.max(0, Math.min(300, Math.round(ms / 25) * 25));
+    try { localStorage.setItem('sv-avoffset', String(this.avOffsetMs)); } catch (e) { /* private mode */ }
   }
 
   // kind 0 = holo ring (mass-less: an electric swish, no low end)
@@ -866,6 +879,12 @@ export class AudioEngine {
 
   // Trophy unlock jingle — brighter and longer for higher tiers.
   trophy(tier) {
+    // The toast queue drains on wall-clock setTimeout, so it keeps dequeuing
+    // while the game is PAUSED — but pause suspends the context and freezes
+    // currentTime, so every note of every jingle shown during the pause lands
+    // on the same timestamp and bursts as one discordant chord on resume.
+    // A jingle nobody could hear is dropped, not deferred.
+    if (this.ctx && this.ctx.state === 'suspended') return;
     const seqs = {
       bronze: [784, 1047],
       silver: [784, 1047, 1319],

@@ -664,6 +664,59 @@ Confirmed but deliberately not fixed here: city sign gantries can stand on
 banked road (visual, city-only — own report); nearMissWhoosh takes no
 output-latency lead (it has no fixed world anchor to sync to).
 
+### 2.6m The hunt turned on its own fix, and the private window was half the ghost (2026-08-07) — FIXED
+"tycker fortfarande att jag hör spökljudet" — from a Safari PRIVATE window,
+which turned out to be a finding in itself. A second adversarial round
+(sound census + review of 2.6l's own code + crossing visibility + Safari
+specifics) confirmed SIX remaining layers:
+
+1. **2.6l's loop murmurs were artifacts of its own detector.** MIN_DS=40
+   paired the loop's OWN ribbon with itself 40m ahead — a default loop
+   climbs ~37m in its steepest 40m of arc, and the pair passed the width
+   test by 16cm. Every "crossing" above ~25m clearance on the roster was
+   this, including both Sunset murmurs (s=313/498) — fired mid-loop with no
+   crossing anywhere. And their lvl=0.35 was authored below the mix at the
+   loudest moment in the game: 2.6i's "too quiet to exist" re-introduced as
+   an intermittent murmur. MIN_DS=120, MAX_H=25, level floor removed (a
+   floor is an on/off cliff at the ceiling). 14 true flyover decks remain
+   (8.6-19.6m), all full-band audible.
+2. **The wall whoosh edge-trigger re-armed itself twice over**: the speed
+   gate's early return cleared the band flag mid-band (a dip-and-recover
+   fired a fresh "entry"), scrape frames were excluded from membership (a
+   scrape RELEASE fired), and the 1.1m boundary had no dead zone (steering
+   jitter re-entered at cooldown rate). Membership is now pure geometry
+   tracked every frame; speed/scrape/airtime gate only the FIRE; exit takes
+   NEARMISS_WALL_EXIT=1.7m hysteresis.
+3. **Respawn (R) snapped rig.gap up to ~7.7m shorter in one frame** — a
+   forward camera teleport that fired every pending thump at the exact
+   moment the player is reorienting. Respawn now resyncs the cursor (null
+   sentinel, same as re-grid).
+4. **"NEW LAP RECORD" celebrated vacuously.** Empty storage made lap one a
+   "record" — and a private window has empty storage EVERY session, so the
+   banner + silver jingle + record trophy fired at the first line crossing
+   of every test run, stacked on the gantry whoomp and lap chime. The
+   first-ever time now stores silently; the celebration requires a record
+   to actually beat (isFinite(prev)).
+5. **Paused toasts burst as a chord.** The toast queue drains on wall-clock
+   setTimeout while pause suspends the context — every jingle note shown
+   during a pause landed on the same frozen currentTime and fired at once
+   on resume. A jingle nobody could hear is now dropped, not deferred.
+6. **Safari reports no outputLatency**, so every synced one-shot lands late
+   by the whole output chain (50-300ms through TV/monitor speakers) — the
+   ring's zing audibly detaches from the ring. The 2.6j idea shipped:
+   OPTIONS → AV OFFSET (0-300ms, 25ms steps, sv-avoffset), added inside
+   audio.outputLat() so every consumer of the lead inherits it.
+
+What a private window does to a test session, for the next time it comes
+up: trophies and records live in localStorage, which is EMPTY every private
+session — so five-plus bronze trophies re-unlock mid-race with queued
+jingles, and (before fix 4) every improving lap was a "record". None of
+those sounds are track structures. The census also cleared the remaining
+one-shots as designed-but-unanchored: drift mini-boost plays the pad whoosh
+with no pad on screen, and a crest landing thuds with no visible impact —
+both deliberate, both worth knowing about when the next "ljud utan orsak"
+report arrives.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no
