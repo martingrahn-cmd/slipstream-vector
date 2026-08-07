@@ -4,6 +4,13 @@ A WipEout × Horizon Chase arcade racer. Anti-grav ship, four low-poly worlds,
 twelve tracks across two championship cups, five weapons, and eight rivals who
 trash-talk you over the comms — built for graphics and game feel first.
 
+| ![Sunset Circuit — through the Sun Gate at 232 km/h](assets/shots/sunset-mesa.jpg) | ![Coral Keys — inverted through the loop over the lagoon](assets/shots/palm-coast-loop.jpg) |
+|---|---|
+| ![Skyline Rush — rain in the neon tunnel, pack in sight](assets/shots/neon-sprawl.jpg) | ![Aurora Pass — flat out under the northern lights](assets/shots/frostfall-ridge.jpg) |
+
+*In-engine chase-camera shots, one per world (Sunset Mesa, Palm Coast, Neon
+Sprawl, Frostfall Ridge) — regenerate with `node tools/press-shots.mjs --jpeg`.*
+
 **Worlds & tracks** (pick with ← → on the start screen; lap records persist):
 
 | World | Tracks | Character |
