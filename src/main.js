@@ -71,6 +71,12 @@ let _lastStrike = -1;
 let _fogWashed = false;
 let _lastArchS = 0;   // ship.s at the previous frame, for counting arch ribs passed
 let _racedOnce = false;   // first race of a session gets extra ADAPTIVE patience
+// [thump] console narration is OPT-IN: at tunnel rate it is ~12 lines a second,
+// and with the web inspector open that much console traffic measurably slows
+// Safari — the log was dragging frame p50 to 36ms and CAUSING the tier drops
+// it was meant to explain. Enable with __game.thumpLog(true).
+let _thumpLog = false;
+try { _thumpLog = localStorage.getItem('sv-thumplog') === '1'; } catch { /* private mode quirks */ }
 
 const camera = new THREE.PerspectiveCamera(T.FOV_BASE, innerWidth / innerHeight, 0.1, 2200);
 scene.add(camera); // speed lines live in camera space
@@ -1993,7 +1999,7 @@ function tick(now) {
           // One line per firing, so ear, eye and trigger can be compared from
           // the console while racing: what fired, where it stands, where the
           // camera cursor was when the sound was handed to the browser.
-          console.log(`[thump] ${t.k === 0 ? 'RING' : t.k === 1 ? 'RIBBA' : 'SPANN'} `
+          if (_thumpLog) console.log(`[thump] ${t.k === 0 ? 'RING' : t.k === 1 ? 'RIBBA' : 'SPANN'} `
             + `s=${Math.round(t.s)} cam=${camS.toFixed(1)} v=${Math.round(ship.v * 3.6)}km/h`);
         }
       }
@@ -2737,6 +2743,10 @@ window.__game = {
   // unanswerable from the console: `fails` says which tiers were tried and
   // found wanting, `ceiling` says what it still believes is reachable.
   adaptive,
+  thumpLog: (on) => {
+    _thumpLog = !!on;
+    try { localStorage.setItem('sv-thumplog', on ? '1' : '0'); } catch { /* private mode */ }
+  },
   qualityState: () => ({
     mode: qualityMode, tier: GFX[tierIdx].name,
     pr: renderer.getPixelRatio(), samples: postfx.samples,

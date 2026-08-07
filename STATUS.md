@@ -572,6 +572,36 @@ window localStorage dies with the session, so common trophies re-unlock and
 their mid-race jingle fires every test run — one more sound that "comes when
 it shouldn't" without being any track structure.
 
+### 2.6k Martin finds it: the ribs nobody could see (2026-08-07) — FIXED
+With the [thump] log on screen he asked the question that closed the case:
+*"kan det vara ribbor vi har som inte syns i spelet? t ex när vägen delar
+sig?"* Exactly right. `buildArches` picked its straights on curvature alone
+and never asked whether the road was WHOLE — and a split section's
+centreline runs through the median island, so the ribs it placed there were
+real, thumped on the trigger (his console: RIBBA s=600-739, no ribs in
+sight), and were invisible from either half of the road. The trigger was
+proven correct in 2.6j; the SOUND was honest; the BUILD LIST lied. Every
+"the sound comes when it shouldn't" report back to the first one is this.
+
+Fix: ribs and holo rings now require whole road — `splitHalfAt(s±14) <= 0.01`
+and no `gapAt(s±10)` — same shape as the stands' footprint rule: the check
+that was missing was never about the trigger, always about placement.
+Verified in-page on all twelve circuits: zero rings/ribs on splits or jump
+gaps (Sunset Circuit dropped exactly the four split ribs). Sign gantries at
+splits are deliberately kept: the beam spans both halves and is fully
+visible, so its whoomp has a visible cause.
+
+Two instrumentation lessons out of the same session:
+- **The [thump] log perturbed the measurement.** ~12 lines/s through a
+  tunnel with the web inspector open drags Safari's frame p50 to ~36ms, and
+  the honest controller then drops tiers BECAUSE OF THE LOGGING meant to
+  debug it. [thump] is now opt-in: `__game.thumpLog(true)` (persisted as
+  localStorage `sv-thumplog`). The [gfx] drop line stays always-on — one
+  line per drop cannot hurt anyone.
+- The p50/p95 drop diagnosis paid for itself immediately: his log showed one
+  window at p50 36ms (uniform — the console cost) and another at p50 17ms /
+  p95 37ms (spiky — pipeline warm-up), two different problems in two lines.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

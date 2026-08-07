@@ -2535,7 +2535,12 @@ function buildHoloRings(spline) {
   for (let s = 0; s < spline.length; s += 10) {
     spline.frameAt(s, f);
     const flatEnough = Math.abs(spline.verticalCurvAt(s)) < 0.0012;
-    if (Math.abs(f.kappa) < TUNING.RING_KAPPA_MAX && flatEnough
+    // Whole road only — same rule as the arch ribs and for the same reason: a
+    // ring centred on a split's median or floating over a jump gap is a sound
+    // with no visible cause.
+    const whole = spline.splitHalfAt(s - 14) <= 0.01 && spline.splitHalfAt(s + 14) <= 0.01
+      && !spline.gapAt(s - 10) && !spline.gapAt(s + 10);
+    if (Math.abs(f.kappa) < TUNING.RING_KAPPA_MAX && flatEnough && whole
       && s - lastS >= TUNING.RING_SPACING) {
       positions.push(s);
       lastS = s;
@@ -2585,7 +2590,15 @@ function buildArches(spline, theme) {
   let start = null;
   for (let s = 0; s <= spline.length; s += 4) {
     spline.frameAt(s, f);
-    const ok = Math.abs(f.kappa) < 0.004 && Math.abs(spline.verticalCurvAt(s)) < 0.0010;
+    // "Straight enough" is not the whole question — the road must also be
+    // WHOLE. A split section's centreline runs through the median island, so
+    // a rib placed there is real, thumps on the trigger, and is invisible
+    // from the road ("man hör ribbljudet men det syns inga ribbor"). Same for
+    // a jump's gap: a ring floating over nothing. The margin keeps a rib off
+    // the split's wedge noses too.
+    const ok = Math.abs(f.kappa) < 0.004 && Math.abs(spline.verticalCurvAt(s)) < 0.0010
+      && spline.splitHalfAt(s - 14) <= 0.01 && spline.splitHalfAt(s + 14) <= 0.01
+      && !spline.gapAt(s - 10) && !spline.gapAt(s + 10);
     if (ok && start === null) start = s;
     else if (!ok && start !== null) { if (s - start >= MIN_RUN) runs.push([start, s]); start = null; }
   }
