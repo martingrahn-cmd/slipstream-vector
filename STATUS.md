@@ -602,6 +602,68 @@ Two instrumentation lessons out of the same session:
   window at p50 36ms (uniform — the console cost) and another at p50 17ms /
   p95 37ms (spiky — pipeline warm-up), two different problems in two lines.
 
+### 2.6l The road itself was the silent structure, and the whoosh was an impostor (2026-08-07) — FIXED
+Same report shape again — swosh with no arch, or seconds off, or "queued" —
+but this time from a TIME TRIAL (no rivals, no weapons), which narrowed the
+suspects enough for a full adversarial audit. Three independent causes, all
+confirmed, all in one class: 2.6k's lesson one level up. The trigger was
+proven, the sound was honest, and once more THE BUILD LIST LIED — this time
+by omission.
+
+1. **The ROAD is the biggest overhead structure in the game and it had no
+   voice.** Flyover decks, loop arcs, corkscrew rolls: measured with the real
+   spline, 29 road-over-road crossings on 11 of 12 circuits (Grid Lock is the
+   only clean one), every single one silent, nearest sounding structure up to
+   264m / 4.4s away. Sunset Circuit alone: the loop's arc over its entry
+   (s≈313) and exit (s≈498) — nearest thump 1.7-1.9s away — plus an 8.7m
+   flyover at s≈3106. The rockCut STONE ARCHES (desert+frost, pillars + lintel
+   13.5m over the deck) were silent too, and a 270m bridge deck that crosses a
+   winding road twice recorded only its centre s. Fix: `findPassUnders()`
+   (src/track/passUnders.js, pure spline arithmetic, no three.js — the
+   buildGround/groundAt lesson: one implementation shared by the game and by
+   `tools/audit-passunders.mjs`), rockCut returns its placed archS, bridges
+   walk their whole deck axis. Every crossing carries a k=2 whoomp whose level
+   fades with clearance (TUNING.PASSUNDER_*): a 9m deck whoomps, a 40m loop
+   arc murmurs at 0.35.
+
+2. **The near-miss whoosh was a state timer wearing an event's clothes** — and
+   it is band-passed noise in the same family as the holo swish, so the ear
+   filed it under "arch sound with no arch". Hold a line inside the 1.1m wall
+   band through a sweeper: a whoosh every 0.55s, nothing passing — in a TIME
+   TRIAL, on a track with zero rivals. Run alongside a rival (or with one
+   sitting in the blind spot behind — no ds sign check) and it fired every
+   0.9s at zero closing speed. It also fired mid-air over jump gaps, skimming
+   a wall that does not exist. Fix: both branches trigger on EVENTS — the wall
+   on ENTERING the band, a rival on actually drawing level (along-track gap
+   changes sign inside the window), plus `!ship.jumping`; cooldowns remain
+   only as jitter backstops. One lap of Sunset in the probe: 3 wall whooshes
+   (band entries), previously a metronome.
+
+3. **The camera cursor could move backward and re-arm everything it had just
+   fired.** camS = ship.s - rig.gap + v*outputLat(): a hard hit collapses the
+   speed-scaled lead (~21m in a frame on Bluetooth), outputLatency itself
+   jitters, and the acceleration lunge grows gap faster than a launching ship
+   travels. Any backward step was committed as a rewind, and the catch-up
+   drive thumped the same structures a SECOND time — the "queued" swoshes.
+   Fix: the mark only moves forward; real teleports (track build, re-grid)
+   resync through a null sentinel instead of being inferred from distance.
+
+Refuted along the way, by adversarial verification against the real
+constants — worth keeping so nobody re-fixes them: holo rings are NOT
+invisible against the bright skies (every material fact checked, claim
+fell); the jump-shortfall respawn cannot fire phantoms; the 3-per-frame cap
+and 45ms floor never audibly drop a legitimate thump.
+
+Verified headless on Sunset Circuit (real rAF frames, thumpLog on): both
+loop arcs FIRED at lvl 0.35, flyover FIRED at lvl 1.00, stone arch SPANN at
+s=186, all rings/ribs exactly once, zero duplicates, zero console errors.
+`[whoosh] WALL|RIVAL` now logs under the same `sv-thumplog` flag, so the
+next "swosh utan orsak" report tells the two systems apart from the console.
+
+Confirmed but deliberately not fixed here: city sign gantries can stand on
+banked road (visual, city-only — own report); nearMissWhoosh takes no
+output-latency lead (it has no fixed world anchor to sync to).
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

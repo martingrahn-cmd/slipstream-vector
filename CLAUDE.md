@@ -125,7 +125,10 @@ fixed.)
   The console narrates the two systems that act on their own: every ADAPTIVE
   tier change logs `[gfx] ... (measured N fps, frame p50/p95)` — healthy p50
   under a spiky p95 means the machine was WARMING (pipeline compiles), not
-  slow — and every pass-under sound logs `[thump] RING|RIBBA|SPANN s= cam=`.
+  slow — and every pass-under sound logs `[thump] RING|RIBBA|SPANN s= cam=`
+  (the same opt-in flag also logs `[whoosh] WALL|RIVAL` for the near-miss
+  swish, because the two are the same family of sound by ear and the console
+  is what tells them apart).
   **`warp` steps physics, AI and contact — NOT the weapon system** (that is only
   stepped in the render loop, `main.js:1765`), and **NOT any visual effect**:
   sparks, trails, shipVisual and the shock/fireball pools all update in the
@@ -152,6 +155,12 @@ fixed.)
 - **Audit:** `node tools/audit-pads.mjs [tracks]` — weapon-pad pickup
   distribution and what a whole pack gets off one pad. The standing answer to
   "does the field share a weapon?" (it does not; see `STATUS.md` §2.5).
+- **Audit:** `node tools/audit-passunders.mjs [tracks]` (needs `npm i three`)
+  — where the road crosses OVER itself, via the same `findPassUnders()` the
+  game feeds thumpS from. The standing answer to "I heard a thump with
+  nothing overhead" and its inverse; the road's own crossings were silent on
+  11 of 12 circuits for as long as the pass-under layer existed
+  (`STATUS.md` §2.6l).
 - **QA gate:** `node tools/audit-laps.mjs` — lap counting and the loop seam. No
   deps, no browser, 50ms, because `shipPhysics.js` has zero three.js imports on
   purpose. Its invariant is the one the standings rest on: **progress never

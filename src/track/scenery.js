@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TUNING } from '../config.js';
 import { makeFrame } from './spline.js';
+import { findPassUnders } from './passUnders.js';
 import { buildTerrain } from './terrain.js';
 import { buildBillboardAtlas } from '../ui/logos.js';
 
@@ -430,7 +431,8 @@ export function buildScenery(spline, scene, theme) {
   if (landmarks) group.add(landmarks.group);
   const mesas = buildMesas(rng, spline, groundY, theme);
   group.add(mesas);
-  if (theme.rockCut) { const rc = buildRockCut(rng, spline, groundY, theme); if (rc) group.add(rc); }
+  const rockCut = theme.rockCut ? buildRockCut(rng, spline, groundY, theme) : null;
+  if (rockCut) group.add(rockCut.mesh);
   group.add(...buildPylons(spline));
   const rings = buildHoloRings(spline);
   group.add(rings.mesh);
@@ -549,6 +551,18 @@ export function buildScenery(spline, scene, theme) {
   if (arches) for (const s of arches.archS) thumpS.push({ s, k: 1 });
   if (overheads) for (const s of overheads.overS) thumpS.push({ s, k: 2 });
   if (bridges && bridges.crossS) for (const s of bridges.crossS) thumpS.push({ s, k: 2 });
+  if (rockCut) for (const s of rockCut.archS) thumpS.push({ s, k: 2 });
+  // The ROAD is the biggest overhead structure in the game and it was the one
+  // with no voice: flyover decks and loop arcs cross over the lane on 11 of
+  // 12 circuits (31 crossings measured), every one silent, nearest sounding
+  // structure up to 264m / 4.4s away — which is exactly the "swosh seconds
+  // from any arch" report. Level fades with clearance: a 9m deck gets the
+  // full span whoomp, a 40m loop arc a distant murmur.
+  for (const c of findPassUnders(spline)) {
+    const lvl = Math.max(TUNING.PASSUNDER_MIN_LVL, Math.min(1,
+      (TUNING.PASSUNDER_MAX_H - c.clearance) / (TUNING.PASSUNDER_MAX_H - TUNING.PASSUNDER_FULL_H)));
+    thumpS.push({ s: c.s, k: 2, lvl });
+  }
   // Heaviest first at equal s: structures can stack (Orbital Ring has a ring,
   // a sign gantry and a bridge all anchored at s=60), and the 45ms rate floor
   // in audio.archPass keeps only the FIRST of a cluster — that should be the
@@ -1788,11 +1802,16 @@ function buildRockCut(rng, spline, groundY, theme) {
   // Natural stone arches OVER the road — raw rock, no neon (gameplay language
   // stays on the track itself). Pillars on both verges + a fat irregular
   // lintel with hanging chunks. Clearance: lintel underside ~13m over the deck.
+  // The placed positions feed thumpS (k=2): these are literal arches the lane
+  // passes under, and they were silent — on the desert/frost circuits they
+  // were the most visible "båge utan ljud" of all.
   const archAt = [bestS + 46, bestS + 122, bestS + 196];
+  const archS = [];
   for (const s of archAt) {
     spline.frameAt(s, f);
     // The whole arch (pillars + lintel) must clear every other lap segment.
     if (!clearOfRest(f.pos.x, f.pos.z, f.width + 12)) continue;
+    archS.push(s % L);
     const yaw = Math.atan2(f.R.x, f.R.z);
     const roadY = f.pos.y;
     const half = f.width + 5.5;
@@ -1831,7 +1850,7 @@ function buildRockCut(rng, spline, groundY, theme) {
     new THREE.MeshBasicMaterial({ vertexColors: true, fog: true }));
   mesh.frustumCulled = false;
   mesh.matrixAutoUpdate = false;
-  return mesh;
+  return { mesh, archS };
 }
 
 // ------------------------------------------------------------ rock strata
@@ -3949,7 +3968,29 @@ function buildBridges(rng, spline, groundY, theme) {
     const cxp = f.pos.x, czp = f.pos.z;
     if (!deckClear(cxp, czp, dirX, dirZ, y, LEN)) continue;
     bi++;
-    crossS.push(s);   // the deck is centred on this track point — a pass-under
+    // A 270m deck over a winding road can cross the lane more than once, and
+    // only the centre point used to be recorded — the second crossing was a
+    // visible pass-under with no whoomp. Walk the whole deck axis and record
+    // every stretch of track it actually covers (the centre s falls out of
+    // this walk too).
+    const hits = [];
+    for (let i = 0; i < spline.n; i++) {
+      const hx = spline.pos[i * 3] - cxp, hy = spline.pos[i * 3 + 1], hz = spline.pos[i * 3 + 2] - czp;
+      const along = hx * dirX + hz * dirZ;
+      if (along < -LEN / 2 || along > LEN / 2) continue;
+      if (Math.abs(hz * dirX - hx * dirZ) > 7) continue;  // deck is 11m across
+      const dy = y - hy;
+      if (dy < 4 || dy > 30) continue;
+      hits.push(i * spline.step);
+    }
+    hits.sort((p, q) => p - q);
+    let runStart = null, prev = null;
+    for (const hs of hits) {
+      if (prev !== null && hs - prev > 30) { crossS.push((runStart + prev) / 2); runStart = hs; }
+      else if (runStart === null) runStart = hs;
+      prev = hs;
+    }
+    if (runStart !== null) crossS.push((runStart + prev) / 2);
     const place = (geom, alongOff, yOff, sideOff) => {
       geom.rotateY(-ang);
       geom.translate(

@@ -69,7 +69,7 @@ const _FLASH_FOG = new THREE.Color(0xdfe8ff);
 const _fwdV = new THREE.Vector3();
 let _lastStrike = -1;
 let _fogWashed = false;
-let _lastArchS = 0;   // ship.s at the previous frame, for counting arch ribs passed
+let _lastArchS = null; // fired-up-to camera cursor for pass-unders; null = resync on next frame
 let _racedOnce = false;   // first race of a session gets extra ADAPTIVE patience
 // [thump] console narration is OPT-IN: at tunnel rate it is ~12 lines a second,
 // and with the web inspector open that much console traffic measurably slows
@@ -375,7 +375,7 @@ function buildWorld(idx) {
   scene.fog.color.setHex(theme.fog);
   _fogBase.setHex(theme.fog);   // the storm washes the fog off this, per frame
   _lastStrike = -1;             // a strike from the previous track must not fire here
-  _lastArchS = 0;               // and no phantom rib thumps from the last circuit's layout
+  _lastArchS = null;            // and no phantom rib thumps from the last circuit's layout
   // A new circuit is a new workload: give ADAPTIVE back its belief in the top
   // tier so a bad minute on one track cannot pin the whole session.
   if (qualityMode === ADAPTIVE) adaptive.newWorkload();
@@ -1032,40 +1032,62 @@ const _vel = new THREE.Vector3();
 
 // Near-miss "whoosh": a wall/pylon or a rival flying close past at speed sends a
 // doppler swish (panned, in audio) + a faint camera tug (via juice). Pure feel,
-// detected read-only over sim state — no physics touched. Cooldowns debounce it
-// so one pass reads as one rush, not a stutter.
+// detected read-only over sim state — no physics touched.
+//
+// Both branches trigger on an EVENT, not a state. The first cut fired on the
+// state itself, debounced only by cooldowns, and the cooldowns turned into
+// metronomes: hold a line inside the wall band through a sweeper and it
+// whooshed every 0.55s with nothing passing; run side-by-side with a rival —
+// or with one parked in the blind spot behind — and it whooshed every 0.9s
+// at zero closing speed. The swish is band-passed noise, same family as the
+// holo-ring pass-under, so the ear filed every one of them under "arch sound
+// with no arch". Now the wall fires once on ENTERING the skim band, and a
+// rival fires once when it actually draws level (the along-track gap changes
+// sign inside the window) — the cooldowns remain only as jitter backstops.
 const _nmF = makeFrame();
 let _nmWallCd = 0;
+let _nmWallIn = false;          // inside the skim band last frame (edge trigger)
 const _nmRivalCd = new Map();
+const _nmRivalDs = new Map();   // rival -> last signed along-track gap (pass detection)
 function updateNearMiss(realDt) {
   _nmWallCd = Math.max(0, _nmWallCd - realDt);
   for (const [r, cd] of _nmRivalCd) { const n = cd - realDt; if (n <= 0) _nmRivalCd.delete(r); else _nmRivalCd.set(r, n); }
   const sn = ship.speedNorm;
-  if (sn < T.NEARMISS_MIN_SN) return;
+  if (sn < T.NEARMISS_MIN_SN) { _nmWallIn = false; return; }
   const spd = (sn - T.NEARMISS_MIN_SN) / (1 - T.NEARMISS_MIN_SN); // 0..1 above the floor
   // Trackside skim: tucked close to the edge (pylons/walls whipping past) but
   // NOT actually scraping — that's the "phew" as you thread a pinch at speed.
+  // No wall exists over a jump gap, so airtime never skims one.
   spline.frameAt(ship.s, _nmF);
   const gap = (_nmF.width - T.WALL_MARGIN) - Math.abs(ship.d);
-  if (!ship.scraping && gap >= 0 && gap < T.NEARMISS_WALL_GAP && _nmWallCd === 0) {
+  const inBand = !ship.scraping && !ship.jumping && gap >= 0 && gap < T.NEARMISS_WALL_GAP;
+  if (inBand && !_nmWallIn && _nmWallCd === 0) {
     juice.emit('nearMiss', { side: Math.sign(ship.d) || 1, intensity: 0.35 + 0.65 * spd });
     _nmWallCd = T.NEARMISS_WALL_CD;
+    if (_thumpLog) console.log(`[whoosh] WALL gap=${gap.toFixed(2)} d=${ship.d.toFixed(1)} s=${Math.round(ship.s)}`);
   }
+  _nmWallIn = inBand;
   // A rival flying past close but clear of contact (interact handles the touch).
   if (state !== 'race' || !race || !race.racers) return;
   const L = spline.length;
   for (const r of race.racers) {
-    if (_nmRivalCd.has(r)) continue;
     const rp = r.phys;
     if (r.finishTime !== null || rp === ship) continue;
     let ds = (((rp.s - ship.s) % L) + L) % L; if (ds > L / 2) ds -= L;
-    if (Math.abs(ds) > T.NEARMISS_RIVAL_DS) continue;
+    const prev = _nmRivalDs.get(r);
+    _nmRivalDs.set(r, ds);
+    if (prev === undefined || _nmRivalCd.has(r)) continue;
+    // The pass itself: both frames inside the window (a wrap glitch half a lap
+    // away flips sign too) and the gap crossing zero — the noses drawing level.
+    if (Math.abs(ds) > T.NEARMISS_RIVAL_DS || Math.abs(prev) > T.NEARMISS_RIVAL_DS) continue;
+    if ((prev > 0) === (ds > 0)) continue;
     const dd = Math.abs(rp.d - ship.d);
     if (dd < T.NEARMISS_RIVAL_IN || dd > T.NEARMISS_RIVAL_OUT) continue;
     const closeness = 1 - (dd - T.NEARMISS_RIVAL_IN) / (T.NEARMISS_RIVAL_OUT - T.NEARMISS_RIVAL_IN);
     const rel = Math.min(1, Math.abs(ship.v - rp.v) / 22);
     juice.emit('nearMiss', { side: Math.sign(rp.d - ship.d) || 1, intensity: 0.4 + 0.35 * closeness + 0.25 * rel });
     _nmRivalCd.set(r, T.NEARMISS_RIVAL_CD);
+    if (_thumpLog) console.log(`[whoosh] RIVAL dd=${dd.toFixed(1)} s=${Math.round(ship.s)}`);
   }
 }
 
@@ -1591,7 +1613,8 @@ function startCountdown() {
   const introDur = document.body.classList.contains('reduced-motion') ? 0 : 2.8;
   rig.playIntro(ship, introDur);
   race.grid();
-  _lastArchS = 0;   // a re-grid must not leave a stale camera arc length behind
+  _lastArchS = null;   // a re-grid must not leave a stale camera arc length behind
+  _nmRivalCd.clear(); _nmRivalDs.clear(); _nmWallIn = false; // stale rivals must not carry a pass over
   if (weapons) weapons.reset();
   banter.reset();
   audio.disableHum(false); // never inherit a stuck paralysis buzz into a new race
@@ -1986,25 +2009,39 @@ function tick(now) {
     const L = spline.length;
     const lead = Math.max(0, ship.v) * audio.outputLat();
     const camS = ((ship.s - rig.gap + lead) % L + L) % L;
-    let travelled = camS - _lastArchS;
-    if (travelled < 0) travelled += L;          // wrapped past the line this frame
-    if (travelled > 0 && travelled < L * 0.5) { // a warp or a re-grid is not a drive-through
-      let fired = 0;
-      for (const t of scenery.thumpS) {
-        let rel = t.s - _lastArchS;
-        if (rel < 0) rel += L;
-        if (rel > 0 && rel <= travelled && fired < 3) {
-          audio.archPass(sn, t.k);
-          fired++;
-          // One line per firing, so ear, eye and trigger can be compared from
-          // the console while racing: what fired, where it stands, where the
-          // camera cursor was when the sound was handed to the browser.
-          if (_thumpLog) console.log(`[thump] ${t.k === 0 ? 'RING' : t.k === 1 ? 'RIBBA' : 'SPANN'} `
-            + `s=${Math.round(t.s)} cam=${camS.toFixed(1)} v=${Math.round(ship.v * 3.6)}km/h`);
+    if (_lastArchS === null) {
+      _lastArchS = camS;    // first frame after a build/re-grid: sync, never sweep
+    } else {
+      let travelled = camS - _lastArchS;
+      if (travelled < 0) travelled += L;          // wrapped past the line this frame
+      if (travelled > 0 && travelled < L * 0.5) { // forward, and not a teleport
+        let fired = 0;
+        for (const t of scenery.thumpS) {
+          let rel = t.s - _lastArchS;
+          if (rel < 0) rel += L;
+          if (rel > 0 && rel <= travelled && fired < 3) {
+            audio.archPass(sn, t.k, t.lvl ?? 1);
+            fired++;
+            // One line per firing, so ear, eye and trigger can be compared from
+            // the console while racing: what fired, where it stands, where the
+            // camera cursor was when the sound was handed to the browser.
+            if (_thumpLog) console.log(`[thump] ${t.k === 0 ? 'RING' : t.k === 1 ? 'RIBBA' : 'SPANN'} `
+              + `s=${Math.round(t.s)} cam=${camS.toFixed(1)} v=${Math.round(ship.v * 3.6)}km/h`
+              + (t.lvl !== undefined ? ` lvl=${t.lvl.toFixed(2)}` : ''));
+          }
         }
+        _lastArchS = camS;
       }
+      // Backward is NEITHER a drive-through NOR a resync. The cursor retreats
+      // for reasons the road does not: a hard hit collapses the v*outputLat()
+      // lead (~21m in one frame on Bluetooth), outputLatency itself jitters
+      // on a route change, and the camera's acceleration lunge grows gap
+      // faster than the ship travels at launch speed. Committing any of those
+      // as a rewind re-armed every structure just fired and the catch-up
+      // drive thumped them all a second time — the "queued" swoshes. Hold the
+      // mark; the cursor catches up silently. Real teleports (track build,
+      // re-grid) resync through the null sentinel above instead.
     }
-    _lastArchS = camS;
   }
 
   const _storm = scenery.storm;

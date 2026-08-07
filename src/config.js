@@ -117,6 +117,19 @@ export const TUNING = {
   NEARMISS_RIVAL_CD: 0.9,     // s per-rival cooldown so one pass = one whoosh
   NEARMISS_PUNCH: 0.13,       // lateral camera tug toward the thing that flew past
 
+  // ---- Pass-under coverage: the ROAD as an overhead structure ----
+  // Flyover decks and loop arcs cross over the lane on 11 of 12 circuits and
+  // were silent — the ear paired the nearest ring/rib thump with them instead
+  // and the whole layer read as seconds out of sync. findPassUnders() marks
+  // them at scenery build; level fades with clearance so a 9m deck whoomps
+  // and a 40m loop arc murmurs.
+  PASSUNDER_MIN_DS: 40,    // m of ribbon between two samples before they are different road
+  PASSUNDER_MIN_H: 3,      // m vertical floor — closer is the same deck, not a crossing
+  PASSUNDER_MAX_H: 45,     // m ceiling — higher is scenery, not a pass-under
+  PASSUNDER_PAD: 4,        // m beyond the upper road's half width that still covers the lane
+  PASSUNDER_FULL_H: 16,    // m clearance at/below which the whoomp plays at full level
+  PASSUNDER_MIN_LVL: 0.35, // level floor for the highest arcs (a loop top ~40m up)
+
   // ---- Weapons (Pass 3) ----
   // Every value identical for player and AI — weapons are combat, never catch-up.
   WEAPON_DISABLE_TIME: 1.7,  // s of cut thrust + mushy steering on hit (coast, not dead stop)
