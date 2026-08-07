@@ -122,6 +122,10 @@ fixed.)
   Labs must include the three.js import map in `<head>` or they die silently.
 - Debug: `window.__game` exposes ship/rig/spline/race/weapons/juice/menu plus
   `warp(seconds, {throttle,...})` for deterministic no-rAF simulation.
+  The console narrates the two systems that act on their own: every ADAPTIVE
+  tier change logs `[gfx] ... (measured N fps, frame p50/p95)` — healthy p50
+  under a spiky p95 means the machine was WARMING (pipeline compiles), not
+  slow — and every pass-under sound logs `[thump] RING|RIBBA|SPANN s= cam=`.
   **`warp` steps physics, AI and contact — NOT the weapon system** (that is only
   stepped in the render loop, `main.js:1765`), and **NOT any visual effect**:
   sparks, trails, shipVisual and the shock/fireball pools all update in the

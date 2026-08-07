@@ -530,6 +530,48 @@ thing the sound system had never heard of.
   stale modules after a deploy. A "still broken" report inside that window may
   be running the previous build; hard-reload before concluding anything.
 
+### 2.6j The start-of-session dip, and the trigger is proven — what remains is the ear (2026-08-07)
+Martin's console, first session on the honest controller: `FULL → MEDIUM
+(measured 37.6 fps)`, then `MEDIUM → LOW (measured 36.4)`. **The drop bought
+nothing** — 40% of the pixels gone, fps unchanged — which is the signature of
+a load tiers do not govern. And it was a TIME TRIAL: no pack on screen, which
+acquits the field. What is left is the browser itself warming up: Safari
+compiles a Metal pipeline for each material/effect the first time it draws,
+spike by spike through the first minute, and "efter en stund kan man vrida
+upp det till ultra utan problem" is exactly what a warmed shader cache feels
+like. The crowd's close-mode was priced and acquitted (a sine and two writes
+per seat; microseconds).
+
+Done about it:
+- `adaptive.reset(idx, hold)` — the race-start hold is now 8s (launch is the
+  worst moment by construction), 15s for the FIRST race of a session (the
+  pipeline-compile window). Those seconds are real to play, but they are not
+  evidence about steady-state speed, which is all a tier change can fix.
+- Every DROP now logs the frame-time p50/p95 of its evidence window:
+  `[gfx] ADAPTIVE FULL → MEDIUM (measured 37.6 fps, frame p50 17.1ms / p95
+  64.0ms)`. Healthy median + spiky p95 = warming, not slow. The next "it
+  dropped" report carries its own diagnosis.
+- Every pass-under fire logs `[thump] RING|RIBBA|SPANN s=... cam=... v=...`.
+
+**The trigger is now PROVEN, not argued**: a real-rAF drive (not `warp` — the
+trigger lives in the render loop) on Sunset Circuit fired all 22 ribs exactly
+once at -0.4..+2.7m of the camera cursor, rings the same, no phantoms, at
+12fps in SwiftShader — on 60fps hardware that is ±1m ≈ ±15ms. (SPANN fired
+zero times in the probe and that is CORRECT: the grid sits just past the
+line, so the gantry first thumps when you complete lap 1; the probe's 150s
+did not finish a lap in software GL.)
+
+So if the sounds still feel wrong, the remaining suspects are OUTSIDE the
+trigger, and the [thump] log splits them: watch the console while passing a
+ring — if the LINE appears at the visual pass but the SOUND trails the line,
+it is the output chain (Safari reports no outputLatency, so HDMI-monitor
+speakers or Bluetooth are invisible to the lead compensation) and the fix is
+a manual AV-offset slider in OPTIONS. If line and sound land together but
+feel wrong, it is sound design, not timing. Also worth knowing: in a PRIVATE
+window localStorage dies with the session, so common trophies re-unlock and
+their mid-race jingle fires every test run — one more sound that "comes when
+it shouldn't" without being any track structure.
+
 ### 2.6 `__game.warp()` does not step the weapon system
 `weapons.stepFixed` is only called from the render loop (`main.js:1765`), so
 `warp()` advances physics, AI and contact but **no pads, no pickups, no

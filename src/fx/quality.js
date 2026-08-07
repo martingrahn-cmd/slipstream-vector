@@ -177,6 +177,17 @@ export class Adaptive {
     this.pending = null;    // a climb earned mid-race, waiting for the flag
     this.judged = 0;        // the fps reading the last decision was made on
     this.fails = new Array(maxIdx + 1).fill(0);  // times each tier failed to hold
+    // The last ~1.5s of raw frame times, so a DROP can say what KIND of slow it
+    // saw. A healthy median under a spiky p95 is a machine WARMING UP (shader
+    // pipelines compiling, a browser task passing through) — dropping the tier
+    // does not help that, and the M4 proved it: FULL -> MEDIUM took 40% of the
+    // pixels away and the measured fps moved 37.6 -> 36.4. A slow median is a
+    // machine that genuinely cannot render the tier. The [gfx] log line is
+    // where this surfaces; it is the difference between a diagnosis and a
+    // shrug the next time someone asks why the game went to LOW.
+    this.win = new Float32Array(90);
+    this.winN = 0;
+    this.lastDrop = null;   // { fps, p50, p95 } of the decision that dropped
   }
 
   // Cash in a climb earned during a race. Called at the next race start.
@@ -214,6 +225,7 @@ export class Adaptive {
       if (++this.hitches < 20) return null;
       dtMs = 250;
     } else this.hitches = 0;
+    this.win[this.winN++ % this.win.length] = dtMs;
     const dt = dtMs / 1000;
     // The hold exists to ignore the frames immediately AFTER a tier change: the
     // render targets reallocate and the bloom shaders recompile, which is
@@ -231,8 +243,16 @@ export class Adaptive {
       // has yet to shake off, and a drop is expensive to undo (see the ceiling).
       this.badT += dt;
       if (this.badT < 0.75) return null;
-      // Step down and remember that this tier did not hold.
+      // Step down and remember that this tier did not hold — and record what
+      // kind of slow the window actually contained (see `win` above).
       this.judged = fps;
+      const n = Math.min(this.winN, this.win.length);
+      const sorted = Array.from(this.win.subarray(0, n)).sort((a, b) => a - b);
+      this.lastDrop = {
+        fps,
+        p50: sorted.length ? sorted[Math.floor(sorted.length * 0.5)] : 0,
+        p95: sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0,
+      };
       const from = this.idx--;
       // The CEILING is what makes a drop expensive to undo — it is a promise
       // not to retry this tier — so do not pay it for a tier's FIRST failure.
@@ -310,14 +330,22 @@ export class Adaptive {
     return null;
   }
 
-  // A settings change or a track load invalidates the measurement.
-  reset(idx = this.idx) {
+  // A settings change or a track load invalidates the measurement. `hold` is
+  // how long to refuse to judge: the default suits a settings change, but a
+  // RACE START deserves more patience — the launch is the frame loop's worst
+  // moment by construction (the full field on screen, every first-use effect
+  // compiling its pipeline), and the first race after a page load is worse
+  // still, because the browser is building its shader cache. Those seconds are
+  // real to play but they are not evidence about steady-state speed, which is
+  // the only thing a tier change can fix.
+  reset(idx = this.idx, hold = 2.5) {
     this.idx = idx;
     this.ema = 1000 / 60;
-    this.hold = 2.5;
+    this.hold = hold;
     this.goodT = 0;
     this.badT = 0;
     this.hitches = 0;
+    this.winN = 0;
     this.pending = null;
   }
 

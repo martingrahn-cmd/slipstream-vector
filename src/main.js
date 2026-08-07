@@ -70,6 +70,7 @@ const _fwdV = new THREE.Vector3();
 let _lastStrike = -1;
 let _fogWashed = false;
 let _lastArchS = 0;   // ship.s at the previous frame, for counting arch ribs passed
+let _racedOnce = false;   // first race of a session gets extra ADAPTIVE patience
 
 const camera = new THREE.PerspectiveCamera(T.FOV_BASE, innerWidth / innerHeight, 0.1, 2200);
 scene.add(camera); // speed lines live in camera space
@@ -1986,7 +1987,15 @@ function tick(now) {
       for (const t of scenery.thumpS) {
         let rel = t.s - _lastArchS;
         if (rel < 0) rel += L;
-        if (rel > 0 && rel <= travelled && fired < 3) { audio.archPass(sn, t.k); fired++; }
+        if (rel > 0 && rel <= travelled && fired < 3) {
+          audio.archPass(sn, t.k);
+          fired++;
+          // One line per firing, so ear, eye and trigger can be compared from
+          // the console while racing: what fired, where it stands, where the
+          // camera cursor was when the sound was handed to the browser.
+          console.log(`[thump] ${t.k === 0 ? 'RING' : t.k === 1 ? 'RIBBA' : 'SPANN'} `
+            + `s=${Math.round(t.s)} cam=${camS.toFixed(1)} v=${Math.round(ship.v * 3.6)}km/h`);
+        }
       }
     }
     _lastArchS = camS;
@@ -2069,9 +2078,15 @@ function tick(now) {
     if (want !== null && want !== tierIdx) {
       // Leave a trace. A tier change is the most visible thing the game does
       // without being asked, and "why did it go to LOW" was previously
-      // unanswerable from the outside.
+      // unanswerable from the outside. On a DROP, say what kind of slow the
+      // window held: a healthy p50 under a spiky p95 is a machine warming up
+      // (pipeline compiles, a background task), not a machine that cannot
+      // render the tier — and that distinction decides what to fix.
+      const d = want < tierIdx ? adaptive.lastDrop : null;
       console.log(`[gfx] ADAPTIVE ${GFX[tierIdx].name} → ${GFX[want].name} `
-        + `(measured ${adaptive.judged.toFixed(1)} fps)`);
+        + `(measured ${adaptive.judged.toFixed(1)} fps`
+        + (d ? `, frame p50 ${d.p50.toFixed(1)}ms / p95 ${d.p95.toFixed(1)}ms` : '')
+        + ')');
       applyTier(want);
     }
   }
@@ -2165,7 +2180,15 @@ function startRace() {
   if (qualityMode === ADAPTIVE) {
     const up = adaptive.takePending();
     if (up !== null && up !== tierIdx) applyTier(up);
-    adaptive.reset(tierIdx);
+    // Patience scaled to how bad the coming seconds are KNOWN to be: every
+    // launch opens with the whole field on screen, and the FIRST race after a
+    // page load also pays the browser's shader-pipeline compilation, spike by
+    // spike, as each effect first appears. Measured on the M4: the launch
+    // window reads 37-44 fps and dropping the tier does not improve it —
+    // FULL -> MEDIUM moved the measurement 37.6 -> 36.4 — so judging it only
+    // makes the rest of the race uglier without making the start faster.
+    adaptive.reset(tierIdx, _racedOnce ? 8 : 15);
+    _racedOnce = true;
   }
   if (selection.mode === 0) {
     champ.active = true; champ.cup = selection.cup; champ.round = 0; champ.done = 0;
