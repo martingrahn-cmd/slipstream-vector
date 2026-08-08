@@ -20,3 +20,4 @@ press/
 node_modules/
 
 # (Music is committed — Martin's own compositions ship with the game.)
+dist/
