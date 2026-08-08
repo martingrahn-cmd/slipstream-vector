@@ -103,11 +103,46 @@
     .tall .tag { font-size: 21px; letter-spacing: 0.18em; }
     .tall .kicker { font-size: 22px; letter-spacing: 0.38em; }
     .tall #badge svg { width: 72px; height: 72px; }
+
+    /* ---- thumb: the GRID variant. A portal tile renders ~250px wide next
+       to thirty shouting neighbours — negative space is invisible there.
+       Opposite rules apply: ONE subject (the ship, huge — a hard zoom into
+       the same backdrop), motion (streaks), max contrast, one compact line
+       of wordmark. ?zx/?zy (percent) aim the zoom at the ship per capture. */
+    .thumb #card { width: 1080px; height: 1080px; }
+    .thumb #bg { background-size: 320%; filter: saturate(1.35) contrast(1.18); }
+    .thumb #grade { background:
+      linear-gradient(180deg, rgba(6,2,20,0.18) 0%, rgba(6,2,20,0) 34%,
+                              rgba(6,2,20,0) 60%, rgba(6,2,20,0.82) 100%); }
+    .thumb #vign { background:
+      radial-gradient(90% 90% at 50% 44%, rgba(0,0,0,0) 48%, rgba(6,2,20,0.72) 100%); }
+    .thumb #plate { left: 0; right: 0; bottom: 5.4%; text-align: center; }
+    .thumb .kicker, .thumb .tag, .thumb .press { display: none; }
+    .thumb h1 { font-size: 96px; line-height: 1; margin: 0; display: inline-block; }
+    .thumb h1 br { display: none; }
+    .thumb h1 .thin { letter-spacing: 0.16em; }
+    .thumb #badge { top: 3.4%; right: 4%; }
+    .thumb #badge .chip { display: none; }
+    .thumb #s1, .thumb #s2, .thumb #hair { display: none; }
+    /* speed streaks: converging neon lines, drawn not photographed */
+    .thumb #streaks { display: block; }
+    #streaks { display: none; position: absolute; inset: 0; pointer-events: none; }
+    #streaks line { stroke-linecap: round; }
   </style>
 </head>
 <body class="wide">
   <div id="card">
     <div id="bg"></div>
+    <svg id="streaks" viewBox="0 0 1080 1080" preserveAspectRatio="none">
+      <g opacity="0.85">
+        <line x1="-40" y1="240" x2="430" y2="430" stroke="#00f0ff" stroke-width="7" />
+        <line x1="-40" y1="330" x2="380" y2="470" stroke="#00f0ff" stroke-width="4" opacity="0.6" />
+        <line x1="1120" y1="220" x2="660" y2="420" stroke="#ff2ec8" stroke-width="7" />
+        <line x1="1120" y1="320" x2="700" y2="465" stroke="#ff2ec8" stroke-width="4" opacity="0.6" />
+        <line x1="-40" y1="880" x2="400" y2="700" stroke="#ff2ec8" stroke-width="6" opacity="0.7" />
+        <line x1="1120" y1="900" x2="680" y2="710" stroke="#00f0ff" stroke-width="6" opacity="0.7" />
+      </g>
+    </svg>
     <div id="grade"></div>
     <div id="vign"></div>
     <div class="stripe" id="s1"></div>
@@ -132,7 +167,12 @@
     const q = new URLSearchParams(location.search);
     document.body.className = q.get('layout') || 'wide';
     const bg = q.get('bg') || 'press/hero/bg-1.png';
-    document.getElementById('bg').style.backgroundImage = `url(${JSON.stringify(bg)})`;
+    const el = document.getElementById('bg');
+    el.style.backgroundImage = `url(${JSON.stringify(bg)})`;
+    // thumb zoom aim: ?zx=50&zy=62 centres the blow-up on the ship
+    if ((q.get('layout') || '') === 'thumb') {
+      el.style.backgroundPosition = `${q.get('zx') || 50}% ${q.get('zy') || 60}%`;
+    }
     // The export tool waits for this flag: fonts + backdrop actually painted.
     const img = new Image();
     img.onload = () => document.fonts.ready.then(() => { window.__heroReady = true; });

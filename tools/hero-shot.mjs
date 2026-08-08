@@ -34,10 +34,26 @@ const browser = await chromium.launch(
     : { executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox', '--no-proxy-server'] },
 );
 
+// Serve three.js from node_modules when present — same accommodation the
+// press/smoke tools make, and the reason the first run of this tool hung
+// forever on a page that "loaded" but never booted: the sandbox proxy eats
+// the CDN fetch and the import map dies silently.
+const localThree = path.join(ROOT, 'node_modules', 'three');
+const routeCdn = async (page) => {
+  if (!fs.existsSync(localThree)) return;
+  await page.route('**://cdn.jsdelivr.net/**', (route) => {
+    const rel = new URL(route.request().url()).pathname.replace(/^\/npm\/three@[^/]+\//, '');
+    try {
+      route.fulfill({ status: 200, contentType: 'application/javascript', body: fs.readFileSync(path.join(localThree, rel)) });
+    } catch { route.fulfill({ status: 404, body: 'not found' }); }
+  });
+};
+
 if (!BG) {
   // ---- phase A: clean candidate backdrops, spread over the lap ----
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   page.setDefaultTimeout(240000);
+  await routeCdn(page);
   await page.goto(URL_, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__game && window.__game.spline, null, { timeout: 90000 });
   await page.addStyleTag({ content: '.hud, #comms-feed { display: none !important; }' });
@@ -73,10 +89,13 @@ const SIZES = [
   ['wide', 1920, 1080],
   ['square', 1080, 1080],
   ['tall', 800, 1200],
+  ['thumb', 1080, 1080],
 ];
+const ZX = flag('zx', 50), ZY = flag('zy', 60);   // thumb zoom aim (percent)
 for (const [layout, w, h] of SIZES) {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
-  await page.goto(`${URL_}hero-lab.html?bg=press/hero/bg-${BG}.png&layout=${layout}`,
+  const zoom = layout === 'thumb' ? `&zx=${ZX}&zy=${ZY}` : '';
+  await page.goto(`${URL_}hero-lab.html?bg=press/hero/bg-${BG}.png&layout=${layout}${zoom}`,
     { waitUntil: 'domcontentloaded' });
   const ready = await page.waitForFunction(() => window.__heroReady, null, { timeout: 30000 });
   if (await ready.jsonValue() === 'bg-missing') { console.error(`bg-${BG}.png missing`); process.exit(1); }
