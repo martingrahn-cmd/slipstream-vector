@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Hero/cover-art compositor - the WipEout-homage title card for portals
+     (CrazyGames et al). Pure HTML/CSS/SVG over an in-engine backdrop, so it
+     needs NO three.js import map (the "labs die silently" rule is about labs
+     that import the engine; this one deliberately does not).
+
+     Open over the dev server:
+       hero-lab.html?bg=press/hero/bg-3.png&layout=wide
+     layout: wide (16:9 cover) | square (1:1) | tall (2:3)
+     Export at exact sizes: node tools/hero-shot.mjs (captures backdrops too).
+
+     Identity is inherited, not invented: Orbitron 800 italic skewed -8deg
+     with the white-cyan-magenta gradient is #overlay h1's exact recipe, the
+     delta-ship mark is the favicon's, colors are the track-edge neon. The
+     homage is the COMPOSITION: flat angular panels, thin technical labels,
+     a class badge, acres of negative space - title screen, not screenshot. -->
+<head>
+  <meta charset="UTF-8" />
+  <title>SLIPSTREAM VECTOR — hero lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --cyan: #00f0ff; --magenta: #ff2ec8; --ink: #060214; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #000; height: 100%; overflow: hidden; }
+
+    #card { position: relative; overflow: hidden; background: var(--ink); }
+    .wide   #card { width: 1920px; height: 1080px; }
+    .square #card { width: 1080px; height: 1080px; }
+    .tall   #card { width: 800px;  height: 1200px; }
+
+    #bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center 38%;
+      transform: scale(1.04);            /* hide capture edges */
+      filter: saturate(1.12) contrast(1.05);
+    }
+    /* Grade: darken the floor for type, cool the top - poster, not screenshot. */
+    #grade { position: absolute; inset: 0; background:
+      linear-gradient(180deg, rgba(6,2,20,0.30) 0%, rgba(6,2,20,0) 30%,
+                              rgba(6,2,20,0) 52%, rgba(6,2,20,0.88) 100%); }
+    #vign { position: absolute; inset: 0; background:
+      radial-gradient(120% 90% at 50% 42%, rgba(0,0,0,0) 62%, rgba(6,2,20,0.55) 100%); }
+
+    /* TDR stripe furniture: two thin skewed bars + a hairline. */
+    .stripe { position: absolute; transform: skewX(-18deg); }
+    #s1 { left: -2%; bottom: 27.5%; width: 46%; height: 10px; background: var(--cyan); opacity: 0.9;
+          box-shadow: 0 0 18px rgba(0,240,255,0.8); }
+    #s2 { left: -2%; bottom: 25.9%; width: 30%; height: 4px; background: var(--magenta); opacity: 0.85; }
+    #hair { position: absolute; left: 0; right: 0; bottom: 8.2%; height: 1px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.35), rgba(255,255,255,0)); }
+
+    #plate { position: absolute; left: 4.2%; bottom: 9.5%; }
+    .kicker {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 27px;
+      letter-spacing: 0.52em; color: var(--cyan);
+      text-shadow: 0 0 14px rgba(0,240,255,0.75);
+    }
+    h1 {
+      font-family: 'Orbitron', monospace; font-weight: 800; font-style: italic;
+      font-size: 148px; line-height: 0.98; letter-spacing: 0.05em;
+      transform: skewX(-8deg); transform-origin: left bottom;
+      background: linear-gradient(180deg, #fff 30%, var(--cyan) 55%, var(--magenta) 90%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(6px 6px 0 rgba(255, 46, 200, 0.30))
+              drop-shadow(0 0 26px rgba(0, 240, 255, 0.35));
+      margin: 10px 0 14px;
+    }
+    h1 .thin { font-weight: 600; letter-spacing: 0.30em; }
+    .tag {
+      font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 30px;
+      letter-spacing: 0.34em; color: #fff; opacity: 0.92;
+    }
+    .tag b { color: var(--magenta); font-weight: 700; }
+    .press {
+      margin-top: 34px;
+      font-family: 'Orbitron', monospace; font-weight: 700; font-size: 24px;
+      letter-spacing: 0.42em; color: #fff; transform: skewX(-8deg);
+      text-shadow: 0 0 22px rgba(0, 240, 255, 0.7); opacity: 0.9;
+    }
+
+    /* Class badge + delta mark, top right - the racing-license corner. */
+    #badge { position: absolute; top: 4.6%; right: 3.6%; text-align: right; }
+    #badge svg { width: 92px; height: 92px; filter: drop-shadow(0 0 16px rgba(0,240,255,0.5)); }
+    .chip {
+      display: inline-block; margin-top: 10px; padding: 7px 16px;
+      font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 21px;
+      letter-spacing: 0.30em; color: var(--ink);
+      background: var(--cyan); clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%);
+    }
+    .chip.mag { background: var(--magenta); color: #fff; }
+
+    /* ---- layout variants ---- */
+    .square h1 { font-size: 118px; }
+    .square #plate { left: 5.5%; bottom: 10.5%; }
+    .square #s1 { bottom: 30.5%; width: 60%; } .square #s2 { bottom: 28.6%; width: 40%; }
+    .square .tag { font-size: 25px; letter-spacing: 0.22em; }
+    .tall h1 { font-size: 96px; }
+    .tall #plate { left: 6.5%; bottom: 12%; }
+    .tall #s1 { bottom: 33.5%; width: 74%; } .tall #s2 { bottom: 32%; width: 50%; }
+    .tall .tag { font-size: 21px; letter-spacing: 0.18em; }
+    .tall .kicker { font-size: 22px; letter-spacing: 0.38em; }
+    .tall #badge svg { width: 72px; height: 72px; }
+  </style>
+</head>
+<body class="wide">
+  <div id="card">
+    <div id="bg"></div>
+    <div id="grade"></div>
+    <div id="vign"></div>
+    <div class="stripe" id="s1"></div>
+    <div class="stripe" id="s2"></div>
+    <div id="hair"></div>
+
+    <div id="badge">
+      <svg viewBox="0 0 64 64"><path d="M32 8 L54 50 L32 40 L10 50 Z" fill="#00f0ff"/><path d="M32 20 L44 46 L32 40 L20 46 Z" fill="#ff2ec8"/></svg>
+      <div><span class="chip">AG LEAGUE</span></div>
+      <div><span class="chip mag">CLASS &#9656; OVERDRIVE</span></div>
+    </div>
+
+    <div id="plate">
+      <div class="kicker">ANTI-GRAV NEO-ARCADE RACING</div>
+      <h1>SLIPSTREAM<br /><span class="thin">VECTOR</span></h1>
+      <div class="tag">FOUR WORLDS &middot; TWELVE CIRCUITS &middot; <b>NO BRAKES</b></div>
+      <div class="press">PRESS START</div>
+    </div>
+  </div>
+
+  <script>
+    const q = new URLSearchParams(location.search);
+    document.body.className = q.get('layout') || 'wide';
+    const bg = q.get('bg') || 'press/hero/bg-1.png';
+    document.getElementById('bg').style.backgroundImage = `url(${JSON.stringify(bg)})`;
+    // The export tool waits for this flag: fonts + backdrop actually painted.
+    const img = new Image();
+    img.onload = () => document.fonts.ready.then(() => { window.__heroReady = true; });
+    img.onerror = () => { window.__heroReady = 'bg-missing'; };
+    img.src = bg;
+  </script>
+</body>
+</html>
