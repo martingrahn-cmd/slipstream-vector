@@ -1,6 +1,7 @@
 # SLIPSTREAM VECTOR
 
-A WipEout × Horizon Chase arcade racer. Anti-grav ship, four low-poly worlds,
+An anti-gravity arcade racer in the spirit of the classic AG racers and
+retro horizon-chasers. Anti-grav ship, four low-poly worlds,
 twelve tracks across two championship cups, five weapons, and eight rivals who
 trash-talk you over the comms — built for graphics and game feel first.
 
@@ -16,7 +17,7 @@ Sprawl, Frostfall Ridge) — regenerate with `node tools/press-shots.mjs --jpeg`
 | World | Tracks | Character |
 |---|---|---|
 | Sunset Mesa | Sunset Circuit · Mesa Run · Dune Drift | bright late afternoon over a monument valley: banded buttes in clusters with empty dune flats between, a canyon rock-cut pass, raptors circling the colossal **Sun Gate** arch that frames the striped sun; Dune Drift is the slipstream speedway |
-| Palm Coast | Lagoon Pass · Coral Keys · Breaker Bay | golden-hour archipelago: animated lagoon water, half-sunk islands with surf-ringed beaches, palms, a red-and-white **lighthouse** sweeping its beam over a resort strip; Coral Keys has a full F-Zero LOOP, Breaker Bay is the tight marina street fight |
+| Palm Coast | Lagoon Pass · Coral Keys · Breaker Bay | golden-hour archipelago: animated lagoon water, half-sunk islands with surf-ringed beaches, palms, a red-and-white **lighthouse** sweeping its beam over a resort strip; Coral Keys has a full vertical LOOP, Breaker Bay is the tight marina street fight |
 | Neon Sprawl | Orbital Ring · Skyline Rush · Grid Lock | blue-hour metropolis: street canyons of lit towers lining the track, **the Spire** anchoring the skyline, glowing asphalt grid, sweeping searchlights; Skyline Rush has a LOOP + summit dive, Grid Lock corkscrews INSIDE a tunnel |
 | Frostfall Ridge | Aurora Pass · Avalanche Run · Moonlit Mile | polar dusk under the **aurora borealis** (it surges on the final lap): moonlit snowpack, blue-shadowed peaks, frosted pines, snow-marker poles, ice sculptures of race ships, skiers carving the far fields, ice-fishing huts on the frozen lake — and falling snow |
 
@@ -231,7 +232,7 @@ challenge you choose, not a reward you earn) and the choice persists.
 ## Racing
 
 You start P8 in a field of 8. Pick your seat on the start screen (↑↓ rows,
-←→ change): **team** (ship stats à la WipEout — Vektor Dynamics balanced,
+←→ change): **team** (distinct hull stats — Vektor Dynamics balanced,
 Halcyon Raceworks handling, Razorback Velocity top speed, NovaSurge
 Industries thrust), **livery** (2 per team) and **callsign** (10 to choose
 from).
