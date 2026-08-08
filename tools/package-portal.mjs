@@ -132,10 +132,18 @@ if (VERIFY) {
   await page.route('**', (route) => {
     const u = route.request().url();
     if (u.startsWith('http://127.0.0.1:8742')) return route.continue();
-    external.push(u); route.abort();
+    // The CrazyGames SDK is the ONE legitimate external call a portal build
+    // makes — on their domain it must load, everywhere else the adapter
+    // degrades to no-ops. Abort it (that IS the degradation test) but do not
+    // count it as a vendoring leak.
+    if (!u.includes('sdk.crazygames.com')) external.push(u);
+    route.abort();
   });
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+  page.on('console', (m) => {
+    // the aborted SDK script logs a resource error — that is the test working
+    if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`);
+  });
   try {
     await page.goto('http://127.0.0.1:8742/', { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__game && window.__game.spline, null, { timeout: 120000 })

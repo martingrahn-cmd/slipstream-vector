@@ -26,6 +26,7 @@ import { Input, NULL_INPUT, REBINDABLE, PAD_MENU, keyLabel, padLabel } from './c
 // CONTROLS rows: the keyboard-rebindable actions, then the pad-only menu binds.
 const CTL_ROWS = [...REBINDABLE, ...PAD_MENU];
 import { AudioEngine } from './core/audio.js';
+import { portal } from './core/portal.js';
 import { Race } from './race.js';
 import { Menu, drawThumb, drawProfile, bar, hex } from './ui/menu.js';
 import { Podium } from './ui/podium.js';
@@ -77,6 +78,12 @@ let _racedOnce = false;   // first race of a session gets extra ADAPTIVE patienc
 // it was meant to explain. Enable with __game.thumpLog(true).
 let _thumpLog = false;
 try { _thumpLog = localStorage.getItem('sv-thumplog') === '1'; } catch { /* private mode quirks */ }
+// The fps/draws/tris readout is a DEBUG instrument, not HUD: off by default,
+// toggled in OPTIONS (persisted). It shipped always-on for the whole beta and
+// read as part of the game's face — a portal QA pass is the wrong place for
+// a corner full of internals.
+let statsOn = false;
+try { statsOn = localStorage.getItem('sv-perf') === '1'; } catch { /* private mode quirks */ }
 
 const camera = new THREE.PerspectiveCamera(T.FOV_BASE, innerWidth / innerHeight, 0.1, 2200);
 scene.add(camera); // speed lines live in camera space
@@ -88,6 +95,8 @@ const sparks = new Sparks(scene);
 const trails = new ExhaustTrails(scene);
 const input = new Input();
 const hud = new Hud(juice);
+document.getElementById('stats').classList.toggle('hidden', !statsOn);
+portal.init();   // resolves before anyone plays; every call no-ops until then
 let banterOn = localStorage.getItem('sv-banter') !== 'off';
 const banter = new BanterFeed(document.getElementById('comms-feed'), audio);
 banter.setEnabled(banterOn);
@@ -348,6 +357,7 @@ function disposeTree(root) {
 }
 
 function buildWorld(idx) {
+  portal.loadingStart();   // no-op outside the portal build
   if (track) { scene.remove(track.group); disposeTree(track.group); }
   if (scenery) {
     scene.remove(scenery.group, scenery.sky);
@@ -399,6 +409,7 @@ function buildWorld(idx) {
   localStorage.setItem('sv-track', String(idx));
   captureEnvThumb();
   updateMenu();
+  portal.loadingStop();
 }
 
 function bestKey() { return `sv-best-${trackDef.id}`; }
@@ -747,6 +758,7 @@ function updateMenu() {
   setTxt('opt-rumble', input.rumbleOn ? 'ON' : 'OFF');
   setTxt('opt-fs', document.fullscreenElement ? 'ON' : 'OFF');
   setTxt('opt-motion', document.body.classList.contains('reduced-motion') ? 'REDUCED' : 'FULL');
+  setTxt('opt-perf', statsOn ? 'ON' : 'OFF');
   setTxt('opt-pilotintro', INTRO_LABEL[introMode]);
   setTxt('opt-banter', banterOn ? 'ON' : 'OFF');
   setTxt('opt-gp-state', input.gamepadActive ? 'CONNECTED' : 'NONE');
@@ -1605,6 +1617,7 @@ function startCountdown() {
   _otAhead.clear();
   juice.trauma = 0; juice.boostFactor = 0;
   state = 'countdown';
+  portal.gameplayStart();
   countdownT = 3.2;
   countdownIntro = introDur ? introDur + 0.2 : 0.4; // hold the 3-2-1 until the sweep lands
   raceTime = 0;
@@ -1690,6 +1703,13 @@ juice.on('lap', ({ lap, time }) => {
     state = 'finished';
     playerFinishTime = race.clock;
     finishedView = 'race';
+    // Portal: the results board is the natural break — telemetry stop, a
+    // happytime on a win, the one midgame ad (audio suspended through it),
+    // and the progress keys mirrored to the account.
+    portal.gameplayStop();
+    if (race.positionOf(ship) === 1) portal.happytime();
+    portal.midgameAd(() => audio.setPaused(true), () => audio.setPaused(false));
+    portal.pushSaves();
     // Best full-race/total time, sanity-floored. Recorded per mode (incl. TT now);
     // the overall race-record banner still fires for the competitive modes only.
     if (playerFinishTime > 60) {
@@ -2136,7 +2156,7 @@ function tick(now) {
     // here was useless: this readout rewrites itself twice a second, so the
     // announcement was gone before anyone could read it — and ADAPTIVE is
     // exactly the mode where you want to see what it settled on.
-    hud.setStats(`${Math.round(frames / statT)} fps · ${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1000).toFixed(0)}k tris · ${qualityLabel()}`);
+    if (statsOn) hud.setStats(`${Math.round(frames / statT)} fps · ${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1000).toFixed(0)}k tris · ${qualityLabel()}`);
     statT = 0; frames = 0;
   }
   renderer.info.reset();
@@ -2197,6 +2217,11 @@ function editRow(row, dir) {
     toggleFullscreen();
   } else if (row === 'motion') {
     applyReducedMotion(true);
+  } else if (row === 'perf') {
+    statsOn = !statsOn;
+    localStorage.setItem('sv-perf', statsOn ? '1' : '0');
+    document.getElementById('stats').classList.toggle('hidden', !statsOn);
+    if (!statsOn) hud.setStats('');
   } else if (row === 'pilotintro') {
     introMode = INTRO_MODES[n(INTRO_MODES.length, INTRO_MODES.indexOf(introMode), dir)];
     localStorage.setItem('sv-intro', introMode);
@@ -2374,6 +2399,7 @@ function applyMenuKey(code) {
 // ---- pause menu -----------------------------------------------------------
 function openPause() {
   paused = true;
+  portal.gameplayStop();
   document.body.classList.add('paused');
   audio.setPaused(true);
   pauseMenu.open(audio.sfxVolume, !!document.fullscreenElement, qualityLabel());
@@ -2383,6 +2409,7 @@ function openPause() {
 
 function closePause() {
   paused = false;
+  if (state === 'race' || state === 'countdown') portal.gameplayStart();
   document.body.classList.remove('paused');
   pauseMenu.close();
   input.clearPressed();
@@ -2590,6 +2617,8 @@ function backToMenu() {
   exitPodium();
   pauseMenu.close();
   document.body.classList.remove('paused');
+  portal.gameplayStop();
+  portal.pushSaves();   // a TT never "finishes" — leaving it is its save point
   state = 'attract';
   paused = false;
   // The pilots do not follow you into the menu. Two separate things have to

@@ -298,6 +298,14 @@ fixed.)
   state per frame, a baked file can't. Re-roll one: `--only <key>`.
 - `src/ship/shipPhysics.js`, `src/ship/aiDriver.js` — zero three.js imports
   (AI/replay seam). Keep it that way.
+- `src/core/portal.js` — the CrazyGames adapter. INERT unless the page
+  carries `window.SV_PORTAL`, which only `tools/package-portal.mjs` injects
+  (that tool also vendors three + fonts into a self-contained zip and can
+  prove it offline with `--verify`). Portal code must never cost the Pages
+  build anything: every hook no-ops without the flag, and the portal build
+  degrades to the same no-ops if the SDK cannot load. Saves mirror the `sv-`
+  localStorage prefix through their data module at race finish / menu exit.
+  The fps/draws/tris readout is OFF by default (OPTIONS → PERF READOUT).
 
 ## Verification & docs
 
