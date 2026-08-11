@@ -54,7 +54,7 @@ fs.mkdirSync(path.join(OUT, 'src'), { recursive: true });
 copyTree(path.join(ROOT, 'src'), path.join(OUT, 'src'));
 fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 copyTree(path.join(ROOT, 'assets'), path.join(OUT, 'assets'),
-  (f) => f === path.join(ROOT, 'assets', 'shots'));
+  (f) => f === path.join(ROOT, 'assets', 'shots') || f === path.join(ROOT, 'assets', 'covers'));
 
 // ---- vendor three -----------------------------------------------------------
 const vendor = path.join(OUT, 'vendor', 'three');
