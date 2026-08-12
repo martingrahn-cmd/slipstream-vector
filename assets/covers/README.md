@@ -10,6 +10,7 @@ gitignored and these would otherwise live nowhere.
 | `cover-tall-800x1200.png` | 2:3 | Portrait cover slot |
 | `cover-square-800x800.png` | 1:1 | Square cover slot |
 | `cover-thumb-1080.png` | 1:1 | GRID tiles — one subject, hard zoom, max contrast |
+| `cover-itch-630x500.png` | 630x500 | itch.io cover (their documented size) |
 
 Two different briefs on purpose. The first three are the title-card
 composition, for surfaces that are LOOKED AT. The thumb is built for a

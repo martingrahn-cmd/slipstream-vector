@@ -90,6 +90,7 @@ const SIZES = [
   ['square', 1080, 1080],
   ['tall', 800, 1200],
   ['thumb', 1080, 1080],
+  ['itch', 630, 500],
 ];
 const ZX = flag('zx', 50), ZY = flag('zy', 60);   // thumb zoom aim (percent)
 for (const [layout, w, h] of SIZES) {

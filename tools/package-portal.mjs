@@ -25,9 +25,16 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = path.join(ROOT, 'dist');
-const OUT = path.join(DIST, 'portal');
 const VERIFY = process.argv.includes('--verify');
+// Two targets, one packaging path. 'portal' injects the SV_PORTAL flag the
+// CrazyGames adapter hangs off; 'itch' is the same self-contained build with
+// no flag, so portal.js stays inert and the page never reaches for someone
+// else's SDK on a host that has nothing to do with them.
+const ti = process.argv.indexOf('--target');
+const TARGET = ti >= 0 && process.argv[ti + 1] ? process.argv[ti + 1] : 'portal';
+if (!['portal', 'itch'].includes(TARGET)) { console.error(`unknown --target ${TARGET}`); process.exit(1); }
+const DIST = path.join(ROOT, 'dist');
+const OUT = path.join(DIST, TARGET);
 
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const threeVer = (html.match(/three@([\d.]+)\//) || [])[1];
@@ -92,8 +99,11 @@ let out = html
   .replace(/<link href="https:\/\/fonts\.googleapis\.com[^"]+"[^>]*>/, '<link href="./vendor/fonts/fonts.css" rel="stylesheet" />')
   .replace(/"three": "[^"]+"/, '"three": "./vendor/three/three.module.js"')
   .replace(/"three\/addons\/": "[^"]+"/, '"three/addons/": "./vendor/three/addons/"');
-// The portal seam: the game can read this flag; the Pages build never has it.
-out = out.replace(/<script type="importmap">/, '<script>window.SV_PORTAL = true;</script>\n  <script type="importmap">');
+// The portal seam: the game can read this flag; the Pages build never has it,
+// and neither does the itch build — same vendored files, no foreign SDK.
+if (TARGET === 'portal') {
+  out = out.replace(/<script type="importmap">/, '<script>window.SV_PORTAL = true;</script>\n  <script type="importmap">');
+}
 fs.writeFileSync(path.join(OUT, 'index.html'), out);
 
 // ---- guard: no external references left in html/css -------------------------
@@ -111,7 +121,7 @@ if (leaks.length) { console.error('EXTERNAL REFERENCES REMAIN:\n' + leaks.join('
 
 // ---- zip --------------------------------------------------------------------
 const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-const zipName = `slipstream-vector-portal-${stamp}.zip`;
+const zipName = `slipstream-vector-${TARGET}-${stamp}.zip`;
 execSync(`cd "${OUT}" && zip -qr "../${zipName}" .`);
 const mb = (n) => (n / 1024 / 1024).toFixed(1) + ' MB';
 const size = (p) => { let s = 0; for (const e of fs.readdirSync(p, { withFileTypes: true })) s += e.isDirectory() ? size(path.join(p, e.name)) : fs.statSync(path.join(p, e.name)).size; return s; };
