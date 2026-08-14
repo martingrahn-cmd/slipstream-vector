@@ -5,6 +5,9 @@ retro horizon-chasers. Anti-grav ship, four low-poly worlds,
 twelve tracks across two championship cups, five weapons, and eight rivals who
 trash-talk you over the comms — built for graphics and game feel first.
 
+**▶ Play it: [smarproc-games.itch.io/slipstream-vector](https://smarproc-games.itch.io/slipstream-vector)**
+— runs in the browser, no install, no account. Keyboard or gamepad.
+
 | ![Sunset Circuit — through the Sun Gate at 232 km/h](assets/shots/sunset-mesa.jpg) | ![Coral Keys — inverted through the loop over the lagoon](assets/shots/palm-coast-loop.jpg) |
 |---|---|
 | ![Skyline Rush — rain in the neon tunnel, pack in sight](assets/shots/neon-sprawl.jpg) | ![Aurora Pass — flat out under the northern lights](assets/shots/frostfall-ridge.jpg) |
