@@ -15,16 +15,27 @@ for a few hours afterwards — that is where a thread lives or dies.
 | Where | State |
 |---|---|
 | itch.io page | live |
-| itch devlog | pending |
-| itch Release Announcements board | pending |
+| itch devlog | posted (Thu 13) |
+| itch Release Announcements board | posted (Thu 13) |
+| r/playmygame | posted (Sat 15) — remember the Platform flair, and comment on other people's games; the sub runs on reciprocity |
 | r/threejs | pending |
 | r/WebGames | pending |
-| r/playmygame | pending |
 | r/WipeOut | pending — wait 2-3 days after the Godot recreation post |
 | Hacker News Show HN | blocked: HN restricts Show HN from new accounts. Build account history first, then post |
 
 Suggested order: devlog first (it becomes the best thing to link), then one
 community per day. Never two on the same day.
+
+**Measured so far:** devlog + Release Announcements on the same day moved the
+page from ~1 view/day to a spike of 20, settling to 5 the next day. Worth
+knowing when the next game launches: those two channels together are worth
+about twenty curious people, not a wave. The traffic case rests on r/WebGames
+and r/WipeOut, and the feedback case on r/playmygame — judge that one on
+whether anyone tells you something useful about the first sixty seconds, not
+on its view count.
+
+itch's Analytics tab breaks views down by referrer, which is how to tell what
+each channel actually delivered rather than guessing from the daily total.
 
 ---
 
