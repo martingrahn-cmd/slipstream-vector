@@ -223,20 +223,53 @@ video** — Reddit heavily favours it over links.
 
 ## r/playmygame
 
-They want a concrete question, not an advert. The sub has a give-feedback-to-
-get-feedback culture — comment on a few others first.
+The sub REQUIRES a template and a description of at least 100 words — posts
+that skip it get removed. Add the Platform flair after posting, as the
+template says. Give-feedback-to-get-feedback culture: comment on a few other
+posts first.
 
-**Title:** [Feedback] Browser anti-grav racer — is the first minute clear enough?
+**Title:** Slipstream Vector — browser anti-gravity racer, twelve circuits, no install
 
-> https://smarproc-games.itch.io/slipstream-vector
+> **Game Title:** Slipstream Vector
 >
-> What I'd most like feedback on: the first 60 seconds. Do you understand what
-> to do without reading anything, and does the ship feel good to steer before
-> you've learned the track? I've played it so much I can't see it fresh
-> anymore.
+> **Playable Link:** https://smarproc-games.itch.io/slipstream-vector
 >
-> Arrows/WASD to drive, Shift is the airbrake through tight corners, Space
-> fires a weapon. Gamepad works too.
+> **Platform:** Browser (HTML5 / WebGL)
+>
+> **Description:** Slipstream Vector is an anti-gravity arcade racer built for
+> speed-feel. Twelve circuits are spread across four worlds: a sunset desert of
+> banded buttes and a canyon rock cut, a golden-hour archipelago of half-sunk
+> islands, a metropolis racing through a thunderstorm, and a polar ridge under
+> the aurora. A race is eight ships on the grid with five weapons, boost pads
+> and stunt geometry — full vertical loops, corkscrews that roll the road
+> through 360 degrees, and jumps with real air.
+>
+> The core design rule is that there is no rubber-banding anywhere. Raising the
+> difficulty makes the AI drive better — more corner confidence, tighter lines,
+> better use of the boost pads — but never faster. Catching up happens through
+> slipstream physics that apply identically to the player and to the field, so
+> a lead you build is a lead you keep unless somebody genuinely out-drives you.
+>
+> Time Trial records your fastest lap and replays it as a ghost to race
+> against. There are two championship cups, four teams with distinct hull
+> characteristics, 31 trophies, and full gamepad support with rebindable
+> controls. Controls are Arrows or WASD to drive, Shift for the airbrake
+> through tight corners, Space to fire, R to respawn and P to pause.
+>
+> **Free to Play Status:**
+> - [x] Free to play
+> - [ ] Demo/Key available
+> - [ ] Paid (Allowed only on Tuesdays with [TT] in the title)
+>
+> **Involvement:** Solo developer — design, code, track layouts, 3D geometry
+> and sound effects are all mine. The music was generated with Suno, the pilot
+> portraits with Grok and the rival voice lines with ElevenLabs, all directed
+> and edited by me; the engine, wind and weapon audio is procedural Web Audio
+> synthesis rather than samples.
+>
+> What I'd most like feedback on is the first sixty seconds: do you understand
+> what to do without reading anything, and does the ship feel good to steer
+> before you've learned the track? I've played it far too much to see it fresh.
 
 ---
 
