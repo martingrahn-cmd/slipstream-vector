@@ -20,7 +20,7 @@ for a few hours afterwards — that is where a thread lives or dies.
 | r/playmygame | posted (Sat 15) — remember the Platform flair, and comment on other people's games; the sub runs on reciprocity |
 | r/threejs | pending |
 | r/WebGames | pending |
-| r/WipeOut | pending — wait 2-3 days after the Godot recreation post |
+| r/WipeOut | posted — 101 upvotes / 7 comments in the first 4 hours, a faster pace than the Godot prototype post it followed. The 1996 opening did the work |
 | Hacker News Show HN | blocked: HN restricts Show HN from new accounts. Build account history first, then post |
 
 Suggested order: devlog first (it becomes the best thing to link), then one
