@@ -769,6 +769,42 @@ build.
 - **A track editor**, even a crude one. `src/track/tracks/` is already the "add
   a track" seam and the audits already guard the result.
 
+### 3.1a If a Steam release ever happens (parked 2026-08-16)
+
+Nothing here is scheduled, and NONE of it should be done to the live browser
+build — the game got 217 upvotes and 6.4k views on r/WipeOut in the form it
+already has, and reworking feel while people are actually playing it is the
+wrong order. This is a list of what the launch surfaced, kept together so a
+future decision has evidence instead of memory.
+
+- **Two people asked for Steam unprompted**, one of them flaired AG Systems.
+  The reasons that came back: Steam Deck (an AG racer with a gamepad on the
+  couch, which a browser cannot do comfortably), achievements that are
+  actually tracked and comparable, and simply having it sit permanently in a
+  library. The 31 trophies map one-to-one onto Steam achievements; that work
+  is already done in `src/ui/achievements.js`.
+- **Handling could bite harder, within limits.** A player noticed the ship
+  "follows the path to some extent" and liked it — accurately, because the
+  physics lives in spline domain: steering sets lateral velocity, and heading
+  always comes from the track frame. There is no assist anywhere in
+  `shipPhysics.js`; you can be badly placed but never pointed the wrong way.
+  Stronger centrifugal push, harsher wall penalties and narrower margins are
+  all available. **Yaw is not** — losing alignment would mean abandoning the
+  spline domain, which is what makes loops and corkscrews free. If a demanding
+  mode is ever wanted, that is the boundary.
+- **A graphic designer from the games industry offered pro bono work**
+  (r/WipeOut, grew up on the TDR house style). The weakest surfaces are the
+  wordmark and the in-race HUD: functional, but without an identity.
+- **The music is the one thing the community pushed back on.** The honest
+  "generated with Suno, edited by me" reply sat at -3 while the post ran to
+  217. This subreddit's relationship with its soundtracks is unusually strong
+  and the disclosure was still the right call. The constructive route is not a
+  defence but an invitation: there are likely musicians in the same scene who
+  would want to write a track for it.
+- Cost of entry, so it is not rediscovered: $100 per title (refunded past
+  $1000 revenue), 30% to Valve, plus a wrapper, store page, capsule art and
+  achievement integration. A season of work, not a weekend.
+
 ### 3.2 Would make it look better
 - **Ship interiors.** Canopies are opaque shells; a visible pilot silhouette is
   a small mesh and a large readability win on the garage and podium screens.
