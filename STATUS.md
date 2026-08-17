@@ -805,6 +805,38 @@ future decision has evidence instead of memory.
   $1000 revenue), 30% to Valve, plus a wrapper, store page, capsule art and
   achievement integration. A season of work, not a weekend.
 
+**The one to build first: leaderboards with downloadable ghosts.** If only a
+single thing from this list ever happens, this is it — it is what makes
+somebody still be playing in six months, and it answers the question a paid
+release has to answer when a complete free version already exists in a
+browser.
+
+Most of it is already here. `src/fx/ghost.js` records a lap at ~20Hz as a flat
+array of `(t, s, d, h)` rounded to two decimals — a 46-second lap is roughly
+900 numbers, a few KB, and it is already JSON round-tripped through
+localStorage (`sv-ghostpath-<track>-<class>`). Records are already kept per
+track AND per mode (`recKey`). The sim is a 120Hz fixed step over seeded
+mulberry32 with zero three.js in `shipPhysics.js`, so a time means the same
+thing on every machine — which is what makes a shared leaderboard honest
+rather than decorative.
+
+What it actually needs: a backend, the one thing this project has
+deliberately never had, and that is the real cost — not the client code.
+Submit a time plus its ghost, fetch the top N, download one and hand it
+straight to `ghost.loadPath()`, which already accepts exactly that shape.
+
+Why this over real-time online racing, which is the thing people ask for
+instead: the fixed step and seeded RNG genuinely would make lockstep
+feasible, so the objection is not technical. It is population. A small racer
+with a few hundred concurrent players at launch and five a month later does
+not have a multiplayer mode, it has an empty lobby that makes the game look
+abandoned. Asynchronous ghosts carry most of the competitive feeling, cost
+nothing to run, and get BETTER as more people play instead of worse. Rejected
+on those grounds until the population argument changes, not on effort.
+
+Cheap extensions once the pipe exists: a weekly circuit with a fixed seed,
+and per-class boards so PULSE times are not buried under OVERDRIVE ones.
+
 ### 3.2 Would make it look better
 - **Ship interiors.** Canopies are opaque shells; a visible pilot silhouette is
   a small mesh and a large readability win on the garage and podium screens.
