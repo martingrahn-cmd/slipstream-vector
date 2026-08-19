@@ -771,6 +771,11 @@ build.
 
 ### 3.1a If a Steam release ever happens (parked 2026-08-16)
 
+Observed defects and confusions from real players — a 30-minute recorded
+playtest, the Reddit threads and the itch comments — are collected with their
+evidence in `BACKLOG.md`, ordered cheapest-and-most-certain first. This
+section keeps the strategy; that file keeps the work.
+
 Nothing here is scheduled, and NONE of it should be done to the live browser
 build — the game got 217 upvotes and 6.4k views on r/WipeOut in the form it
 already has, and reworking feel while people are actually playing it is the
